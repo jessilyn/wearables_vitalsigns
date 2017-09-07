@@ -16,14 +16,14 @@ require(data.table)
 require(psych)
 
 #### READ:
-vitals <- fread("ForLukasz/all_vitals.csv",
+vitals <- fread("SECURE_data//all_vitals.csv",
                    header=TRUE,sep=',',stringsAsFactors=FALSE)
 vitals <- data.frame(vitals)
 
-labs <- fread("ForLukasz/all_labs.csv",
+labs <- fread("SECURE_data/all_labs.csv",
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-wear <- read.csv("Basis2016_Norm0824_WeekPrior.csv",
+wear <- read.csv("SECURE_data/Basis2016_Norm0824_WeekPrior.csv",
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### NOTE WANTED LAB TESTS:
@@ -1110,7 +1110,7 @@ labs <- data.frame(labs)
 
 #Note: IGM, UALBCR, and UALBCRINTP are left out (not found in new labs)
 
-labs <- fread("SECURE_lab_results_20180905_subset.csv",
+labs <- fread("SECURE_data/SECURE_lab_results_20180905_subset.csv",
               header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### PREP VITALS DATA ####
@@ -1182,7 +1182,7 @@ names(test)[grep("^ORD_VALUE.+",names(test))] <-
   gsub("^ORD_VALUE.","",names(test)[grep("^ORD_VALUE.+",names(test))])
 labs <- test
 
-labs = fread("20170905_Cleaned_joined_30k_labs_vitals.csv")
+labs = fread("SECURE_data/20170905_Cleaned_joined_30k_labs_vitals.csv")
 
 #Merge data
 corDf <- merge(labs,
@@ -1268,4 +1268,6 @@ for (i in 1:length(allClin)){
 }
 
 
+fwrite(vitals,file = "SECURE_data/big.vitals.csv")
+fwrite(labs,file = "SECURE_data/big.labs.csv")
 
