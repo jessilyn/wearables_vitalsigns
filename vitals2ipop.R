@@ -1,5 +1,9 @@
 library(MASS)
-source("20170830_CorMatrix_Vitals_Labs_Wear.R")
+source("old/20170830_CorMatrix_Vitals_Labs_Wear.R")
+library("reshape2")
+library("ggthemes")
+source("ggplot-theme.R")
+
 v = t(read.csv("top.csv",row.names = 1))
 top = as.vector(v)
 names(top) = colnames(v)
@@ -55,13 +59,12 @@ for (j in 1:length(wear.names))
 rownames(rsq.all) = c("Vitals","Simple","Full")
 df = data.frame(rsq.all)
 df$name = rownames(rsq.all)
-library("reshape2")
-library("ggthemes")
+
 #qplot(variable, value, colour = name, data = melt(df, id = "name"))
 data = melt(df, id = "name")
 colnames(data) = c("model","test","r_squared")
 ggplot(data, aes(test,r_squared, color = model))  +  geom_point(size = 5, aes(shape=model, color=model)) +
-  theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  weartals_theme +
   labs(x = "Lab tests",y = expression(paste("adjusted ",R^{2}))) + ggtitle("Model comparison")
   #+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) # verbose
 
