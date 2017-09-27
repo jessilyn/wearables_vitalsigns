@@ -13,16 +13,16 @@ require(psych)
 dir = "./"
 
 vitals <- read.csv(
-  paste0(dir,"vitals.csv"),
+  paste0(dir,"SECURE_data/vitals.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 labs <- read.csv(
-  paste0("./","lab_results_20170717.csv"),
+  paste0("./","SECURE_data/lab_results_20170717.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 
 wear <- read.csv(
-  paste0("./","Basis2016_Norm0824_WeekPrior.csv"),
+  paste0("./","SECURE_data/Basis2016_Norm0824_WeekPrior.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### PREP VITALS DATA ####
