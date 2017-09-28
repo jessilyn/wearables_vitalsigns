@@ -109,6 +109,8 @@ slopes = extract.slopes(data$ANON_ID, data$Temp, data$PLT)
 mean(slopes < 0.05)
 boxplot(slopes)
 
+
+
 #################
 library("lme4")
 library("sjPlot")
@@ -144,9 +146,33 @@ m1.lm = lm(GLU_byMeter ~ 1 + Pulse,
                data = labs.vitals[labs.vitals$ANON_ID %in% top.patients.GLU,])
 
 library("lme4")
-m1.lme4 = lmer(GLU_byMeter ~ 1 + Pulse + (Pulse|ANON_ID),
+m1.lme4 = lmer(GLU_fasting ~ Pulse + (Pulse|ANON_ID),
                data = labs.vitals[labs.vitals$ANON_ID %in% top.patients.GLU,])
-summary(m1.lme4)
+
+mm.lym = lmer(LYM ~ Pulse + (Pulse|ANON_ID),
+               data = labs.vitals)
+mm.neut = lmer(NEUT ~ Pulse + (Pulse|ANON_ID),
+               data = labs.vitals)
+
+ggplot(labs.vitals, aes(x = NEUT, y = Pulse)) + weartals_theme + 
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5)
+ggsave("plots/quadratic-neut.png")
+ggplot(labs.vitals, aes(x = LYM, y = Pulse)) + weartals_theme + 
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5)
+ggsave("plots/quadratic-lym.png")
+ggplot(labs.vitals, aes(x = GLU_fasting, y = Pulse)) + weartals_theme + 
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5)
+ggsave("plots/quadratic-glu.png")
+
+coef(mm.lym)
+coef(mm.neut)
+
+cf = coef(mm.lym)
+
+
 plot(m1.lme4)
 MuMIn::r.squaredGLMM(m1.lme4)
 
