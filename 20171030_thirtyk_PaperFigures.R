@@ -212,34 +212,50 @@ iPOPcorDf <- merge(iPOPlabs,
 # RUN iPOP CORRELATIONS between labs and vitals
 
 options("scipen"=100, "digits"=4)
-r<-matrix(ncol = length(unique(iPOPcorDf$iPOP_ID)),nrow = length(allClin),
-          dimnames=list(
-             c(allClin),
-             c(unique(iPOPcorDf$iPOP_ID))))
-p<-r; fstat <-r; degfree <- r; numObs <-r;
-tmp=0
-for (i in allClin){ # for each of the 50 clinical lab tests
-  tmp=tmp+1 # counter for index of allClin
-  tmp2=0    # counter for index of iPOP_ID
-  for (j in unique(iPOPcorDf$iPOP_ID)){ 
-    print(c(i,j))
-    tmp2=tmp2+1  # counter for index of iPOP_ID
-    iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
-  df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
-  df <- na.omit(df)
-  #model <- lm(df[,1] ~ df$Pulse + df$Temp) # bivariate with pulse + temp
-  #model <- lm(df[,1] ~ df$Temp) # univariate with pulse or temp only
-  model<-lm(df[,1] ~ df$Temp + I(df$Temp^2))
-  m <- summary(model) # quadratic univariate with pulse or temp only
-  r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
-  p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
-  numObs[tmp,tmp2]<-length(df$Pulse) # the number of each clinical lab test that has corresponding vital signs
-  iPOPcorDf3 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),]
-  df3 <- cbind(iPOPcorDf3[[i]], iPOPcorDf3[,c("Pulse", "Temp")])
-  df3 <- na.omit(df3)
-  pred=predict(model, newdata=df3)
+models=c("df[,1] ~ df$Pulse", # univariate with pulse only
+         "df[,1] ~ df$Temp",   # univariate with temp only
+         "df[,1] ~ df$Pulse + df$Temp", # bivariate with pulse + temp
+         "df[,1] ~ df$Pulse + I(df$Pulse^2)",
+         "df[,1] ~ df$Temp + I(df$Temp^2)")
+
+for (k in 1:length(models)){
+  print(k)
+  r<-matrix(ncol = length(unique(iPOPcorDf$iPOP_ID)),nrow = length(allClin),
+            dimnames=list(
+              c(allClin),
+              c(unique(iPOPcorDf$iPOP_ID))))
+  rsq.pred <-r; p<-r; fstat <-r; degfree <- r; numObs <-r;
+  tmp=0
+  for (i in allClin){ # for each of the 50 clinical lab tests
+    tmp=tmp+1 # counter for index of allClin
+    tmp2=0    # counter for index of iPOP_ID
+    for (j in unique(iPOPcorDf$iPOP_ID)){ 
+      print(c(i,j))
+      tmp2=tmp2+1  # counter for index of iPOP_ID
+      iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
+      df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
+      df <- na.omit(df)
+      model<-lm(as.formula(models[k]))
+      m <- summary(model) # quadratic univariate with pulse or temp only
+      # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
+      # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
+      numObs[tmp,tmp2]<-length(df$Pulse) # the number of each clinical lab test that has corresponding vital signs
+      iPOPcorDf3 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # test set (the one person that was left out)
+      df3 <- cbind(iPOPcorDf3[[i]], iPOPcorDf3[,c("Pulse", "Temp")])
+      df3 <- na.omit(df3)
+      pred=predict(model, newdata=df3)# prediction on test person
+      rsq.pred[tmp,tmp2] = 1 - mean( (pred - df3[,1])**2 ) / mean( (df3[,1])**2 ) # test r.sq
+    }
   }
+  name.rsq <- paste("model.mean.rsq", k, sep = "")
+  assign(name.rsq, data.frame(as.list(rowMeans(rsq.pred)))) 
+  name.sd <- paste("model.sd", k, sep = "")
+  assign(name.sd, apply(rsq.pred, 1, sd))  
 }
+
+rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.mean.rsq3, model.mean.rsq4, model.mean.rsq5))))
+sd.plot<- as.data.frame(as.list((rbind(model.sd1, model.sd2, model.sd3, model.sd4, model.sd5))))
+ggplot(rsq.plot) # plot how rsq changes with the different models, and add in error bars from sd.plot
 
 
 tot # total number of labs that have clin vitals measures corresponding to it
