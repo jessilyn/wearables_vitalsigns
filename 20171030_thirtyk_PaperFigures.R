@@ -230,7 +230,7 @@ for (k in 1:length(models)){
     tmp=tmp+1 # counter for index of allClin
     tmp2=0    # counter for index of iPOP_ID
     for (j in unique(iPOPcorDf$iPOP_ID)){ 
-      print(c(i,j))
+      #print(c(i,j))
       tmp2=tmp2+1  # counter for index of iPOP_ID
       iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
       df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
@@ -248,14 +248,23 @@ for (k in 1:length(models)){
     }
   }
   name.rsq <- paste("model.mean.rsq", k, sep = "")
-  assign(name.rsq, data.frame(as.list(rowMeans(rsq.pred)))) 
-  name.sd <- paste("model.sd", k, sep = "")
-  assign(name.sd, apply(rsq.pred, 1, sd))  
+  assign(name.rsq, data.frame(model = name.rsq, test = allClin, means = rowMeans(rsq.pred), sd =apply(rsq.pred, 1, sd))) 
+  # assign(name.rsq, data.frame(as.list(rowMeans(rsq.pred)))) 
+  # name.sd <- paste("model.sd", k, sep = "")
+  # assign(name.sd, apply(rsq.pred, 1, sd))  
 }
 
 rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.mean.rsq3, model.mean.rsq4, model.mean.rsq5))))
-sd.plot<- as.data.frame(as.list((rbind(model.sd1, model.sd2, model.sd3, model.sd4, model.sd5))))
-ggplot(rsq.plot) # plot how rsq changes with the different models, and add in error bars from sd.plot
+
+# plot how rsq changes with the different models, and add in error bars from sd.plot
+ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model))) +
+  geom_point() +
+  theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  axis.text.x = element_text(angle = 60, hjust = 1)) +
+  xlab("Clinical Laboratory Test") + ylab("Cross-Validated R-squared (+/- SD)") +
+  geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=1,
+                position=position_dodge(.5)) 
+
 
 
 tot # total number of labs that have clin vitals measures corresponding to it
