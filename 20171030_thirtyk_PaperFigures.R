@@ -62,37 +62,54 @@ allClin <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
 ####################
 #### Figure 1  #####
 ####################
-iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Slide 2/slide2_C_participant_data_summary.csv",
+iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 ###############################
-# Fig BA, left, middle, right #
+# Fig 1B, left, middle, right #
 ###############################
 hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=20,
      xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
      xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=20,
-     xlab = "Number of Clinic Visits", main = NULL, font.lab=2,lwd=2,font=2)
+hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
+     xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
 mean(iPOPdaysMonitored$Total_NumOfClinMeasures)
 mean(iPOPdaysMonitored$Days_monitored_by_clinic)
 
-#######################
-# Fig 1B, left, right #
-#######################
-hist(iPOPvitals$Pulse, col="darkred", breaks=100,
-     xlab = "cHR",
+###############
+# Fig 1C, top #
+###############
+#clean iPOP Vitals
+names(iPOPvitals)[which(names(iPOPvitals)=="HIMCID")] <- "iPOP_ID"
+names(iPOPvitals)[which(names(iPOPvitals)=="RECORDED_TIME")] <- "Clin_Result_Date"
+names(iPOPvitals)[which(names(iPOPvitals)=="X.Pulse.")] <- "Pulse"
+names(iPOPvitals)[which(names(iPOPvitals)=="X.Temp.")] <- "Temp"
+names(iPOPvitals)[which(names(iPOPvitals)=="X.BP.")] <- "BP"
+names(iPOPvitals)[which(names(iPOPvitals)=="X.Bmi.")] <- "BMI"
+
+hist(iPOPvitals$Pulse, col="darkred", breaks=50,
+     xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
 
 hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
-     xlab = "cTemp",
+     xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
 
 ################################################
 #  Figure 1C Bottom - see Ryans_Figure1_Code.R #
 ################################################
+dfFigOneC <- fread(paste0("/Users/jessilyn/Desktop/framework_paper/Figure1/Fig1C/Ryans_input_files/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20170928.csv"),
+            header=TRUE,sep=",",stringsAsFactors = FALSE)
+hist(dfFigOneC$Heart_Rate, col="darkred", breaks=100,
+     xlab = "wHR",
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+hist(dfFigOneC$Skin_Temperature_F, col="darkgrey", breaks=100,
+     xlab = "wTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
 
 #characterize the iPOP data set
 length(na.omit(iPOPvitals$X.Temp.)) + length(na.omit(iPOPvitals$X.Pulse.)) # total number of clinical vital signs measured
@@ -137,18 +154,87 @@ length(na.omit(vitals$Temp)) + length(na.omit(vitals$Pulse)) # total number of c
 #304 people have more than 50 observations per person
 length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 
+##############
+#  Figure 3A #
+##############
+#30 K Univariate Correlation Fit Plots by Lukasz 
+vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
+allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
+             "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
+             "CR","EOS","EOSAB","ESR", "GLOB","GLU_byMeter",
+             "GLU_fasting","GLU_nonFasting","GLU_SerPlas",
+             "GLU_wholeBld","HCT","HDL",
+             "HGB","HSCRP","IGM","K","LDL_Calc", "LDL_Direct","LDLHDL","LYM","LYMAB",
+             "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
+             "NEUTAB","NHDL","PLT","PROCALCITONIN", "RBC","RDW","TBIL","TGL","TP","TroponinI","WBC")
+clinVars <- which(names(corDf) %in% allClin)
 
+
+#clin subset of the top 10 most predictive models from bivariate analysis:
+clinTopTen <- c("GLU_fasting","CR","HSCRP", "NEUTAB","NEUT","LYM", "RDW","ALB","AG", "PLT","PROCALCITONIN", "ESR")
+clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL")
+
+
+# boxplots #http://www.cookbook-r.com/Graphs/Plotting_means_and_error_bars_(ggplot2)/#Helper functions
+summary.pulse<-list()
+summary.Temp<-list()
+r.squared <-c()
+for (j in clinTopTen){
+  corDf$bin2<-ntile(corDf[[j]], 40)
+  # for Temp
+  # corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
+  # print(ggplot(corDf2, aes(x=bin2, y=Temp)) +
+  # geom_point(stat="identity", fill="darkblue") +
+  #   geom_errorbar(aes(ymin=Temp-se, ymax=Temp+se), width=.4) +
+  #   xlab(paste(c(j, "bins", sep=" ")))+
+  #   scale_y_continuous(limits = c(97,99)) 
+  # + theme(text = element_text(size=9),
+  #         axis.text.x = element_text(angle = 60, hjust = 1)))
+  # For Pulse
+  corDf2 <- summarySE(corDf, measurevar="Pulse", groupvars="bin2", na.rm=TRUE)
+  # print(ggplot(corDf2, aes(x=bin2, y=Pulse)) +
+  #  geom_bar(stat="identity", fill="darkred") +
+  # geom_errorbar(aes(ymin=Pulse-se, ymax=Pulse+se), width=.2) +
+  # xlab(paste(c(j, "bins", sep=" ")))
+  # + theme(text = element_text(size=9),
+  #         axis.text.x = element_text(angle = 60, hjust = 1)))
+  print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
+  print(ggplot(corDf2, aes(x = bin2, y = Pulse)) +
+          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
+          theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+          geom_point(col="black") +
+          xlab(paste0(c(j ," Bin"))))
+  summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
+  r.squared[j] <- summary.pulse$adj.r.squared
+  # print(ggplot(corDf2, aes(x = bin2, y = Temp)) +
+  #         stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
+  #         geom_point(col="black") +
+  #         #ylim(c(96,98.5))+
+  #         theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+  #         xlab(paste0(c(j ," Bin"))))
+  # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
+  # r.squared[j] <- summary.Temp$adj.r.squared
+  
+}
+as.matrix(r.squared)
+
+
+##############
+#  Figure 3B #
+##############
+
+hist(corDf$Pulse, col="darkred", breaks=100,
+     xlab = "cHR",
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+hist(corDf$Temp, col="darkgrey", breaks=100,
+     xlab = "cTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
 
 #############################
 #    Suppl. Table 1A and B  #
 #############################
-#clean iPOP Vitals
-names(iPOPvitals)[which(names(iPOPvitals)=="HIMCID")] <- "iPOP_ID"
-names(iPOPvitals)[which(names(iPOPvitals)=="RECORDED_TIME")] <- "Clin_Result_Date"
-names(iPOPvitals)[which(names(iPOPvitals)=="X.Pulse.")] <- "Pulse"
-names(iPOPvitals)[which(names(iPOPvitals)=="X.Temp.")] <- "Temp"
-names(iPOPvitals)[which(names(iPOPvitals)=="X.BP.")] <- "BP"
-names(iPOPvitals)[which(names(iPOPvitals)=="X.Bmi.")] <- "BMI"
+
 
 for (i in 1:length(iPOPvitals$BP)){
   iPOPvitals$systolic[i] <- strsplit(as.character(iPOPvitals$BP),'/')[[i]][1]
@@ -217,6 +303,8 @@ models=c("df[,1] ~ df$Pulse", # univariate with pulse only
          "df[,1] ~ df$Pulse + df$Temp", # bivariate with pulse + temp
          "df[,1] ~ df$Pulse + I(df$Pulse^2)",
          "df[,1] ~ df$Temp + I(df$Temp^2)")
+models=c(" ~ Pulse" # univariate with pulse only
+)
 
 for (k in 1:length(models)){
   print(k)
@@ -230,21 +318,21 @@ for (k in 1:length(models)){
     tmp=tmp+1 # counter for index of allClin
     tmp2=0    # counter for index of iPOP_ID
     for (j in unique(iPOPcorDf$iPOP_ID)){ 
-      #print(c(i,j))
       tmp2=tmp2+1  # counter for index of iPOP_ID
       iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
       df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
       df <- na.omit(df)
-      model<-lm(as.formula(models[k]))
+      model<-lm(as.formula(paste0(i,models[k])),data=iPOPcorDf2)
       m <- summary(model) # quadratic univariate with pulse or temp only
       # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
       # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
       numObs[tmp,tmp2]<-length(df$Pulse) # the number of each clinical lab test that has corresponding vital signs
-      iPOPcorDf3 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # test set (the one person that was left out)
+      iPOPcorDf3 <- iPOPcorDf[(iPOPcorDf$iPOP_ID %in% j),] # test set (the one person that was left out)
       df3 <- cbind(iPOPcorDf3[[i]], iPOPcorDf3[,c("Pulse", "Temp")])
       df3 <- na.omit(df3)
+      # i think this is the problem! pred is 1100 values, but should be same length as df3, correct?
       pred=predict(model, newdata=df3)# prediction on test person
-      rsq.pred[tmp,tmp2] = 1 - mean( (pred - df3[,1])**2 ) / mean( (df3[,1])**2 ) # test r.sq
+      rsq.pred[tmp,tmp2] = 1 - (mean( (pred - df3[,1])**2 ) / var( (df3[,1]) )) # test r.sq
     }
   }
   name.rsq <- paste("model.mean.rsq", k, sep = "")
@@ -259,11 +347,11 @@ rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.
 # plot how rsq changes with the different models, and add in error bars from sd.plot
 ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model))) +
   geom_point() +
-  theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
   axis.text.x = element_text(angle = 60, hjust = 1)) +
   xlab("Clinical Laboratory Test") + ylab("Cross-Validated R-squared (+/- SD)") +
-  geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=1,
-                position=position_dodge(.5)) 
+  geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=0.7,
+                position=position_dodge(.7)) + ylim(0,1)
 
 
 
@@ -407,69 +495,6 @@ tot # total number of labs that have clin vitals measures corresponding to it
 
 
 
-##############
-#  Figure 3A #
-##############
-#30 K Univariate Correlation Fit Plots by Lukasz 
-vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
-allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
-             "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
-             "CR","EOS","EOSAB","ESR", "GLOB","GLU_byMeter",
-             "GLU_fasting","GLU_nonFasting","GLU_SerPlas",
-             "GLU_wholeBld","HCT","HDL",
-             "HGB","HSCRP","IGM","K","LDL_Calc", "LDL_Direct","LDLHDL","LYM","LYMAB",
-             "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
-             "NEUTAB","NHDL","PLT","PROCALCITONIN", "RBC","RDW","TBIL","TGL","TP","TroponinI","WBC")
-clinVars <- which(names(corDf) %in% allClin)
-
-
-#clin subset of the top 10 most predictive models from bivariate analysis:
-clinTopTen <- c("GLU_fasting","CR","HSCRP", "NEUTAB","NEUT","LYM", "RDW","ALB","AG", "PLT","PROCALCITONIN", "ESR")
-clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL")
-
-
-# boxplots #http://www.cookbook-r.com/Graphs/Plotting_means_and_error_bars_(ggplot2)/#Helper functions
-summary.pulse<-list()
-summary.Temp<-list()
-r.squared <-c()
-for (j in clinTopTen){
-  corDf$bin2<-ntile(corDf[[j]], 40)
- # for Temp
-  # corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
- # print(ggplot(corDf2, aes(x=bin2, y=Temp)) +
- # geom_point(stat="identity", fill="darkblue") +
- #   geom_errorbar(aes(ymin=Temp-se, ymax=Temp+se), width=.4) +
- #   xlab(paste(c(j, "bins", sep=" ")))+
- #   scale_y_continuous(limits = c(97,99)) 
- # + theme(text = element_text(size=9),
- #         axis.text.x = element_text(angle = 60, hjust = 1)))
-  # For Pulse
- corDf2 <- summarySE(corDf, measurevar="Pulse", groupvars="bin2", na.rm=TRUE)
- # print(ggplot(corDf2, aes(x=bin2, y=Pulse)) +
- #  geom_bar(stat="identity", fill="darkred") +
- # geom_errorbar(aes(ymin=Pulse-se, ymax=Pulse+se), width=.2) +
- # xlab(paste(c(j, "bins", sep=" ")))
- # + theme(text = element_text(size=9),
- #         axis.text.x = element_text(angle = 60, hjust = 1)))
- print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
- print(ggplot(corDf2, aes(x = bin2, y = Pulse)) +
-   stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
-   theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-   geom_point(col="black") +
-   xlab(paste0(c(j ," Bin"))))
- summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
- r.squared[j] <- summary.pulse$adj.r.squared
- # print(ggplot(corDf2, aes(x = bin2, y = Temp)) +
- #         stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
- #         geom_point(col="black") +
- #         #ylim(c(96,98.5))+
- #         theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
- #         xlab(paste0(c(j ," Bin"))))
- # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
- # r.squared[j] <- summary.Temp$adj.r.squared
- 
-}
-as.matrix(r.squared)
 
 ##############
 #  Figure 2B #
