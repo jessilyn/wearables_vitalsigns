@@ -12,10 +12,13 @@ require(plotmo) #bells and whistles
 require(psych)
 require(zoo) #label year/quarter
 
+fullpath="~/Desktop/YourPath/"
+fullpath="./SECURE_data/"
+
 #read
 full <- read.csv(
-  paste0("~/Desktop/YourPath/",
-         "Basis2016_Clean_Norm_WeekPrior_20171020.csv"),
+  paste0(fullpath,
+         "../Basis2016_Clean_Norm_WeekPrior_20171020.csv"),
   header=TRUE,sep=',',
   stringsAsFactors = FALSE)
 
@@ -76,9 +79,8 @@ full <- cbind(
   model)
 
 cref <- read.csv(
-  paste0("~/Desktop/Ongoing_Projects/Jessie_MobilizeCenter/",
-         "Datasets/PhysSubset_Tables/",
-         "clin.csv"),
+  paste0(fullpath,
+         "../clin.csv"),
   header=FALSE,sep=',',
   stringsAsFactors = FALSE)
 
@@ -330,7 +332,7 @@ nlk4 <- sub("mean","kurtosis",nlk1)
 
 ### NEW: Add dummy variables by ID
 dummies <- dummy('iPOP_ID', full, sep = "_")
-full <- cbind(full, dummies)
+#full <- cbind(full, dummies)
 iPOPvars <- grep("iPOP_ID_.*",names(full),value=TRUE)
 ###
 
@@ -405,11 +407,10 @@ for(idx in 1:length(allClin)){
   unqIDs <- unique(full$iPOP_ID)
   
   for(id in 1:length(unqIDs)){
-    
     #subset main table by variables wanted for analysis
-    testDf <- full[which(full$iPOP_ID!=unqIDs[id]),
+    testDf <- full[,
                    c(allClin[idx],
-                     allWear[-grep(unqIDs[id],allWear)],
+                     allWear,
                      allDemo)]
     
     #remove > and < signs to make columns numeric
@@ -560,8 +561,12 @@ for(idx in 1:length(allClin)){
     # sigCorsRelevant <- sigCorsRelevant$sigCorsRelevant[cache]
     # sigCorsRelevant <- data.frame(sigCorsRelevant)
     
+    # Leave one out!
+    loo.mask = (unqIDs[id] != IDandDate[,1])
+    if (sum(!loo.mask) > 0){
+
     #decide on number for nfolds from number of obs per subject
-    frq <- as.vector(table(as.character(IDandDate$iPOP_ID)))
+    frq <- as.vector(table(as.character(IDandDate$iPOP_ID[loo.mask])))
     
     #optional argument for leave-one-out CV method
     n <- length(frq)
@@ -571,12 +576,16 @@ for(idx in 1:length(allClin)){
     folds <- rep(1:length(frq),frq[1:length(frq)])
     
     #run cross-validation
-    CV <- cv.glmnet(x=as.matrix(predictors),y=outcome,
+    CV <- cv.glmnet(x=as.matrix(predictors[loo.mask,]),y=as.matrix(outcome[loo.mask]),
                     standardize.response=FALSE,
                     family="gaussian",
                     nfolds=n,
                     foldid=folds,
                     nlambda=100)
+
+    # predict on the remaining one user
+    pred = predict(CV,newx = as.matrix(predictors[!loo.mask,]))
+    sdev.ratio = mean((pred - outcome[!loo.mask])**2) / mean(outcome[!loo.mask]**2)
     
     #view fit
     #theFit <- data.frame(Df=CV$glmnet.fit$df,
@@ -663,8 +672,8 @@ for(idx in 1:length(allClin)){
     
     dfList2[[idx]][[id]] <- data.frame(
       "Clin_Test"=rep(allClin[idx],length(frq)),
-      "Subj"=names(table(as.character(IDandDate$iPOP_ID))),
-      "Num_Obs"=as.vector(table(as.character(IDandDate$iPOP_ID)))
+      "Subj"=names(table(as.character(IDandDate$iPOP_ID[!loo.mask]))),
+      "Num_Obs"=as.vector(table(as.character(IDandDate$iPOP_ID[!loo.mask])))
     )
     #assign(paste0('obsPerSubj', idx), obsPerSubj)
     
@@ -696,8 +705,8 @@ for(idx in 1:length(allClin)){
     
     dfList5[[idx]][[id]] <- data.frame(
       "Clin_Test"=rep(allClin[idx],length(frq)),
-      "Subj"=names(table(as.character(IDandDate$iPOP_ID))),
-      "Num_Obs"=as.vector(table(as.character(IDandDate$iPOP_ID)))
+      "Subj"=names(table(as.character(IDandDate$iPOP_ID[!loo.mask]))),
+      "Num_Obs"=as.vector(table(as.character(IDandDate$iPOP_ID[!loo.mask])))
     )
     #assign(paste0('obsPerSubj', idx), obsPerSubj)
     
@@ -718,8 +727,8 @@ for(idx in 1:length(allClin)){
     )
     #assign(paste0('topFactors', idx), topFactors)
     
-    print(unqIDs[id])
-    
+    print(paste("ID",unqIDs[id],sdev.ratio))
+    }
   } #ea iPOP
   
   print(allClin[idx])
