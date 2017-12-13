@@ -585,7 +585,8 @@ for(idx in 1:length(allClin)){
 
     # predict on the remaining one user
     pred = predict(CV,newx = as.matrix(predictors[!loo.mask,]))
-    sdev.ratio = mean((pred - outcome[!loo.mask])**2) / mean(outcome[!loo.mask]**2)
+#    sdev.ratio = mean((pred - outcome[!loo.mask])**2) / mean(outcome[!loo.mask]**2)
+    sdev.ratio = 1 - var(pred - outcome[!loo.mask]) / var(outcome[!loo.mask] - mean(outcome))
     
     #view fit
     #theFit <- data.frame(Df=CV$glmnet.fit$df,
