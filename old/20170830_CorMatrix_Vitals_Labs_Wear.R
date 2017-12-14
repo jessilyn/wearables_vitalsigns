@@ -21,8 +21,11 @@ labs <- read.csv(
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 
+# wear <- read.csv(
+#   paste0("./","SECURE_data/Basis2016_Norm0824_WeekPrior.csv"),
+#   header=TRUE,sep=',',stringsAsFactors=FALSE)
 wear <- read.csv(
-  paste0("./","SECURE_data/Basis2016_Norm0824_WeekPrior.csv"),
+  paste0("./","SECURE_data/Basis2016_Cleaned_NotNorm0824_WeekPrior.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### PREP VITALS DATA ####
