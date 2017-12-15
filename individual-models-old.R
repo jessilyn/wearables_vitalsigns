@@ -1,9 +1,20 @@
-source("population-models.R")
+library(MASS)
+library("reshape2")
+library("ggthemes")
+library("ggplot2")
+library(dplyr)
+library(reshape2)
+library(randomForest)
+library("lme4")
+
+# Path to the directory with data
+dir = "./SECURE_data/"
+source("load-data.R") # loads the data
+source("ggplot-theme.R") # just to make things look nice
 
 #######################
 ## Individual models ##
 #######################
-library("lme4")
 m1.lme4 = lmer(GLU ~ 1 + rhr_mean + st_mean + (rhr_mean|iPOP_ID),
                data = labs.wear.full)
 summary(m1.lme4)
@@ -12,13 +23,13 @@ MuMIn::r.squaredGLMM(m1.lme4)
 
 head(df)
 
-## LABS PER PATIENT
-table(labs.wear[,1])
+labs.wear= labs.wear.full[!is.na(labs.wear.full$lowAct_gsr_kurtosis),]
 
 # People with many observations
-participants.visit = sort(table(labs.wear[,1]),decreasing = TRUE)
-participants = names(participants.visit[participants.visit>50])
+participants.visit = sort(table(labs.wear$iPOP_ID),decreasing = TRUE)
+participants = names(participants.visit[participants.visit>10])
 
+simple.model = c("st_mean","st_sd","rhr_mean","hr_sd")
 model.p = list()
 for (i in 1:length(participants)){
   labs.wear.p = labs.wear[labs.wear$iPOP_ID %in% participants[i],]
@@ -36,8 +47,6 @@ for (i in 1:length(model.p)){
   print(summary(model.p[[i]])[[2]]$adj.r.squared)
 }
 
-
-
 # People with many observations
 participants.wear = sort(table(labs.wear[!is.na(labs.wear$hr_mean),1]),decreasing = TRUE)
 participants.w = names(participants.wear[participants.wear>20])
@@ -46,9 +55,6 @@ labs.vitals.top = labs.vitals[labs.vitals$iPOP_ID %in% participants.w,]
 labs.wear.top = labs.wear[labs.wear$iPOP_ID %in% participants.w,]
 
 
-library(lme4)
-library("MuMIn")
-library("sjPlot")
 m1.lme4 = lmer(GLU ~ Pulse + Temp + (1|iPOP_ID),
                data = labs.vitals.top)
 sjp.glmer(m1.lme4, type = "fe.cor")

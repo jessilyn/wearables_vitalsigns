@@ -1182,19 +1182,21 @@ names(test)[grep("^ORD_VALUE.+",names(test))] <-
   gsub("^ORD_VALUE.","",names(test)[grep("^ORD_VALUE.+",names(test))])
 labs <- test
 
-labs = fread("SECURE_data/20170905_Cleaned_joined_30k_labs_vitals.csv")
+corDf = fread("SECURE_data/20170905_Cleaned_joined_30k_labs_vitals.csv")
+labs = corDf
 
 #Merge data
 corDf <- merge(labs,
-               vitals[,c("ANON_ID","Clin_Result_Date",
-                         "Pulse","Temp")],
+               vitals[,c("ANON_ID","Clin_Result_Date")],
                by=c("ANON_ID","Clin_Result_Date"),
                all.y = TRUE)
+length(na.omit(corDf$Pulse)); corDf$Pulse[(corDf$Pulse > 230) | (corDf$Pulse < 30) ] <- NA; length(na.omit(corDf$Pulse)) # remove values outside of phys range
+length(na.omit(corDf$Temp)); corDf$Temp[(corDf$Temp > 115) | (corDf$Temp < 90) ] <- NA; length(na.omit(corDf$Temp)) # remove values outside of phys range
 
 #Separate ID/Date columns from corDf
 # ID_Date <- corDf[,c("ANON_ID","Clin_Result_Date")]
 # corDf <- corDf[,-c(which(
-#   names(corDf) %in% c("ANON_ID","Clin_Result_Date")))]
+#   names(corDf) %in% c("ANON_ID","d")))]
 
 #Remove NAs from pulse and temp columns
 sum(!is.na(corDf$Pulse))
@@ -1211,12 +1213,13 @@ corDf <- test
 #### RUN CORRELATIONS ####
 
 #cor(corDf[,3:ncol(corDf)], use = "pairwise.complete.obs")
+
 corDf = corDf[,-6]
 Y = as.matrix(corDf[,3:(ncol(corDf)-2)])
 X = as.matrix(corDf[,(ncol(corDf)-1):ncol(corDf)])
 res = c()
 for (i in 1:(ncol(Y)-2)){
-  s = summary(lm( Y[,i] ~ X))$r.squared
+  s = summary(lm( Y[,i] ~ X))$adj.r.squared
   res = c(res, s)
 }
 names(res) = colnames(Y)[1:length(res)]

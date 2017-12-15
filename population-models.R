@@ -22,7 +22,7 @@ names(top) = colnames(v)
 # order according to accuracy of a simple vitals model (stored in 'top.csv' and it might not be accurate ordering)
 top = sort(top,decreasing = TRUE) 
 top.names = names(top)
-
+labs.wear.full
 # Select variables: iPop_ID, Clin_Result_Data and top variables 
 labs.clin = labs[,colnames(labs) %in% c(colnames(labs)[1:2], top.names)]
 
