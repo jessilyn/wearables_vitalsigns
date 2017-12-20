@@ -25,12 +25,7 @@ names(top) = colnames(v)
 top = sort(top,decreasing = TRUE)
 top.names = names(top)
 
-# top.names <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
-#              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
-#              "CR","EGFR","EOS","EOSAB","ESR", "GLOB","GLU","HCT","HDL",
-#              "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
-#              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
-#              "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC")
+#top.names <- allClin
 
 # Select variables: iPop_ID, Clin_Result_Data and top variables 
 labs.clin = labs[,colnames(labs) %in% c(colnames(labs)[1:2], top.names)]
@@ -58,7 +53,7 @@ models.vitals.s = summary(models.vitals)
 rsq.vitals = c()
 
 for (i in 1:length(top.names))
-  print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
+  #print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
   rsq.vitals = c(rsq.vitals, sqrt(models.vitals.s[[i]]$adj.r.squared)) # not crossvalidated but very elementary models here!
 names(rsq.vitals) = top.names
 

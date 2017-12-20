@@ -3,8 +3,8 @@
 
 #### DEPENDENCIES: iPOP Vitals, Labs, and wearables data
 # vitals.csv 
-# lab_results_20170717.csv
-# Basis2016_Cleaned_NotNorm0824_WeekPrior.csv
+# lab_results_20170717.csv  
+# Basis2016_Cleaned_NotNorm0824_WeekPrior.csv  #for the time course analysis, will have to re-generate these files using different time windows (located in /Users/jessilyn/Desktop/framework_paper/Ryan_Runge_Framework_Paper_All_Materials/Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos)
 
 #### OUTPUT: 
 # objects: labs, wear, vitals (used in population-models.R)
@@ -209,21 +209,3 @@ if(length(emptyVar)!=0){
 }
 
 allWear <- allWear[-c(which(allWear==emptyVar))]
-
-#### FORMAT DATA FRAME FOR CORRELATION MATRIX ####
-
-#Merge data
-# corDf <- merge(labs[,c("iPOP_ID","Clin_Result_Date",allClin)],
-#                vitals[,c("iPOP_ID","Clin_Result_Date",
-#                          "Pulse","Temp")],
-#                by=c("iPOP_ID","Clin_Result_Date"))
-# 
-# corDf <- merge(corDf,wear,
-#                by=c("iPOP_ID","Clin_Result_Date"),
-#                all.x = TRUE)
-
-#Separate ID/Date columns from corDf
-# ID_Date <- corDf[,c("iPOP_ID","Clin_Result_Date")]
-# corDf <- corDf[,-c(which(
-#   names(corDf) %in% c("iPOP_ID","Clin_Result_Date")))]
-
