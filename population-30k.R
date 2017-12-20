@@ -1,3 +1,7 @@
+# Script to create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
+# predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
+# model uses 10% of people as test set in LOO CV
+
 # FUNCTIONS
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
