@@ -1,4 +1,5 @@
 ##TODO: Still issue with CR corr coeff =1; need to fix
+##TODO: Find code that combines GLU_* into 1 metric; LDL_direct vs LDL_calc
 
 require(data.table)
 require(psych)
