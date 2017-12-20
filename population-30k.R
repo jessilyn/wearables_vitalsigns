@@ -2,8 +2,12 @@ require(data.table)
 require(psych)
 dir = "../SECURE_data/"
 
-labs = fread(paste0(dir, "big.labs.csv"))
+labs = fread(paste0(dir, "20170905_Cleaned_joined_30k_labs_vitals.csv"), stringsAsFactors = FALSE)
+#labs <-na.omit(labs)
+#labs = fread(paste0(dir, "big.labs.csv"))
 labs = labs[,-c(1,2)]
+labs <- subset(labs, select=-c(ALCRU))
+#labs = as.numeric(labs)
 
 nms = names(labs)
 nms[1:(length(nms) - 2)] # list with test names

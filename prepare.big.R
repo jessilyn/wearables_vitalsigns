@@ -26,7 +26,10 @@ vitals <- data.frame(vitals)
 labs <- fread(paste0(dir,"all_labs.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-wear <- read.csv(paste0(dir,"Basis2016_Norm0824_WeekPrior.csv"),
+# wear <- read.csv(paste0(dir,"Basis2016_Norm0824_WeekPrior.csv"),
+#   header=TRUE,sep=',',stringsAsFactors=FALSE)
+wear <- read.csv(
+  paste0(dir,"Basis2016_Cleaned_NotNorm0824_WeekPrior.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### NOTE WANTED LAB TESTS:
