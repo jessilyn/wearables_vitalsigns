@@ -57,6 +57,6 @@ for (nm in nms){
 
 # check model ranks against amount of data for each model:
 lab.nums <- as.matrix(nrow(labs) - sort(colSums(is.na(labs))))
-corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2]), ]
+corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
 
-write.table(thirtyk.lm, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
