@@ -1,6 +1,3 @@
-##TODO: Still issue with CR corr coeff =1; need to fix
-##TODO: Find code that combines GLU_* into 1 metric; LDL_direct vs LDL_calc
-
 # FUNCTIONS
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
@@ -17,23 +14,18 @@ dir = "../SECURE_data/"
 
 labs <- read.csv(paste0(dir, "20170905_Cleaned_joined_30k_labs_vitals.csv"), 
              header=TRUE,sep=',',stringsAsFactors = FALSE)
-
-# Remember the list of subjects
-ANON_ID = labs$ANON_ID
-
+ANON_ID = labs$ANON_ID # Remember the list of subjects
 labs[, -c(1,2)] <- apply(labs[, -c(1,2)], 2, remove_outliers) # clean the data
-
-labs = labs[,-c(1,2)]
-labs <- subset(labs, select=-c(ALCRU))
-#labs = as.numeric(labs)
+labs = labs[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
+labs <- subset(labs, select=-c(ALCRU)) # all values for ALCRU tests are NA
 
 nms = names(subset(labs, select=-c(Pulse, Temp)))
-nms[1:(length(nms) - 2)] # list with test names
+#nms[1:(length(nms) - 2)] # list with test names
 
 # Do cross-valiadtion per subject
 subjects = unique(ANON_ID)
 n = length(subjects) # total num of observations
-test = sample(n)[1:floor(n*0.1)] # 10% for testing
+test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
 test.subj = subjects[test]
 test.mask = ANON_ID %in% test.subj 
 
