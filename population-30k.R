@@ -39,9 +39,9 @@ for (nm in nms){
   model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,])
 
   # predict
-  pred = predict(model, newdata = df[!test.mask,])
+  pred = predict(model, newdata = df[test.mask,])
   
-  cor.coef <- cor(pred, labs[[nm]][!test.mask], use = "complete.obs")
+  cor.coef <- cor(pred, labs[[nm]][test.mask], use = "complete.obs")
   #print(paste(nm,cor.coef))
   
   thirtyk.lm= rbind(thirtyk.lm, c(nm,cor.coef))
