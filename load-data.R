@@ -46,14 +46,6 @@ vitals[,c("Pulse","Temp")] <- apply(
   vitals[,c("Pulse","Temp")], 2,
   function(x) as.numeric(as.character(x)))
 
-#Describe
-# describe(vitals$Pulse)
-# describe(vitals$Temp)
-# 
-# #Plot hist
-# hist(vitals$Pulse)
-# hist(vitals$Temp)
-
 ## REMOVED THIS FROM SCRIPT ##
 # #Transform to normal (in this case sqrt pulse; winsor Temp)
 # describe(sqrt(vitals$Pulse))
