@@ -1,8 +1,10 @@
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data
 
 ## TODO Decide how to best define allClin
-## why are there 52 instead of 54 iPOP people included in the analysis (see labs.wear.uid). Compare length(unique(wear$iPOP_ID)) with length(unique(wear.vitals$iPOP_ID))
+## TODO why are there 52 instead of 54 iPOP people included in the analysis (see labs.wear.uid). Compare length(unique(wear$iPOP_ID)) with length(unique(wear.vitals$iPOP_ID))
 ## TODO what is the purpose for the loopover wear.names
+## TODO why are there only 51 features in the model (we had something like 153 previously)
+
 
 library(MASS)
 library("reshape2")
