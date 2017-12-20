@@ -11,21 +11,22 @@ library("glmnet")
 dir = "../SECURE_data/"
 
 #source("../20171214_thirtyk_PaperFigures.R") # loads the data
+source("population-30k.R") # loads the top simple models from 30k
 source("load-data.R") # loads the data
 source("ggplot-theme.R") # just to make things look nice
 
 #######################
 ## Population models ##
 #######################
-v = t(read.csv("top.csv",row.names = 1))
+v = t(read.csv(paste0(dir,"ranked_models.csv"),row.names = 1))
+#v = t(read.csv("top.csv",row.names = 1))
 top = as.vector(v)
 names(top) = colnames(v)
 
-# order according to accuracy of a simple vitals model (stored in 'top.csv' and it might not be accurate ordering)
-top = sort(top,decreasing = TRUE)
-top.names = names(top)
-
-#top.names <- allClin
+# order according to accuracy of a simple vitals model (stored in 'ranked_models.csv')
+# make sure the tests in the 30k are also done in the iPOP group
+top.names = names(top)[names(top) %in% allClin]
+simple <- top[names(top) %in% allClin ]
 
 # Select variables: iPop_ID, Clin_Result_Data and top variables 
 labs.clin = labs[,colnames(labs) %in% c(colnames(labs)[1:2], top.names)]
@@ -46,31 +47,24 @@ labs.wear.uid = labs.wear[,1]
 
 # Linear models for iPOP vitals ~ labs
 #labs.vitals[,names(labs.vitals) %in% top.names]
-models.vitals = lm(as.matrix(labs.vitals[,names(labs.vitals) %in% top.names]) ~ as.matrix(labs.vitals[,c("Pulse","Temp")]))
-models.vitals.s = summary(models.vitals)
+# models.vitals = lm(as.matrix(labs.vitals[,names(labs.vitals) %in% top.names]) ~ as.matrix(labs.vitals[,c("Pulse","Temp")]))
+# models.vitals.s = summary(models.vitals)
 
 # Choose best R from iPOP vitals ~ labs
-rsq.vitals = c()
-
-for (i in 1:length(top.names))
-  #print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
-  rsq.vitals = c(rsq.vitals, sqrt(models.vitals.s[[i]]$adj.r.squared)) # not crossvalidated but very elementary models here!
-names(rsq.vitals) = top.names
+# rsq.vitals = c()
+# 
+# for (i in 1:length(top.names))
+#   #print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
+#   rsq.vitals = c(rsq.vitals, sqrt(models.vitals.s[[i]]$adj.r.squared)) # not crossvalidated but very elementary models here!
+# names(rsq.vitals) = top.names
 
 ## WEARABLES -- build models for wearables and crossvalidate
-rsq.all = rsq.vitals
+rsq.all = simple
 # Mean impute
 #for(i in 1:ncol(labs.wear))
 #  labs.wear[is.na(labs.wear[,i]), i] <- mean(labs.wear[,i], na.rm = TRUE)
 
-
-wear.names = list(#tiny = c("st_mean","rhr_mean"),
-  #smpl = c("st_mean","st_sd","rhr_mean","hr_sd"),
-  #smpl.hr = c("sk_mean","gsr_mean", "st_mean","st_sd","rhr_mean","hr_sd"),
-  #smpl.hr.gsr = c("hr_mean","sk_mean","gsr_mean","st_mean","rhr_mean","hr_sd","sk_sd","gsr_sd","st_sd","rhr_sd"),
-  #goodGLOB = c("hr_kurtosis","hr_mean", "hr_median", "st_mean", "st_sd", "gsr_median", "rhr_mean", "highAct_hr_sd",
-  #         "highAct_st_mean", "highAct_st_median", "highAct_st_kurtosis", "highAct_gsr_mean", "highAct_gsr_median",
-  #         "highAct_sk_mean", "highAct_sk_median", "highAct_sk_kurtosis", "lowAct_st_mean", "lowAct_st_median"),
+wear.names = list(
   vars = c(),
   all = colnames(wear)[3:53])
 
@@ -81,7 +75,7 @@ for (j in 1:length(wear.names))
   col.wear = c(1:2, which(colnames(wear) %in% wear.names[[j]])) 
   col.vitals = c(1:2, 4:5)
   
-  # Build to matrices: predictev vs true
+  # Build to matrices: predicted vs true
   val.true = c()
   val.pred = list(lm=c(),rf=c())
   
