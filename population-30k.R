@@ -1,4 +1,5 @@
 # Script to create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
+# checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
 # model uses 10% of people as test set in LOO CV
 

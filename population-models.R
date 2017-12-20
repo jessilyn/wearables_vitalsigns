@@ -1,3 +1,9 @@
+# Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data
+
+## TODO Decide how to best define allClin
+## why are there 52 instead of 54 iPOP people included in the analysis (see labs.wear.uid). Compare length(unique(wear$iPOP_ID)) with length(unique(wear.vitals$iPOP_ID))
+## TODO what is the purpose for the loopover wear.names
+
 library(MASS)
 library("reshape2")
 library("ggthemes")
@@ -11,22 +17,22 @@ library("glmnet")
 dir = "../SECURE_data/"
 
 #source("../20171214_thirtyk_PaperFigures.R") # loads the data
-source("population-30k.R") # loads the top simple models from 30k
+#source("population-30k.R") # loads the top simple models from 30k
 source("load-data.R") # loads the data
 source("ggplot-theme.R") # just to make things look nice
 
 #######################
 ## Population models ##
 #######################
+# these are the bivariate 30k models (labtest ~ Pulse + Temp) from population-30k.R ordered according to accuracy of a simple vitals model (stored in 'ranked_models.csv')
 v = t(read.csv(paste0(dir,"ranked_models.csv"),row.names = 1))
-#v = t(read.csv("top.csv",row.names = 1))
 top = as.vector(v)
 names(top) = colnames(v)
 
-# order according to accuracy of a simple vitals model (stored in 'ranked_models.csv')
 # make sure the tests in the 30k are also done in the iPOP group
 top.names = names(top)[names(top) %in% allClin]
 simple <- top[names(top) %in% allClin ]
+rsq.all = simple # create vector of correlation coeffs
 
 # Select variables: iPop_ID, Clin_Result_Data and top variables 
 labs.clin = labs[,colnames(labs) %in% c(colnames(labs)[1:2], top.names)]
@@ -43,23 +49,17 @@ labs.wear.full = data.frame(labs.wear.full)
 labs.wear = aggregate(labs.wear.full[,-c(1,2)], by = list(labs.wear.full$iPOP_ID), function(x){mean(x,na.rm=TRUE)} )
 labs.wear.uid = labs.wear[,1]
 
-# From now on we have independent [??]
-
-# Linear models for iPOP vitals ~ labs
-#labs.vitals[,names(labs.vitals) %in% top.names]
+## Non-CV Bivariate Linear models for iPOP vitals ~ labs
+# labs.vitals[,names(labs.vitals) %in% top.names]
 # models.vitals = lm(as.matrix(labs.vitals[,names(labs.vitals) %in% top.names]) ~ as.matrix(labs.vitals[,c("Pulse","Temp")]))
 # models.vitals.s = summary(models.vitals)
-
-# Choose best R from iPOP vitals ~ labs
 # rsq.vitals = c()
-# 
 # for (i in 1:length(top.names))
 #   #print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
 #   rsq.vitals = c(rsq.vitals, sqrt(models.vitals.s[[i]]$adj.r.squared)) # not crossvalidated but very elementary models here!
 # names(rsq.vitals) = top.names
 
 ## WEARABLES -- build models for wearables and crossvalidate
-rsq.all = simple
 # Mean impute
 #for(i in 1:ncol(labs.wear))
 #  labs.wear[is.na(labs.wear[,i]), i] <- mean(labs.wear[,i], na.rm = TRUE)
