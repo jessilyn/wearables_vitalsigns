@@ -15,15 +15,18 @@
 require(data.table)
 require(psych)
 
+dir = "../SECURE_data/"
+
+
 #### READ:
-vitals <- fread("SECURE_data//all_vitals.csv",
+vitals <- fread(paste0(dir,"all_vitals.csv"),
                    header=TRUE,sep=',',stringsAsFactors=FALSE)
 vitals <- data.frame(vitals)
 
-labs <- fread("SECURE_data/all_labs.csv",
+labs <- fread(paste0(dir,"all_labs.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-wear <- read.csv("SECURE_data/Basis2016_Norm0824_WeekPrior.csv",
+wear <- read.csv(paste0(dir,"Basis2016_Norm0824_WeekPrior.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #### NOTE WANTED LAB TESTS:
@@ -1182,7 +1185,7 @@ names(test)[grep("^ORD_VALUE.+",names(test))] <-
   gsub("^ORD_VALUE.","",names(test)[grep("^ORD_VALUE.+",names(test))])
 labs <- test
 
-corDf = fread("SECURE_data/20170905_Cleaned_joined_30k_labs_vitals.csv")
+corDf = fread(paste0(dir,"20170905_Cleaned_joined_30k_labs_vitals.csv"))
 labs = corDf
 
 #Merge data
@@ -1271,6 +1274,6 @@ for (i in 1:length(allClin)){
 }
 
 
-fwrite(vitals,file = "SECURE_data/big.vitals.csv")
-fwrite(labs,file = "SECURE_data/big.labs.csv")
+fwrite(vitals,file = paste0(dir,"big.vitals.csv"))
+fwrite(labs,file = paste0(dir,"big.labs.csv"))
 
