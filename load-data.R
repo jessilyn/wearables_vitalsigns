@@ -1,15 +1,18 @@
 
-#### PURPOSE: Check correlations between vitals and other clinical labs.
+#### PURPOSE: Load data for population and inividual models
 
-#### DEPENDENCIES: Vitals and Labs data; psych libary from R.
+#### DEPENDENCIES: iPOP Vitals, Labs, and wearables data
+# vitals.csv 
+# lab_results_20170717.csv
+# Basis2016_Cleaned_NotNorm0824_WeekPrior.csv
 
-#### OUTPUT: Two CSV files to desktop with correlation results.
+#### OUTPUT: 
+# objects: labs, wear, vitals (used in population-models.R)
 
 #### REQUIRED LIBRARIES (i.e. PACKAGES) ####
-#install.packages("psych")
 require(psych)
 
-dir = "/Users/jessilyn/Desktop/framework_paper/weartals/"
+dir = "../SECURE_data/"
 
 
 #### READ DATA ####'
@@ -20,7 +23,6 @@ vitals <- read.csv(
 labs <- read.csv(
   paste0(dir,"lab_results_20170717.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
-
 
 # wear <- read.csv(
 #   paste0(dir,"Basis2016_Norm0824_WeekPrior.csv"),
@@ -45,13 +47,6 @@ vitals$Clin_Result_Date <- format(
 vitals[,c("Pulse","Temp")] <- apply(
   vitals[,c("Pulse","Temp")], 2,
   function(x) as.numeric(as.character(x)))
-
-## REMOVED THIS FROM SCRIPT ##
-# #Transform to normal (in this case sqrt pulse; winsor Temp)
-# describe(sqrt(vitals$Pulse))
-# vitals$Pulse <- sqrt(vitals$Pulse)
-# describe(winsor(vitals$Temp, trim = 0.05))
-# vitals$Temp <- winsor(vitals$Temp, trim = 0.05)
 
 #### PREP LABS DATA ####
 
@@ -218,17 +213,17 @@ allWear <- allWear[-c(which(allWear==emptyVar))]
 #### FORMAT DATA FRAME FOR CORRELATION MATRIX ####
 
 #Merge data
-corDf <- merge(labs[,c("iPOP_ID","Clin_Result_Date",allClin)],
-               vitals[,c("iPOP_ID","Clin_Result_Date",
-                         "Pulse","Temp")],
-               by=c("iPOP_ID","Clin_Result_Date"))
-
-corDf <- merge(corDf,wear,
-               by=c("iPOP_ID","Clin_Result_Date"),
-               all.x = TRUE)
+# corDf <- merge(labs[,c("iPOP_ID","Clin_Result_Date",allClin)],
+#                vitals[,c("iPOP_ID","Clin_Result_Date",
+#                          "Pulse","Temp")],
+#                by=c("iPOP_ID","Clin_Result_Date"))
+# 
+# corDf <- merge(corDf,wear,
+#                by=c("iPOP_ID","Clin_Result_Date"),
+#                all.x = TRUE)
 
 #Separate ID/Date columns from corDf
-ID_Date <- corDf[,c("iPOP_ID","Clin_Result_Date")]
-corDf <- corDf[,-c(which(
-  names(corDf) %in% c("iPOP_ID","Clin_Result_Date")))]
+# ID_Date <- corDf[,c("iPOP_ID","Clin_Result_Date")]
+# corDf <- corDf[,-c(which(
+#   names(corDf) %in% c("iPOP_ID","Clin_Result_Date")))]
 

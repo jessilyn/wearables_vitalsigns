@@ -8,7 +8,7 @@ library(randomForest)
 library("glmnet")
 
 # Path to the directory with data
-dir = "./SECURE_data/"
+dir = "../SECURE_data/"
 
 #source("../20171214_thirtyk_PaperFigures.R") # loads the data
 source("load-data.R") # loads the data
