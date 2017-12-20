@@ -5,10 +5,12 @@ library("ggplot2")
 library(dplyr)
 library(reshape2)
 library(randomForest)
+library("glmnet")
 
 # Path to the directory with data
 dir = "./SECURE_data/"
 
+#source("../20171214_thirtyk_PaperFigures.R") # loads the data
 source("load-data.R") # loads the data
 source("ggplot-theme.R") # just to make things look nice
 
@@ -20,9 +22,16 @@ top = as.vector(v)
 names(top) = colnames(v)
 
 # order according to accuracy of a simple vitals model (stored in 'top.csv' and it might not be accurate ordering)
-top = sort(top,decreasing = TRUE) 
+top = sort(top,decreasing = TRUE)
 top.names = names(top)
-labs.wear.full
+
+# top.names <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
+#              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
+#              "CR","EGFR","EOS","EOSAB","ESR", "GLOB","GLU","HCT","HDL",
+#              "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
+#              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
+#              "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC")
+
 # Select variables: iPop_ID, Clin_Result_Data and top variables 
 labs.clin = labs[,colnames(labs) %in% c(colnames(labs)[1:2], top.names)]
 
@@ -38,17 +47,18 @@ labs.wear.full = data.frame(labs.wear.full)
 labs.wear = aggregate(labs.wear.full[,-c(1,2)], by = list(labs.wear.full$iPOP_ID), function(x){mean(x,na.rm=TRUE)} )
 labs.wear.uid = labs.wear[,1]
 
-# From now on we have independent
+# From now on we have independent [??]
 
-# Linear models for vitals
-labs.vitals[,names(labs.vitals) %in% top.names]
+# Linear models for iPOP vitals ~ labs
+#labs.vitals[,names(labs.vitals) %in% top.names]
 models.vitals = lm(as.matrix(labs.vitals[,names(labs.vitals) %in% top.names]) ~ as.matrix(labs.vitals[,c("Pulse","Temp")]))
 models.vitals.s = summary(models.vitals)
 
-# Choose best
+# Choose best R from iPOP vitals ~ labs
 rsq.vitals = c()
 
 for (i in 1:length(top.names))
+  print(top.names, sqrt(models.vitals.s[[i]]$adj.r.squared))
   rsq.vitals = c(rsq.vitals, sqrt(models.vitals.s[[i]]$adj.r.squared)) # not crossvalidated but very elementary models here!
 names(rsq.vitals) = top.names
 
