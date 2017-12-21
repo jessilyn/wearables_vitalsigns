@@ -179,7 +179,7 @@ hist(dfFigOneC$Skin_Temperature_F, col="darkgrey", breaks=100,
      main = NULL, font.lab=2,lwd=2,font=2)
 
 #characterize the iPOP data set
-length(na.omit(iPOPvitals$X.Temp.)) + length(na.omit(iPOPvitals$X.Pulse.)) # total number of clinical vital signs measured
+length(na.omit(iPOPvitals$Temp)) + length(na.omit(iPOPvitals$Pulse)) # total number of clinical vital signs measured
 describe(iPOPlabs[names(iPOPlabs) %in% allClin]) # summary of clinical labs data
 length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
@@ -198,13 +198,13 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #describe(iPOPlabs)
 
 
-#################################
-#  Figure 2C  - see Lukasz code #
-#################################
-# load-data.R - repetitive with what is already embedded at the top of this script
+###############
+#  Figure 2C  #
+###############
+# load-data.R - ignore; repetitive with what is already embedded at the top of this script
 
-# population-30k.R:  create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
-# checked by Jessie on 2017-12-20
+# population-30k.Rignore; repetitive with what is already embedded below in this script
+# create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
 # model uses 10% of people as test set in LOO CV
 
@@ -213,7 +213,7 @@ corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
 corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU)) # all values for ALCRU tests are NA
 nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
 
-# Do cross-valiadtion per subject
+# Do cross-validation per subject
 subjects = unique(ANON_ID)
 n = length(subjects) # total num of observations
 test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
@@ -232,11 +232,51 @@ for (nm in nms){
 corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
 #write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-# population-models.R - Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data
+# population-models.R - trying to migrate this into current script
+# Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data
+
 source("ggplot-theme.R") # just to make things look nice
 
-##  FILL IN HERE ##
+top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple bivariate models
+top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 
+wear.names <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+
+# LOO
+labs.wear.uid = unique(wear$iPOP_ID) 
+patients = unique(labs.wear.uid)
+
+# Build to matrices: predicted vs true
+val.true = c()
+val.pred = list(lm=c(),rf=c())
+
+# Linear models for wearables
+for (k in 1:length(patients)){
+  loo.mask = patients[k] == labs.wear.uid
+
+  ######################
+  ## Build random forest and linear models
+  # We will predict one by one, let's create a vector of tests
+  res.true = c()
+  res.pred = list(lm=c(),rf=c())
+  
+  print(patients[k])
+  for (l in 1:length(top.names)){
+    # skip nas and nans
+    nas = cbind(as.matrix(wear[,wear.names]),as.matrix(wear[,top.names[l],drop=FALSE]))
+    na.rows = rowMeans(nas)
+    drop.rows = (is.na(na.rows) | is.nan(na.rows))
+    x <-as.matrix(wear[!loo.mask & !drop.rows,wear.names]) # predictors ## PROBLEM WITH THE LOO.MASK
+    y <- as.matrix(as.data.frame(wear[!loo.mask & !drop.rows,top.names[l],drop=FALSE])) # outcomes ## PROBLEM WITH THE LOO.MASK
+    glm.res = cv.glmnet(x=x,y=y,
+                        standardize.response=FALSE,
+                        family="gaussian",
+                        nlambda=100)
+    wear.names[["vars"]] = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,])
+}
+
+  ### FILL  IN RANDOM FOREST & REST OF population-models.R script
+  
 #########################################
 #  Figure 2D  - update with new models  #
 #########################################
