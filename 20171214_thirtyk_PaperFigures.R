@@ -243,8 +243,7 @@ top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that 
 wear.names <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 
 # LOO
-labs.wear.uid = unique(wear$iPOP_ID) 
-patients = unique(labs.wear.uid)
+patients = unique(wear$iPOP_ID)
 
 # Build to matrices: predicted vs true
 val.true = c()
@@ -252,8 +251,8 @@ val.pred = list(lm=c(),rf=c())
 
 # Linear models for wearables
 for (k in 1:length(patients)){
-  loo.mask = patients[k] == labs.wear.uid
-
+  train <- patients[patients != patients[k]]
+  test <- patients[patients == patients[k]]
   ######################
   ## Build random forest and linear models
   # We will predict one by one, let's create a vector of tests
@@ -261,18 +260,36 @@ for (k in 1:length(patients)){
   res.pred = list(lm=c(),rf=c())
   
   print(patients[k])
+  
   for (l in 1:length(top.names)){
-    # skip nas and nans
-    nas = cbind(as.matrix(wear[,wear.names]),as.matrix(wear[,top.names[l],drop=FALSE]))
-    na.rows = rowMeans(nas)
-    drop.rows = (is.na(na.rows) | is.nan(na.rows))
-    x <-as.matrix(wear[!loo.mask & !drop.rows,wear.names]) # predictors ## PROBLEM WITH THE LOO.MASK
-    y <- as.matrix(as.data.frame(wear[!loo.mask & !drop.rows,top.names[l],drop=FALSE])) # outcomes ## PROBLEM WITH THE LOO.MASK
-    glm.res = cv.glmnet(x=x,y=y,
+    x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
+    x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
+    x.train<- na.omit(x.train) # skip nas and nans
+    predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.names]) # matrix of predictors for model building
+    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building
+    
+    # create test set
+    x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
+    x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
+    x.test<- na.omit(x.test) # skip nas and nans
+    
+    # lasso 
+    glm.res = cv.glmnet(x=predictors,y=outcome,
                         standardize.response=FALSE,
                         family="gaussian",
                         nlambda=100)
-    wear.names[["vars"]] = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,])
+    #wear.names[["vars"]] = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,])
+    
+    # Random forest
+    fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(wear.names,collapse=" + "))
+    models.wear.rf = randomForest(as.formula(fml),
+                                  data = x2)
+                                  #weights = labs.wear$weight) # not sure where this comes from
+    res.true = cbind(res.true, as.matrix(x.test[,top.names[l]])) # true value of left out person
+    res.pred[["rf"]] = cbind(res.pred[["rf"]], predict(models.wear.rf, newdata = x.test)) # predict on left out person
+    
+    # LM 
+    
 }
 
   ### FILL  IN RANDOM FOREST & REST OF population-models.R script
