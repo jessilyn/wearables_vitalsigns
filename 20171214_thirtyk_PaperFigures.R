@@ -275,7 +275,9 @@ for (k in 1:length(patients)){
     x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
     x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
     res.true = cbind(res.true, as.matrix(x.test[,top.names[l]])) # true values of left out person
-    
+    if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
+      res.true = NA # hacky fix to make line 309 defining val.true to work
+    }
     # lasso 
     glm.res = cv.glmnet(x=predictors,y=outcome,
                         standardize.response=FALSE,
@@ -296,24 +298,24 @@ for (k in 1:length(patients)){
                         # , weights = labs.wear$weight) # should come from lasso maybe?
     res.pred[["lm"]] = cbind(res.pred[["lm"]], predict(models.wear.lm, newdata = x.test))
   }
-  if (!nrow(res.pred[["lm"]])){ # not sure what this does, removing for now.
+  if (!nrow(res.pred[["lm"]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
     res.pred[["lm"]] = NA
     res.pred[["rf"]] = NA
   }
   # Add predictions and true values for the patient k
-  val.true = rbind(val.true, res.true)
   val.pred[["lm"]] = rbind(val.pred[["lm"]], res.pred[["lm"]])
   val.pred[["rf"]] = rbind(val.pred[["rf"]], res.pred[["rf"]])
   # ----
+  val.true = rbind(val.true, res.true) ## fixed by lines 278-280 : still a really hacky fix - will need to remove row.names before analysis
 }
-
+row.names(val.true)<-NULL # remove row names on val.true
 
 # Diagonal of correlation matrix of pred and true is the correlation for a specific test
 rsq.wear = diag(cor(val.true,val.pred[["rf"]],use = "pairwise.complete.obs")) #rsq.wear not correct yet
 names(rsq.wear) = top.names
 
 rsq.all <- corr.coefs[corr.coefs[,1] %in% top.names, ] # pull out the correlation coefficients from the 30k simple bivariate models where those labs were also present in the iPOP dataset
-# rsq.all = rbind(rsq.all, rsq.wear) #rsq.wear not correct yet
+rsq.all = rbind(rsq.all, rsq.wear) #rsq.wear not correct yet
 # rownames(rsq.all)[nrow(rsq.all)] = paste(names(wear.names)[j],"rf",sep="-")
 
   ### FILL  IN REST OF population-models.R script ###
