@@ -243,7 +243,7 @@ top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 
-# top.names = top.names[1:3]
+top.names = top.names
 
 # Get the vitals models
 ranked = read.csv("../SECURE_data/ranked_models.csv",header = FALSE)
@@ -254,11 +254,12 @@ colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names]
 # LOO
 patients = unique(wear$iPOP_ID)
 
-# Build to matrices: predicted vs true
-val.true = c()
-val.pred = list(lm=c(),rf=c())
+# Build two lists: predicted vs true
+val.true = list()
+val.pred = list(lm=list(),rf=list())
 
 modes = c("all","lasso")
+model.names = c("lm","rf")
 
 for (mode in modes){
   cat("Feature sellection:",mode,"\n")
@@ -269,8 +270,8 @@ for (mode in modes){
     ######################
     ## Build random forest and linear models
     # We will predict one by one, let's create a vector of tests
-    res.true<-c()
-    res.pred = list(lm=c(),rf=c())
+    res.true <- list()
+    res.pred = list(lm=list(),rf=list())
     
     cat("Patient",patients[k],"\n") # LOO
     
@@ -286,9 +287,9 @@ for (mode in modes){
       x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
       x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
-      res.true = cbind(res.true, as.matrix(x.test[,top.names[l]])) # true values of left out person
+      res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
-        res.true = NA # hacky fix to make line 309 defining val.true to work
+        res.true[[l]] = NA # hacky fix to make line 309 defining val.true to work
       }
       if(mode == "all")
         variables.to.use = wear.names
@@ -306,37 +307,43 @@ for (mode in modes){
       models.wear.rf = randomForest(as.formula(fml),
                                     data = x.train)
                                     #weights = labs.wear$weight) # should come from lasso maybe?
-      res.pred[["rf"]] = cbind(res.pred[["rf"]], predict(models.wear.rf, newdata = x.test)) # predict on left out person
+      res.pred[["rf"]][[l]] = predict(models.wear.rf, newdata = x.test) # predict on left out person
       
       # LM  - always throws warnings; not sure why
       models.wear.lm = lm(as.formula(fml),
                           data = x.train)
                           # , weights = labs.wear$weight) # should come from lasso maybe?
-      res.pred[["lm"]] = cbind(res.pred[["lm"]], predict(models.wear.lm, newdata = x.test))
+      res.pred[["lm"]][[l]] = predict(models.wear.lm, newdata = x.test)
+      # if (!nrow(res.pred[["lm"]][[l]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
+      #   res.pred[["lm"]][[l]] = NA
+      #   res.pred[["rf"]][[l]] = NA
+      # }
+      # Add predictions and true values for the patient k
+      
+      for (mdl.name in model.names){
+        if (l %in% names(val.pred[[mdl.name]]))
+          val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]])
+        else
+          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]]
+      }
+
+      if (l %in% names(val.true))
+        val.true[[l]] = append(val.true[[l]], res.true[[l]]) 
+      else
+        val.true[[l]] = res.true[[l]]
     }
-    if (!nrow(res.pred[["lm"]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
-      res.pred[["lm"]] = NA
-      res.pred[["rf"]] = NA
-    }
-    # Add predictions and true values for the patient k
-    val.pred[["lm"]] = rbind(val.pred[["lm"]], res.pred[["lm"]])
-    val.pred[["rf"]] = rbind(val.pred[["rf"]], res.pred[["rf"]])
     # ----
-    val.true = rbind(val.true, res.true) ## fixed by lines 278-280 : still a really hacky fix - will need to remove row.names before analysis
   }
   
-  # Diagonal of correlation matrix of pred and true is the correlation for a specific test
-  rsq.wear = diag(cor(val.true,val.pred[["rf"]],use = "pairwise.complete.obs"))
-  names(rsq.wear) = top.names
-  rsq.all = rbind(rsq.all, rsq.wear)
-  rownames(rsq.all)[nrow(rsq.all)] = paste(mode,"rf",sep="-")
-  
-  colnames(val.pred[["lm"]])= NULL
-  colnames(val.true)= NULL
-  rsq.wear = diag(cor(val.true,as.matrix(val.pred[["lm"]]),use = "pairwise.complete.obs"))
-  names(rsq.wear) = top.names
-  rsq.all = rbind(rsq.all, rsq.wear)
-  rownames(rsq.all)[nrow(rsq.all)] = paste(mode,"lm",sep="-")
+  # Get correlation coeffs for each model
+  for (mdl.name in model.names){
+    rsq.wear = c()
+    for (l in 1:length(top.names))
+      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[l]], val.true[[l]]))
+    names(rsq.wear) = top.names
+    rsq.all = rbind(rsq.all, rsq.wear)
+    rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
+  }
 }
 
 rownames(rsq.all)[1] = "vitals"
