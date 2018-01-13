@@ -249,7 +249,7 @@ top.names = top.names
 ranked = read.csv("../SECURE_data/ranked_models.csv",header = FALSE)
 ranked = ranked[ranked$V1 %in% top.names,]
 rsq.all = t(as.matrix(ranked$V2))
-colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names]
+colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] #TODO: CHECK ORDERING!!!
 
 # LOO
 patients = unique(wear$iPOP_ID)
