@@ -241,7 +241,15 @@ source("ggplot-theme.R") # just to make things look nice
 
 top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
-wear.names <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+
+# top.names = top.names[1:3]
+
+# Get the vitals models
+ranked = read.csv("../SECURE_data/ranked_models.csv",header = FALSE)
+ranked = ranked[ranked$V1 %in% top.names,]
+rsq.all = t(as.matrix(ranked$V2))
+colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names]
 
 # LOO
 patients = unique(wear$iPOP_ID)
@@ -250,73 +258,108 @@ patients = unique(wear$iPOP_ID)
 val.true = c()
 val.pred = list(lm=c(),rf=c())
 
-# Build models using wearables data
-for (k in 1:length(patients)){
-  train <- patients[patients != patients[k]]
-  test <- patients[patients == patients[k]]
-  ######################
-  ## Build random forest and linear models
-  # We will predict one by one, let's create a vector of tests
-  res.true<-c()
-  res.pred = list(lm=c(),rf=c())
-  
-  print(patients[k]) # LOO
-  
-  for (l in 1:length(top.names)){
-    print(top.names[l])
-    x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
-    x.train<- na.omit(x.train) # skip nas and nans ## the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-    x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
-    predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.names]) # matrix of predictors for model building
-    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+modes = c("all","lasso")
+
+for (mode in modes){
+  cat("Feature sellection:",mode,"\n")
+  # Build models using wearables data
+  for (k in 1:length(patients)){
+    train <- patients[patients != patients[k]]
+    test <- patients[patients == patients[k]]
+    ######################
+    ## Build random forest and linear models
+    # We will predict one by one, let's create a vector of tests
+    res.true<-c()
+    res.pred = list(lm=c(),rf=c())
     
-    # create test set
-    x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
-    x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
-    x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
-    res.true = cbind(res.true, as.matrix(x.test[,top.names[l]])) # true values of left out person
-    if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
-      res.true = NA # hacky fix to make line 309 defining val.true to work
+    cat("Patient",patients[k],"\n") # LOO
+    
+    for (l in 1:length(top.names)){
+      cat("Test",top.names[l],"\n")
+      x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
+      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
+      x.train<- na.omit(x.train) # skip nas and nans ## the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+      predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.names]) # matrix of predictors for model building
+      outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+      
+      # create test set
+      x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
+      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
+      x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
+      res.true = cbind(res.true, as.matrix(x.test[,top.names[l]])) # true values of left out person
+      if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
+        res.true = NA # hacky fix to make line 309 defining val.true to work
+      }
+      if(mode == "all")
+        variables.to.use = wear.names
+      if(mode == "lasso"){
+        # lasso 
+        glm.res = cv.glmnet(x=predictors,y=outcome,
+                            standardize.response=FALSE,
+                            family="gaussian",
+                            nlambda=100)
+        variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
+      }
+      
+      # Random forest
+      fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(variables.to.use,collapse=" + "))
+      models.wear.rf = randomForest(as.formula(fml),
+                                    data = x.train)
+                                    #weights = labs.wear$weight) # should come from lasso maybe?
+      res.pred[["rf"]] = cbind(res.pred[["rf"]], predict(models.wear.rf, newdata = x.test)) # predict on left out person
+      
+      # LM  - always throws warnings; not sure why
+      models.wear.lm = lm(as.formula(fml),
+                          data = x.train)
+                          # , weights = labs.wear$weight) # should come from lasso maybe?
+      res.pred[["lm"]] = cbind(res.pred[["lm"]], predict(models.wear.lm, newdata = x.test))
     }
-    # lasso 
-    glm.res = cv.glmnet(x=predictors,y=outcome,
-                        standardize.response=FALSE,
-                        family="gaussian",
-                        nlambda=100)
-    #wear.names[["vars"]] = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # not sure what this does, removing for now.
-    
-    # Random forest
-    fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(wear.names,collapse=" + "))
-    models.wear.rf = randomForest(as.formula(fml),
-                                  data = x.train)
-                                  #weights = labs.wear$weight) # should come from lasso maybe?
-    res.pred[["rf"]] = cbind(res.pred[["rf"]], predict(models.wear.rf, newdata = x.test)) # predict on left out person
-    
-    # LM  - always throws warnings; not sure why
-    models.wear.lm = lm(as.formula(fml),
-                        data = x.train)
-                        # , weights = labs.wear$weight) # should come from lasso maybe?
-    res.pred[["lm"]] = cbind(res.pred[["lm"]], predict(models.wear.lm, newdata = x.test))
+    if (!nrow(res.pred[["lm"]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
+      res.pred[["lm"]] = NA
+      res.pred[["rf"]] = NA
+    }
+    # Add predictions and true values for the patient k
+    val.pred[["lm"]] = rbind(val.pred[["lm"]], res.pred[["lm"]])
+    val.pred[["rf"]] = rbind(val.pred[["rf"]], res.pred[["rf"]])
+    # ----
+    val.true = rbind(val.true, res.true) ## fixed by lines 278-280 : still a really hacky fix - will need to remove row.names before analysis
   }
-  if (!nrow(res.pred[["lm"]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
-    res.pred[["lm"]] = NA
-    res.pred[["rf"]] = NA
-  }
-  # Add predictions and true values for the patient k
-  val.pred[["lm"]] = rbind(val.pred[["lm"]], res.pred[["lm"]])
-  val.pred[["rf"]] = rbind(val.pred[["rf"]], res.pred[["rf"]])
-  # ----
-  val.true = rbind(val.true, res.true) ## fixed by lines 278-280 : still a really hacky fix - will need to remove row.names before analysis
+  
+  # Diagonal of correlation matrix of pred and true is the correlation for a specific test
+  rsq.wear = diag(cor(val.true,val.pred[["rf"]],use = "pairwise.complete.obs"))
+  names(rsq.wear) = top.names
+  rsq.all = rbind(rsq.all, rsq.wear)
+  rownames(rsq.all)[nrow(rsq.all)] = paste(mode,"rf",sep="-")
+  
+  colnames(val.pred[["lm"]])= NULL
+  colnames(val.true)= NULL
+  rsq.wear = diag(cor(val.true,as.matrix(val.pred[["lm"]]),use = "pairwise.complete.obs"))
+  names(rsq.wear) = top.names
+  rsq.all = rbind(rsq.all, rsq.wear)
+  rownames(rsq.all)[nrow(rsq.all)] = paste(mode,"lm",sep="-")
 }
-row.names(val.true)<-NULL # remove row names on val.true
 
-# Diagonal of correlation matrix of pred and true is the correlation for a specific test
-rsq.wear = diag(cor(val.true,val.pred[["rf"]],use = "pairwise.complete.obs")) #rsq.wear not correct yet
-names(rsq.wear) = top.names
+rownames(rsq.all)[1] = "vitals"
+df = data.frame(rsq.all)
+#df[df<0] = 0 # clamp correlations to 0
+df$name = rownames(rsq.all)
 
-rsq.all <- corr.coefs[corr.coefs[,1] %in% top.names, ] # pull out the correlation coefficients from the 30k simple bivariate models where those labs were also present in the iPOP dataset
-rsq.all = rbind(rsq.all, rsq.wear) #rsq.wear not correct yet
-# rownames(rsq.all)[nrow(rsq.all)] = paste(names(wear.names)[j],"rf",sep="-")
+# Plot the correlations
+data = melt(df, id = "name")
+colnames(data) = c("model","test","r_squared")
+
+png('plots/figure2C.png',width = 1700, height = 600,res=120)
+vitals_res = data[data$model == "vitals",]
+data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
+ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
+dev.off()
+
 
   ### FILL  IN REST OF population-models.R script ###
   
@@ -751,7 +794,7 @@ for (i in topHits){
   
   length(temp.diff.neut[!is.na(temp.diff.neut)])
 #  }
-}
+#}
 
 ############
 # Figure 4 #
@@ -854,6 +897,5 @@ write.csv(sigCors_Ranked,
           row.names=TRUE)
 
 #### END ####
-
 
 
