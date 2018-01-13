@@ -254,14 +254,14 @@ colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] #TODO: CHECK ORDERING!!!
 # LOO
 patients = unique(wear$iPOP_ID)
 
-# Build two lists: predicted vs true
-val.true = list()
-val.pred = list(lm=list(),rf=list())
-
 modes = c("all","lasso")
 model.names = c("lm","rf")
 
 for (mode in modes){
+  # Build two lists: predicted vs true
+  val.true = list()
+  val.pred = list(lm=list(),rf=list())
+
   cat("Feature sellection:",mode,"\n")
   # Build models using wearables data
   for (k in 1:length(patients)){
