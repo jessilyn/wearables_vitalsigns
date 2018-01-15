@@ -214,7 +214,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 ANON_ID = corDf$ANON_ID # Remember the list of subjects
 corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
-corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU)) # all values for ALCRU tests are NA
+corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
 nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
 
 # Do cross-validation per subject
@@ -232,9 +232,12 @@ for (nm in nms){
   pred = predict(model, newdata = df[test.mask,]) # predict
   cor.coef <- cor(pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
   thirtyk.lm= rbind(thirtyk.lm, c(nm,cor.coef))
+  print(nm)
 }
 corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
-#write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
+corr.coefs[corr.coefs %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
+corr.coefs[corr.coefs %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
+write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
@@ -243,13 +246,11 @@ top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 
-top.names = top.names
-
 # Get the vitals models
 ranked = read.csv("../SECURE_data/ranked_models.csv",header = FALSE)
 ranked = ranked[ranked$V1 %in% top.names,]
 rsq.all = t(as.matrix(ranked$V2))
-colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] #TODO: CHECK ORDERING!!!
+colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
 
 # LOO
 patients = unique(wear$iPOP_ID)
@@ -262,7 +263,7 @@ for (mode in modes){
   val.true = list()
   val.pred = list(lm=list(),rf=list())
 
-  cat("Feature sellection:",mode,"\n")
+  cat("Feature selection:",mode,"\n")
   # Build models using wearables data
   for (k in 1:length(patients)){
     train <- patients[patients != patients[k]]
@@ -278,21 +279,21 @@ for (mode in modes){
     for (l in 1:length(top.names)){
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
-      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
-      x.train<- na.omit(x.train) # skip nas and nans ## the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-      predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.names]) # matrix of predictors for model building
+      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
+      x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+      predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
       
       # create test set
       x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
-      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.names)] # subset input data by lab: only take current lab test of interest
+      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
-        res.true[[l]] = NA # hacky fix to make line 309 defining val.true to work
+        res.true[[l]] = NA # TODO: keep track of number of people this happens to
       }
       if(mode == "all")
-        variables.to.use = wear.names
+        variables.to.use = wear.variables
       if(mode == "lasso"){
         # lasso 
         glm.res = cv.glmnet(x=predictors,y=outcome,
@@ -306,13 +307,13 @@ for (mode in modes){
       fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(variables.to.use,collapse=" + "))
       models.wear.rf = randomForest(as.formula(fml),
                                     data = x.train)
-                                    #weights = labs.wear$weight) # should come from lasso maybe?
+                                    #weights = labs.wear$weight) # TODO: do we need to include this line?
       res.pred[["rf"]][[l]] = predict(models.wear.rf, newdata = x.test) # predict on left out person
       
       # LM  - always throws warnings; not sure why
       models.wear.lm = lm(as.formula(fml),
                           data = x.train)
-                          # , weights = labs.wear$weight) # should come from lasso maybe?
+                          # , weights = labs.wear$weight) # TODO: do we need to include this line?
       res.pred[["lm"]][[l]] = predict(models.wear.lm, newdata = x.test)
       # if (!nrow(res.pred[["lm"]][[l]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
       #   res.pred[["lm"]][[l]] = NA
@@ -320,6 +321,7 @@ for (mode in modes){
       # }
       # Add predictions and true values for the patient k
       
+      # TODO: I don't understand what the if else statements below are doing
       for (mdl.name in model.names){
         if (l %in% names(val.pred[[mdl.name]]))
           val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]])
@@ -343,6 +345,8 @@ for (mode in modes){
     names(rsq.wear) = top.names
     rsq.all = rbind(rsq.all, rsq.wear)
     rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
+    
+    # TODO : make sure sufficient number of observations for each test and training set
   }
 }
 
@@ -367,9 +371,6 @@ ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shap
   labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
 dev.off()
 
-
-  ### FILL  IN REST OF population-models.R script ###
-  
 #########################################
 #  Figure 2D  - update with new models  #
 #########################################
