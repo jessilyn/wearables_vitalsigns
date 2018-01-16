@@ -255,7 +255,6 @@ patients = unique(wear$iPOP_ID)
 
 modes = c("all","lasso")
 model.names = c("lm","rf")
-rm(num.Records)
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
@@ -279,27 +278,29 @@ for (mode in modes){
     cat("Patient",patients[k],"\n") # LOO
     
     for (l in 1:length(top.names)){
-      num.Records[[1]][[idx]] <- patients[k]
-      num.Records[[2]][[idx]] <- top.names[l]
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
       x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
       predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
-      num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
       
       # create test set
       x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
       x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
-      num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
-      idx=idx+1 # to index entry into num.Records
+      
+      
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
         res.true[[l]] = NA # TODO: keep track of number of people this happens to
       }
       if(mode == "all")
+        num.Records[[1]][[idx]] <- patients[k]
+        num.Records[[2]][[idx]] <- top.names[l]
+        num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
+        num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
+        idx=idx+1 # to index entry into num.Records
         variables.to.use = wear.variables
       if(mode == "lasso"){
         # lasso 
