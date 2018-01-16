@@ -250,6 +250,7 @@ ranked = ranked[ranked$V1 %in% top.names,]
 rsq.all = t(as.matrix(ranked$V2))
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
 
+
 # LOO
 patients = unique(wear$iPOP_ID)
 
@@ -331,13 +332,13 @@ for (mode in modes){
       
       
       for (mdl.name in model.names){
-        if (l %in% names(val.pred[[mdl.name]])) # TODO: I don't understand what the if else statements below are doing
+        if (l <= length(val.pred[[mdl.name]])) # TODO: I don't understand what the if else statements below are doing
           val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]]) #append new predictions to val.pred matrix
         else
           val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]] # initiate val.pred matrix
       }
 
-      if (l %in% names(val.true))
+      if (l <= length(val.true))
         val.true[[l]] = append(val.true[[l]], res.true[[l]]) 
       else
         val.true[[l]] = res.true[[l]] # initiate val.true matrix
@@ -361,7 +362,7 @@ num.Records <- do.call("cbind",num.Records)
 write.table(num.Records, "../SECURE_data/num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 rownames(rsq.all)[1] = "vitals"
-df = data.frame(rsq.all)
+  df = data.frame(rsq.all)
 #df[df<0] = 0 # clamp correlations to 0
 df$name = rownames(rsq.all)
 
