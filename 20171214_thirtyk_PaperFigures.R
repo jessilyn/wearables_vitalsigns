@@ -488,7 +488,90 @@ hist(corDf$Temp, col="darkgrey", breaks=100,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 
+##############
+#  Figure 3D #
+##############
 
+
+#for (i in clinTopTen){
+i <- "NEUT"
+pulse.diff <- c()
+temp.diff <- c()
+pulse.fourth.quartile <- c()
+pulse.num.fourth.quartile <- c()
+pulse.third.quartile <- c()
+pulse.num.third.quartile <- c()
+pulse.second.quartile <- c()
+pulse.num.second.quartile <- c()
+pulse.first.quartile <- c()
+pulse.num.first.quartile <- c()
+temp.fourth.quartile <- c()
+temp.num.fourth.quartile <- c()
+temp.third.quartile <- c()
+temp.num.third.quartile <- c()
+temp.second.quartile <- c()
+temp.num.second.quartile <- c()
+temp.first.quartile <- c()
+temp.num.first.quartile <- c()
+idx=0
+ptm <- proc.time()
+for (j in unique(corDf$ANON_ID)){
+  idx=idx+1
+  #create personalized quartiles for each person/measurement type; this step takes a very very long time
+  person <- corDf[corDf$ANON_ID == j,]
+  if (sum(!is.na(person[,i])) >= 4 & sum(!is.na(person$Pulse)) >= 4){
+    print(paste0(idx, " : ", j))
+    person$bins2 <- ntile(person[,i], 4)
+    #get pulse values when the lab measurement for that person is in their lowest or highest quartile
+    pulse.fourth.quartile[j] <- mean(person$Pulse[person$bins2 >= 4])
+    pulse.num.fourth.quartile[j] <-length(person$Pulse[person$bins2 >= 4 ])
+    pulse.third.quartile[j] <- mean(person$Pulse[person$bins2 >= 3  &  person$bins2 < 4 ])
+    pulse.num.third.quartile[j] <- length(person$Pulse[person$bins2 >= 3  &  person$bins2 < 4 ])
+    pulse.second.quartile[j] <- mean(person$Pulse[person$bins2 >= 2  &  person$bins2 < 3 ])
+    pulse.num.second.quartile[j] <- length(person$Pulse[person$bins2 >= 2  &  person$bins2 < 3 ])
+    pulse.first.quartile[j] <- mean(person$Pulse[person$bins2 <= 1 ])
+    pulse.num.first.quartile[j] <-length(person$Pulse[person$bins2 <= 1 ])
+    # make a way to save this for each i
+    
+    #get temp values when the lab measurement for that person is in their lowest or highest quantile
+    temp.fourth.quartile[j] <- mean(person$Temp[person$bins2 >= 4 ])
+    temp.num.fourth.quartile[j] <-length(person$Temp[person$bins2 >= 4 ])
+    temp.third.quartile[j] <- mean(person$Temp[person$bins2 >= 3  &  person$bins2 < 4 ])
+    temp.num.third.quartile[j] <- length(person$Temp[person$bins2 >= 3  &  person$bins2 < 4 ])
+    temp.second.quartile[j] <- mean(person$Temp[person$bins2 >= 2  &  person$bins2 < 3 ])
+    temp.num.second.quartile[j] <- length(person$Temp[person$bins2 >= 2  &  person$bins2 < 3 ])
+    temp.first.quartile[j] <- mean(person$Temp[person$bins2 <= 1 ])
+    temp.num.first.quartile[j] <-length(person$Temp[person$bins2 <= 1 ])
+    # make a way to save this for each i
+    
+  }
+}
+proc.time() - ptm
+
+personalQuartiles<-cbind(as.matrix(pulse.first.quartile), as.matrix(pulse.second.quartile), as.matrix(pulse.third.quartile),as.matrix(pulse.fourth.quartile),
+                         as.matrix(temp.first.quartile), as.matrix(temp.second.quartile), as.matrix(temp.third.quartile), as.matrix(temp.fourth.quartile))
+personalQuartiles <- personalQuartiles[(!is.na(personalQuartiles[,2]) & !is.na(personalQuartiles[,5])),] #remove NAs
+#names(personalQuartiles) <- c("pulse.first.quartile", "pulse.second.quartile", "pulse.third.quartile", "pulse.fourth.quartile", "temp.first.quartile", "temp.second.quartile", "temp.third.quartile","temp.fourth.quartile")
+pulse.diff<-as.matrix(personalQuartiles[,4] - personalQuartiles[,1])
+hist(pulse.diff, breaks=100, col="darkred", main=paste0("Mean Pulse (1st - 4th quartile of ",i, " values)"))
+boxplot(pulse.diff, col="darkred", outline=FALSE, main=paste0("Mean Pulse (1st - 4th quartile of ",i, " values)"))
+temp.diff<-as.matrix(personalQuartiles[,8] - personalQuartiles[,5])
+hist(temp.diff, breaks=100, col="darkblue", main=paste0("Mean Temp (1st - 4th quartile of ",i, " values)"))
+boxplot(temp.diff, col="darkblue", outline=FALSE, main=paste0("Mean Temp (1st - 4th quartile of ",i, " values)"))
+
+
+# data in play: temp.diff.neut and pulse.diff.neut and temp.diff.lym and pulse.diff.lym
+hist(temp.diff.neut, breaks=100, main="Temperature Difference Between Personalized  4th and 1st Quartile of Neutrophil Levels", xlab="Temperature Difference", ylab="Number of Individuals", border="black", col="darkblue")
+hist(pulse.diff.neut, breaks=100, main="Pulse Difference Between Personalized 4th and 1st Quartile of Neutrophil Levels", xlab="Pulse Difference", ylab="Number of Individuals", border="black", col="darkred")
+hist(temp.diff.lym, breaks=100, main="Temperature Difference Between Personalized 4th and 1st Quartile of Lymphocyte Levels", xlab="Temperature Difference", ylab="Number of Individuals", border="black", col="darkblue")
+hist(pulse.diff.lym, breaks=100, main="Pulse Difference Between Personalized 4th and 1st Quartile of Lymphocyte Levels", xlab="Pulse Difference", ylab="Number of Individuals", border="black", col="darkred")
+
+write.csv(temp.diff.lym, "~/Desktop/tempdifflym.csv")
+write.csv(pulse.diff.lym, "~/Desktop/pulsedifflym.csv")
+
+length(temp.diff.neut[!is.na(temp.diff.neut)])
+#  }
+#}
 
 ##########################################
 #    Fig 3C; Suppl. Table 2 and 3        #
@@ -729,90 +812,7 @@ for (i in topHits){
   boxplot(below, above, outline=FALSE, main=paste(i,", P=", pval, sep=""), names=c("Below 1st ventile","Above 10th ventile"), ylab="Temp")
 }
 
-##############
-#  Figure 3A #
-##############
 
-
-#for (i in clinTopTen){
-  i <- "NEUT"
-  pulse.diff <- c()
-  temp.diff <- c()
-  pulse.fourth.quartile <- c()
-  pulse.num.fourth.quartile <- c()
-  pulse.third.quartile <- c()
-  pulse.num.third.quartile <- c()
-  pulse.second.quartile <- c()
-  pulse.num.second.quartile <- c()
-  pulse.first.quartile <- c()
-  pulse.num.first.quartile <- c()
-  temp.fourth.quartile <- c()
-  temp.num.fourth.quartile <- c()
-  temp.third.quartile <- c()
-  temp.num.third.quartile <- c()
-  temp.second.quartile <- c()
-  temp.num.second.quartile <- c()
-  temp.first.quartile <- c()
-  temp.num.first.quartile <- c()
-  idx=0
-  ptm <- proc.time()
-  for (j in unique(corDf$ANON_ID)){
-    idx=idx+1
-    #create personalized quartiles for each person/measurement type; this step takes a very very long time
-    person <- corDf[corDf$ANON_ID == j,]
-    if (sum(!is.na(person[,i])) >= 4 & sum(!is.na(person$Pulse)) >= 4){
-      print(paste0(idx, " : ", j))
-    person$bins2 <- ntile(person[,i], 4)
-    #get pulse values when the lab measurement for that person is in their lowest or highest quartile
-      pulse.fourth.quartile[j] <- mean(person$Pulse[person$bins2 >= 4])
-      pulse.num.fourth.quartile[j] <-length(person$Pulse[person$bins2 >= 4 ])
-      pulse.third.quartile[j] <- mean(person$Pulse[person$bins2 >= 3  &  person$bins2 < 4 ])
-      pulse.num.third.quartile[j] <- length(person$Pulse[person$bins2 >= 3  &  person$bins2 < 4 ])
-      pulse.second.quartile[j] <- mean(person$Pulse[person$bins2 >= 2  &  person$bins2 < 3 ])
-      pulse.num.second.quartile[j] <- length(person$Pulse[person$bins2 >= 2  &  person$bins2 < 3 ])
-      pulse.first.quartile[j] <- mean(person$Pulse[person$bins2 <= 1 ])
-      pulse.num.first.quartile[j] <-length(person$Pulse[person$bins2 <= 1 ])
-      # make a way to save this for each i
-    
-    #get temp values when the lab measurement for that person is in their lowest or highest quantile
-      temp.fourth.quartile[j] <- mean(person$Temp[person$bins2 >= 4 ])
-      temp.num.fourth.quartile[j] <-length(person$Temp[person$bins2 >= 4 ])
-      temp.third.quartile[j] <- mean(person$Temp[person$bins2 >= 3  &  person$bins2 < 4 ])
-      temp.num.third.quartile[j] <- length(person$Temp[person$bins2 >= 3  &  person$bins2 < 4 ])
-      temp.second.quartile[j] <- mean(person$Temp[person$bins2 >= 2  &  person$bins2 < 3 ])
-      temp.num.second.quartile[j] <- length(person$Temp[person$bins2 >= 2  &  person$bins2 < 3 ])
-      temp.first.quartile[j] <- mean(person$Temp[person$bins2 <= 1 ])
-      temp.num.first.quartile[j] <-length(person$Temp[person$bins2 <= 1 ])
-      # make a way to save this for each i
-      
-    }
-  }
-  proc.time() - ptm
-
-  personalQuartiles<-cbind(as.matrix(pulse.first.quartile), as.matrix(pulse.second.quartile), as.matrix(pulse.third.quartile),as.matrix(pulse.fourth.quartile),
-                           as.matrix(temp.first.quartile), as.matrix(temp.second.quartile), as.matrix(temp.third.quartile), as.matrix(temp.fourth.quartile))
-  personalQuartiles <- personalQuartiles[(!is.na(personalQuartiles[,2]) & !is.na(personalQuartiles[,5])),] #remove NAs
-  #names(personalQuartiles) <- c("pulse.first.quartile", "pulse.second.quartile", "pulse.third.quartile", "pulse.fourth.quartile", "temp.first.quartile", "temp.second.quartile", "temp.third.quartile","temp.fourth.quartile")
-  pulse.diff<-as.matrix(personalQuartiles[,4] - personalQuartiles[,1])
-  hist(pulse.diff, breaks=100, col="darkred", main=paste0("Mean Pulse (1st - 4th quartile of ",i, " values)"))
-  boxplot(pulse.diff, col="darkred", outline=FALSE, main=paste0("Mean Pulse (1st - 4th quartile of ",i, " values)"))
-  temp.diff<-as.matrix(personalQuartiles[,8] - personalQuartiles[,5])
-  hist(temp.diff, breaks=100, col="darkblue", main=paste0("Mean Temp (1st - 4th quartile of ",i, " values)"))
-  boxplot(temp.diff, col="darkblue", outline=FALSE, main=paste0("Mean Temp (1st - 4th quartile of ",i, " values)"))
-  
-  
-# data in play: temp.diff.neut and pulse.diff.neut and temp.diff.lym and pulse.diff.lym
-  hist(temp.diff.neut, breaks=100, main="Temperature Difference Between Personalized  4th and 1st Quartile of Neutrophil Levels", xlab="Temperature Difference", ylab="Number of Individuals", border="black", col="darkblue")
-  hist(pulse.diff.neut, breaks=100, main="Pulse Difference Between Personalized 4th and 1st Quartile of Neutrophil Levels", xlab="Pulse Difference", ylab="Number of Individuals", border="black", col="darkred")
-  hist(temp.diff.lym, breaks=100, main="Temperature Difference Between Personalized 4th and 1st Quartile of Lymphocyte Levels", xlab="Temperature Difference", ylab="Number of Individuals", border="black", col="darkblue")
-  hist(pulse.diff.lym, breaks=100, main="Pulse Difference Between Personalized 4th and 1st Quartile of Lymphocyte Levels", xlab="Pulse Difference", ylab="Number of Individuals", border="black", col="darkred")
-  
-  write.csv(temp.diff.lym, "~/Desktop/tempdifflym.csv")
-  write.csv(pulse.diff.lym, "~/Desktop/pulsedifflym.csv")
-  
-  length(temp.diff.neut[!is.na(temp.diff.neut)])
-#  }
-#}
 
 ############
 # Figure 4 #
