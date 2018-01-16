@@ -105,7 +105,7 @@ plot(toplot)
 dev.off()
 
 png('plots/other-scatter.png',width = 1200, height = 800,res=120)
-toplot = labs.vitals[,which(colnames(labs.vitals) %in% c(names(top),"Temp","Pulse") )[c(5:12)]]
+toplot = labs.vitals[,which(colnames(labs.vitals) %in% c(top,"Temp","Pulse") )[c(5:12)]]
 toplot = na.omit(toplot)
 plot(toplot)
 dev.off()
@@ -128,8 +128,7 @@ m1.lm = lm(GLU_byMeter ~ 1 + Pulse,
 
 library("lme4")
 
-source("top-names.R")
-top8 = top
+top8 = top.names[1:8]
 plots = list()
 
 plotlist = NULL
@@ -150,33 +149,35 @@ weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border =
 
 library("grid")
 
+#### FIGURE 4D
 ## Univariate Mixed-effect
 # !! Only patients with at least min_visits = 20
-min_visits = 20
-for (i in 1:length(1)){
-  for (j in 1:1){
-    vit = vits[j+1]
+min_visits = 2
+for (i in 1:length(top8)){
+  for (j in 1:2){
+    vit = vits[j]
     clin = top8[i]
     #2*(i - 1) + j + 1
     matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
     
     patients = sort(table(labs.vitals[!is.na(labs.vitals[[clin]]),]$ANON_ID))
     labs.vitals.tmp = labs.vitals[labs.vitals$ANON_ID %in% names(patients[patients > min_visits]),]
-    
-    frm = paste0(clin," ~ ",vit," + (",vit,"|ANON_ID)")
-    print(frm)
-    mm = lmer(frm, data = labs.vitals.tmp)
-    cf = coef(mm)
-    qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(nms[i]," ~ ",vit)) + ylab("count")
-    print(qq, vp = viewport(layout.pos.row = matchidx$row,
-                            layout.pos.col = matchidx$col))
+    if (nrow(labs.vitals.tmp) ){
+      frm = paste0(clin," ~ ",vit," + (",vit,"|ANON_ID)")
+      print(frm)
+      mm = lmer(frm, data = labs.vitals.tmp)
+      cf = coef(mm)
+      qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(nms[i]," ~ ",vit)) + ylab("count")
+      print(qq, vp = viewport(layout.pos.row = matchidx$row,
+                              layout.pos.col = matchidx$col))
+    }
   }
 }
 
-## Univariate Mixed-effect
+## Univariate Mixed-effect: True vs predicted 
 # !! Only patients with at least min_visits = 20
-min_visits = 50
-for (i in 1:length(1)){
+min_visits = 5
+for (i in 1:length(top8)){
   clin = top8[i]
   #2*(i - 1) + j + 1
   matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
@@ -192,32 +193,35 @@ for (i in 1:length(1)){
   
   frm = paste0(clin," ~ Pulse + Temp + (Pulse + Temp|ANON_ID)")
   print(frm)
-  mm = lmer(frm, data = labs.vitals.tmp[train,])
-  cf = coef(mm)
-  vit = "Pulse"
-  qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(nms[i]," ~ ",vit)) + ylab("count")
-  print(qq, vp = viewport(layout.pos.row = matchidx$row,
-                          layout.pos.col = matchidx$col))
-  
-  # Evaluate LR model
-  frm = paste0(clin," ~ Pulse + Temp")
-  m0 = lm(frm, labs.vitals.tmp[train,])
-  pp = predict(m0, newdata = labs.vitals.tmp[test,])
-  plot(pp, tt)
-  print(cor(pp,tt,use = "na.or.complete"))
-  
-  # Evaluate MM model
-  tt = labs.vitals.tmp[test,clin]
-  pp = predict(mm, newdata = labs.vitals.tmp[test,])
-  plot(pp, tt)
-  print(cor(pp,tt,use = "na.or.complete"))
-  
-  # Evaluate LR model with ID
-  frm = paste0(clin," ~ ANON_ID")
-  m0 = lm(frm, labs.vitals.tmp[train,])
-  pp = predict(m0, newdata = labs.vitals.tmp[test,])
-  plot(pp, tt)
-  print(cor(pp,tt,use = "na.or.complete"))
+  if (nrow(labs.vitals.tmp[train,]) && length(unique(labs.vitals.tmp[train,]$ANON_ID)) > 1){
+    mm = lmer(frm, data = labs.vitals.tmp[train,])
+    cf = coef(mm)
+    vit = "Pulse"
+    qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(nms[i]," ~ ",vit)) + ylab("count")
+    print(qq, vp = viewport(layout.pos.row = matchidx$row,
+                            layout.pos.col = matchidx$col))
+    
+    tt = labs.vitals.tmp[test,clin]
+    
+    # Evaluate LR model
+    frm = paste0(clin," ~ Pulse + Temp")
+    m0 = lm(frm, labs.vitals.tmp[train,])
+    pp = predict(m0, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+    
+    # Evaluate MM model
+    pp = predict(mm, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+    
+    # Evaluate LR model with ID
+    frm = paste0(clin," ~ ANON_ID")
+    m0 = lm(frm, labs.vitals.tmp[train,])
+    pp = predict(m0, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+  }
 }
 
 
