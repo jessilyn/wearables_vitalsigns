@@ -206,7 +206,6 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 # old scripts: load-data.R - now embedded at the top of this script
 # old scripts: population-30k.R - now embedded below in this script
-# population-models.R - trying to migrate this into current script; see line 239 and below
 
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
@@ -237,11 +236,10 @@ for (nm in nms){
 corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
 corr.coefs[corr.coefs %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
 corr.coefs[corr.coefs %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
-write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
+#write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
-
 top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
@@ -257,6 +255,9 @@ patients = unique(wear$iPOP_ID)
 
 modes = c("all","lasso")
 model.names = c("lm","rf")
+rm(num.Records)
+num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
+idx=1 # index for entry into num.Records
 
 for (mode in modes){
   # Build two lists: predicted vs true
@@ -265,6 +266,7 @@ for (mode in modes){
 
   cat("Feature selection:",mode,"\n")
   # Build models using wearables data
+  
   for (k in 1:length(patients)){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
@@ -273,22 +275,27 @@ for (mode in modes){
     # We will predict one by one, let's create a vector of tests
     res.true <- list()
     res.pred = list(lm=list(),rf=list())
-    
+
     cat("Patient",patients[k],"\n") # LOO
     
     for (l in 1:length(top.names)){
+      num.Records[[1]][[idx]] <- patients[k]
+      num.Records[[2]][[idx]] <- top.names[l]
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
       x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
       predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+      num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
       
       # create test set
       x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
       x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
-      x.test<- na.omit(x.test) # skip nas and nans ## SEE ABOVE FOR ISSUE WITH THIS
+      x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
+      num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
+      idx=idx+1 # to index entry into num.Records
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
         res.true[[l]] = NA # TODO: keep track of number of people this happens to
       }
@@ -321,18 +328,19 @@ for (mode in modes){
       # }
       # Add predictions and true values for the patient k
       
-      # TODO: I don't understand what the if else statements below are doing
+      
       for (mdl.name in model.names){
-        if (l %in% names(val.pred[[mdl.name]]))
-          val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]])
+        if (l %in% names(val.pred[[mdl.name]])) # TODO: I don't understand what the if else statements below are doing
+          val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]]) #append new predictions to val.pred matrix
         else
-          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]]
+          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]] # initiate val.pred matrix
       }
 
       if (l %in% names(val.true))
         val.true[[l]] = append(val.true[[l]], res.true[[l]]) 
       else
-        val.true[[l]] = res.true[[l]]
+        val.true[[l]] = res.true[[l]] # initiate val.true matrix
+      
     }
     # ----
   }
@@ -346,9 +354,10 @@ for (mode in modes){
     rsq.all = rbind(rsq.all, rsq.wear)
     rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
     
-    # TODO : make sure sufficient number of observations for each test and training set
   }
 }
+num.Records <- do.call("cbind",num.Records) 
+write.table(num.Records, "../SECURE_data/num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 rownames(rsq.all)[1] = "vitals"
 df = data.frame(rsq.all)
