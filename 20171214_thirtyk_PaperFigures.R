@@ -290,7 +290,7 @@ for (mode in modes){
       x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
-      
+      if (length(res.true[[l]])<5){next}
       
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
         res.true[[l]] = NA # TODO: keep track of number of people this happens to
