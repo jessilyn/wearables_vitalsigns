@@ -291,8 +291,7 @@ for (mode in modes){
       x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
-      if (length(res.true[[l]])<5){next}
-      
+
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
         res.true[[l]] = NA # TODO: keep track of number of people this happens to
       }
@@ -351,7 +350,7 @@ for (mode in modes){
   for (mdl.name in model.names){
     rsq.wear = c()
     for (l in 1:length(top.names))
-      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[l]], val.true[[l]]))
+      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[l]], na.omit(val.true[[l]])))
     names(rsq.wear) = top.names
     rsq.all = rbind(rsq.all, rsq.wear)
     rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
