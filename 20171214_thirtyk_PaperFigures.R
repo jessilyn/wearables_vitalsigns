@@ -227,15 +227,26 @@ test.mask = ANON_ID %in% test.subj
 
 ## Cross validated correlation
 thirtyk.lm= c()
+thirtyk.rf= c()
 for (nm in nms){
   df = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
-  model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
-  pred = predict(model, newdata = df[test.mask,]) # predict
-  cor.coef <- cor(pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
-  thirtyk.lm= rbind(thirtyk.lm, c(nm,cor.coef))
+  ## lm
+  lm.model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
+  lm.pred = predict(lm.model, newdata = df[test.mask,]) # predict
+  lm.cor.coef <- cor(lm.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
+  thirtyk.lm= rbind(thirtyk.lm, c(nm,lm.cor.coef))
+  
+  ## rf
+  rf.model = randomForest(labtest ~ Pulse + Temp, data=na.omit(df[!test.mask,])) # build the model
+  rf.pred = predict(rf.model, newdata = na.omit(df[test.mask,])) # predict
+  rf.cor.coef <- cor(rf.pred, na.omit(df[test.mask,])$labtest, use = "complete.obs")
+  thirtyk.rf= rbind(thirtyk.rf, c(nm,rf.cor.coef))
+  
   print(nm)
 }
 corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
+rf.corr.coefs <- thirtyk.rf[ order(thirtyk.lm[,2], decreasing = TRUE), ]
+plot(corr.coefs, rf.corr.coefs)
 corr.coefs[corr.coefs %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
 corr.coefs[corr.coefs %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
 #write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
