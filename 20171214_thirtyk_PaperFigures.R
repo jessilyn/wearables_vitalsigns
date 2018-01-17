@@ -21,6 +21,8 @@ library(reshape2)
 library(randomForest)
 library("glmnet")
 
+if(!dir.exists("plots")) dir.create("plots")
+
 # FUNCTIONS
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
@@ -369,7 +371,7 @@ df$name = rownames(rsq.all)
 data = melt(df, id = "name")
 colnames(data) = c("model","test","r_squared")
 
-png('plots/figure2C.png',width = 1700, height = 600,res=120)
+png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
 data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
 ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
