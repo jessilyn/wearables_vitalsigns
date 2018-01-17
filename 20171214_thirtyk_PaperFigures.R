@@ -297,13 +297,14 @@ for (mode in modes){
       if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
         res.true[[l]] = NA # TODO: keep track of number of people this happens to
       }
-      if(mode == "all")
+      if(mode == "all"){
         num.Records[[1]][[idx]] <- patients[k]
         num.Records[[2]][[idx]] <- top.names[l]
         num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
         num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
         idx=idx+1 # to index entry into num.Records
         variables.to.use = wear.variables
+      }
       if(mode == "lasso"){
         # lasso 
         glm.res = cv.glmnet(x=predictors,y=outcome,

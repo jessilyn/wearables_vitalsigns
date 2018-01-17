@@ -153,9 +153,12 @@ library("grid")
 ## Univariate Mixed-effect
 # !! Only patients with at least min_visits = 20
 min_visits = 2
-for (i in 1:length(top8)){
-  for (j in 1:2){
-    vit = vits[j]
+
+for (j in 1:2){
+  vit = vits[j]
+  png(paste0('plots/figure4D-',vit,'.png'),width = 1200, height = 800,res=120)
+
+  for (i in 1:length(top8)){
     clin = top8[i]
     #2*(i - 1) + j + 1
     matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
@@ -172,11 +175,12 @@ for (i in 1:length(top8)){
                               layout.pos.col = matchidx$col))
     }
   }
+  dev.off()
 }
 
 ## Univariate Mixed-effect: True vs predicted 
 # !! Only patients with at least min_visits = 20
-min_visits = 5
+min_visits = 20
 for (i in 1:length(top8)){
   clin = top8[i]
   #2*(i - 1) + j + 1
@@ -229,7 +233,8 @@ for (i in 1:length(top8)){
 library(ggplot2)
 library("lme4")
 
-i = 1
+## THE CODE BELOW WORKS ONLY WITH TEST WITH ENOUGH OBSERVATION (GLU, NA., etc.)
+i = 4
 vit = vits[j+1]
 clin = top8[i]
 #2*(i - 1) + j + 1
@@ -263,10 +268,10 @@ toppat = names(sort(-table(labs.vitals$ANON_ID))[c(1:10)])
 
 dd = labs.vitals[labs.vitals$ANON_ID %in% c("N-7881","D-6050",toppat) ,c("ANON_ID",vit,clin)]
 
-if (!("ww" %in% ls()))
-  ww = loess(paste0(vit," ~ ",clin), labs.vitals)
-grid = seq(min(labs.vitals[[clin]], na.rm = T),max(labs.vitals[[clin]],na.rm = T),length.out = 100)
-ff = approxfun(grid, predict(ww,grid))
+# if (!("ww" %in% ls()))
+#   ww = loess(paste0(vit," ~ ",clin), labs.vitals)
+# grid = seq(min(labs.vitals[[clin]], na.rm = T),max(labs.vitals[[clin]],na.rm = T),length.out = 100)
+# ff = approxfun(grid, predict(ww,grid))
 
 ggplot(dd, aes_string(clin, vit, group = "ANON_ID", colour = "ANON_ID")) + 
   weartals_theme + theme(text = element_text(size=20)) +
