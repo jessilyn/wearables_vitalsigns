@@ -246,7 +246,8 @@ for (nm in nms){
 }
 corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
 rf.corr.coefs <- thirtyk.rf[ order(thirtyk.lm[,2], decreasing = TRUE), ]
-plot(corr.coefs, rf.corr.coefs)
+d <- data.frame(x=corr.coefs, y=rf.corr.coefs)
+ggplot(d, aes(as.numeric(as.character(x.2)),as.numeric(as.character(y.2)))) + geom_point()+ geom_text(aes(label=thirtyk.lm[,1])) + ylim(0,0.4) + xlim(0,0.4) + labs(title = "Predictive Model Accuracy for 30K Dataset \n (Correlation Coefs Between Observed and Predicted)", x="Correlation Coefficient \n (Linear Model)", y="Correlation Coefficient \n (Random Forest)")
 corr.coefs[corr.coefs %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
 corr.coefs[corr.coefs %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
 #write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
