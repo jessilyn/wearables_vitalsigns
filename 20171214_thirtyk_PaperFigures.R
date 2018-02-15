@@ -322,6 +322,7 @@ for (mode in modes){
         glm.res = cv.glmnet(x=predictors,y=outcome,
                             standardize.response=FALSE,
                             family="gaussian",
+			    nfold=len(outcome),
                             nlambda=100)
         variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
       }
