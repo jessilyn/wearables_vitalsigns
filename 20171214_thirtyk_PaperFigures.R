@@ -39,13 +39,26 @@ dir = "../SECURE_data/"
 ###################
 #### READ DATA ####
 ###################
+
 #iPOP wearables/clinical combined data
-wear <- read.csv(paste0(dir, "Basis2016_Cleaned_NotNorm0824_WeekPrior.csv"),
-                 header=TRUE,sep=',',stringsAsFactors=FALSE) # for Lukasz script
-# wear <- read.csv("/Users/jessilyn/Documents/Career_Development/Mentoring/RyanRunge/20170803_FINAL_LASSOS/Basis2016_Norm0824_WeekPrior.csv",
+# wear <- read.csv(paste0(dir, "Basis2016_Cleaned_NotNorm0824_WeekPrior.csv"),
+#                  header=TRUE,sep=',',stringsAsFactors=FALSE) # for Lukasz script
+# do not use:  wear <- read.csv("/Users/jessilyn/Documents/Career_Development/Mentoring/RyanRunge/20170803_FINAL_LASSOS/Basis2016_Norm0824_WeekPrior.csv",
 #                  header=TRUE,sep=',',stringsAsFactors=FALSE) # for other figures, may need to resurrect this one
+timespans <-c("AllData",
+              "MonthPrior",
+              "2WeekPrior",
+              "WeekPrior",
+              "5DayPrior",
+              "3DayPrior",
+              "DayPrior" )
+
+wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Ryan_Runge_Framework_Paper_All_Materials/Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
+                "Basis2016_Clean_Norm_", timespans[4], "_20171020.csv"),
+                 header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
+setwd("/Users/jessilyn/Desktop/framework_paper/weartals")
 iPOPvitals <- read.csv(paste0(dir, "vitals.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
@@ -201,7 +214,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 
 ###############
-#  Figure 2C  #
+#  Figure 2D  #
 ###############
 ## TODO: problem removing NAs for x.train and x.test for the multiple model runs (line 267)
 # the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
@@ -211,46 +224,67 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
-# model uses 10% of people as test set in LOO CV
-
-ANON_ID = corDf$ANON_ID # Remember the list of subjects
-corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
-corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
-nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
-
-# Do cross-validation per subject
-subjects = unique(ANON_ID)
-n = length(subjects) # total num of observations
-test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
-test.subj = subjects[test]
-test.mask = ANON_ID %in% test.subj 
-
-## Cross validated correlation
-thirtyk.lm= c()
-thirtyk.rf= c()
-for (nm in nms){
-  df = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
-  ## lm
-  lm.model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
-  lm.pred = predict(lm.model, newdata = df[test.mask,]) # predict
-  lm.cor.coef <- cor(lm.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
-  thirtyk.lm= rbind(thirtyk.lm, c(nm,lm.cor.coef))
+# Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
+#test change
+corr.coefs.lm<-c()
+corr.coefs.quad<-c()
+corr.coefs.rf<-c()
+for (i in 1:50){
+  ANON_ID = corDf$ANON_ID # Remember the list of subjects
+  corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
+  corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
+  nms = names(subset(corDf.tmp, select=-c(Pulse, Temp, bin2)))
   
-  ## rf
-  rf.model = randomForest(labtest ~ Pulse + Temp, data=na.omit(df[!test.mask,])) # build the model
-  rf.pred = predict(rf.model, newdata = na.omit(df[test.mask,])) # predict
-  rf.cor.coef <- cor(rf.pred, na.omit(df[test.mask,])$labtest, use = "complete.obs")
-  thirtyk.rf= rbind(thirtyk.rf, c(nm,rf.cor.coef))
+  # Do cross-validation per subject
+  subjects = unique(ANON_ID)
+  n = length(subjects) # total num of observations
+  test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
+  test.subj = subjects[test]
+  test.mask = ANON_ID %in% test.subj 
   
-  print(nm)
+  ## Cross validated correlation
+  thirtyk.lm= c()
+  thirtyk.quad= c()
+  thirtyk.rf= c()
+  for (nm in nms){
+    df = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
+    ## lm
+    lm.model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
+    lm.pred = predict(lm.model, newdata = df[test.mask,]) # predict
+    lm.cor.coef <- cor(lm.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
+    thirtyk.lm= rbind(thirtyk.lm, c(nm,lm.cor.coef))
+    
+    # quadratic model
+    quad.model = lm(labtest ~ Pulse + Pulse^2, data=df[!test.mask,]) # build the model
+    quad.pred = predict(quad.model, newdata = df[test.mask,]) # predict
+    quad.cor.coef <- cor(quad.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
+    thirtyk.quad= rbind(thirtyk.quad, c(nm,quad.cor.coef))
+    
+    ## rf
+    # rf.model = randomForest(labtest ~ Pulse + Temp, data=na.omit(df[!test.mask,])) # build the model
+    # rf.pred = predict(rf.model, newdata = na.omit(df[test.mask,])) # predict
+    # rf.cor.coef <- cor(rf.pred, na.omit(df[test.mask,])$labtest, use = "complete.obs")
+    # thirtyk.rf= rbind(thirtyk.rf, c(nm,rf.cor.coef))
+    
+    print(nm)
+  }
+  corr.coefs.lm <- cbind(corr.coefs.lm, thirtyk.lm[,2]) 
+  corr.coefs.quad <- cbind(corr.coefs.quad, thirtyk.quad[,2])
+  corr.coefs.rf <- cbind(corr.coefs.quad, thirtyk.rf[,2])
 }
-corr.coefs <- thirtyk.lm[ order(thirtyk.lm[,2], decreasing = TRUE), ]
-rf.corr.coefs <- thirtyk.rf[ order(thirtyk.lm[,2], decreasing = TRUE), ]
-d <- data.frame(x=corr.coefs, y=rf.corr.coefs)
-ggplot(d, aes(as.numeric(as.character(x.2)),as.numeric(as.character(y.2)))) + geom_point()+ geom_text(aes(label=thirtyk.lm[,1])) + ylim(0,0.4) + xlim(0,0.4) + labs(title = "Predictive Model Accuracy for 30K Dataset \n (Correlation Coefs Between Observed and Predicted)", x="Correlation Coefficient \n (Linear Model)", y="Correlation Coefficient \n (Random Forest)")
-corr.coefs[corr.coefs %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
-corr.coefs[corr.coefs %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
-#write.table(corr.coefs, "../SECURE_data/ranked_models.csv",row.names=FALSE,col.names=FALSE, sep=",")
+corr.coefs <- corr.coefs.lm # change to calculate corr.coef for rf or quad models
+rownames(corr.coefs)<- thirtyk.lm[,1] 
+rownames(corr.coefs)[rownames(corr.coefs) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
+rownames(corr.coefs)[rownames(corr.coefs)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
+class(corr.coefs)<-"numeric"
+boxplot(t(corr.coefs), outpch=19, outcex=0.5, ylab="Corr. bt Obs/Pred", xlab="Lab Test", las=2)
+abline(h = 0, col = "red") 
+ci<- apply(as.matrix(corr.coefs), 1, function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
+means <- apply(as.matrix(corr.coefs), 1, function(x){mean(x)})
+ci <- rbind(means, ci)
+corr.coefs <- as.matrix(means[ order(as.matrix(means), decreasing = TRUE) ])
+write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=TRUE,col.names=FALSE, sep=",")
+# Checked against suppl. table 8:  least number of observations should correspond to largest corr.coef ranges in boxplot figure (e.g. AG, ALKP, GLU_Fasting, PLT)
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
@@ -374,7 +408,7 @@ for (mode in modes){
   }
 }
 num.Records <- do.call("cbind",num.Records) 
-write.table(num.Records, "../SECURE_data/num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records, "../SECURE_data/num_Records_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 rownames(rsq.all)[1] = "vitals"
   df = data.frame(rsq.all)
@@ -385,21 +419,19 @@ df$name = rownames(rsq.all)
 data = melt(df, id = "name")
 colnames(data) = c("model","test","r_squared")
 
-png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
+#png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
 data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
 ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
+  ylim(0,0.5) +
   scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
   labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
-dev.off()
-
-#########################################
-#  Figure 2D  - update with new models  #
-#########################################
+#dev.off()
+write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ##############
 #  Figure 3A #
@@ -427,9 +459,9 @@ length(na.omit(vitals$Temp)) + length(na.omit(vitals$Pulse)) # total number of c
 #304 people have more than 50 observations per person
 length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 
-##############
-#  Figure 3A #
-##############
+########################
+#  Figure 3A 3D and 3E #
+########################
 #30 K Univariate Correlation Fit Plots by Lukasz 
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
 allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
@@ -452,6 +484,7 @@ clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", 
 summary.pulse<-list()
 summary.Temp<-list()
 r.squared <-c()
+
 for (j in clinTopTen){
   corDf$bin2<-ntile(corDf[[j]], 40)
   # for Temp
@@ -472,11 +505,14 @@ for (j in clinTopTen){
   # + theme(text = element_text(size=9),
   #         axis.text.x = element_text(angle = 60, hjust = 1)))
   print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
+  #model <-lm(corDf2$Pulse  ~ corDf2$bin2 + I((corDf2$bin2)^2))
   print(ggplot(corDf2, aes(x = bin2, y = Pulse)) +
           stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
           theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
           geom_point(col="black") +
           xlab(paste0(c(j ," Bin"))))
+  
+
   summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
   r.squared[j] <- summary.pulse$adj.r.squared
   # print(ggplot(corDf2, aes(x = bin2, y = Temp)) +
@@ -487,7 +523,6 @@ for (j in clinTopTen){
   #         xlab(paste0(c(j ," Bin"))))
   # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
   # r.squared[j] <- summary.Temp$adj.r.squared
-  
 }
 as.matrix(r.squared)
 
@@ -504,9 +539,9 @@ hist(corDf$Temp, col="darkgrey", breaks=100,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 
-##############
-#  Figure 3D #
-##############
+#####################
+#  Figure 3F and 3G #
+#####################
 
 
 #for (i in clinTopTen){
@@ -681,7 +716,7 @@ for (i in iPOPtopTen){
   #pList[[j]] <- 
   print(ggplot(df, aes(x = df$Pulse, y = df[,1])) +
         geom_point(col="black", pch=19, cex=0.5) +
-        stat_smooth(method = "lm", formula = y ~ x, size = 1.5, col="darkred") +
+        stat_smooth(method = "lm", formula = y  ~ x + I(x^2), size = 1.5, col="darkred") +
         theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
         xlab("cHR") + ylab(i)) }
 #grid.arrange(pList[[1]],pList[[2]],pList[[3]],pList[[4]],pList[[5]],pList[[6]], ncol=2,top="Main Title")
