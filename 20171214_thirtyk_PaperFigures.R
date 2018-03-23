@@ -225,7 +225,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
 # Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
-#test change
+
 corr.coefs.lm<-c()
 corr.coefs.quad<-c()
 corr.coefs.rf<-c()
