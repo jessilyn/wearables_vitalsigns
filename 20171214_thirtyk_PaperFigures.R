@@ -353,10 +353,11 @@ for (mode in modes){
       }
       if(mode == "lasso"){
         # lasso 
+        n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
         glm.res = cv.glmnet(x=predictors,y=outcome,
                             standardize.response=FALSE,
                             family="gaussian",
-			    nfold=len(outcome),
+			                      nfolds=n,
                             nlambda=100)
         variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
       }
