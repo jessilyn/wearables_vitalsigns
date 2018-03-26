@@ -230,10 +230,11 @@ corr.coefs.lm<-c()
 corr.coefs.quad<-c()
 corr.coefs.rf<-c()
 for (i in 1:50){
+  print(i)
   ANON_ID = corDf$ANON_ID # Remember the list of subjects
   corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
   corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
-  nms = names(subset(corDf.tmp, select=-c(Pulse, Temp, bin2)))
+  nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
   
   # Do cross-validation per subject
   subjects = unique(ANON_ID)
@@ -288,13 +289,14 @@ write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
-top.names<-as.character(corr.coefs[,1]) # names of lab tests from the 30k simple bivariate models
+top.names<-rownames(corr.coefs) # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 
 # Get the vitals models
-ranked = read.csv("../SECURE_data/ranked_models.csv",header = FALSE)
+ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
 ranked = ranked[ranked$V1 %in% top.names,]
+rm(rsq.all)
 rsq.all = t(as.matrix(ranked$V2))
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
 
@@ -364,6 +366,7 @@ for (mode in modes){
       
       # Random forest
       fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(variables.to.use,collapse=" + "))
+      set.seed(1)
       models.wear.rf = randomForest(as.formula(fml),
                                     data = x.train)
                                     #weights = labs.wear$weight) # TODO: do we need to include this line?
