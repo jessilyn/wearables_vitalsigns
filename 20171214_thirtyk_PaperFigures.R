@@ -8,7 +8,6 @@
 library(ggplot2)
 library(data.table)
 library(psych)
-#library(lme4)
 library(nlme)
 library(MuMIn)
 library(Rmisc)
@@ -696,6 +695,79 @@ tot <- 0; for (i in 7:56){
 
 # num vital signs in iPOP dataset
 tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot
+
+###############
+#   Figure 4  #
+###############
+# run after reading in and cleaning data and running Figure 2D section to get top.names
+
+library(lme4)
+weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+
+corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")
+top.names<-rownames(corr.coefs) # names of lab tests from the 30k simple bivariate models
+top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
+
+
+## Univariate Mixed-effect: True vs predicted 
+# !! Only patients with at least min_visits = 20
+
+top8 = top.names[1:8]
+min_visits = 20
+weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+
+for (i in 1:length(top8)){
+  clin = top8[i]
+  #matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+  
+  patients = sort(table(corDf[!is.na(corDf[[clin]]),]$ANON_ID))
+  labs.vitals.tmp = corDf[corDf$ANON_ID %in% names(patients[patients > min_visits]),]
+  labs.vitals.tmp$ANON_ID = factor(labs.vitals.tmp$ANON_ID)
+  
+  nn = nrow(labs.vitals.tmp)
+  smp = sample(nn)
+  test = smp[(1+floor(nn*0.9)):nn]
+  train = smp[1:floor(nn*0.9)]
+  
+  frm = paste0(clin," ~ Pulse + Temp + (Pulse + Temp|ANON_ID)")
+  print(frm)
+  if (nrow(labs.vitals.tmp[train,]) && length(unique(labs.vitals.tmp[train,]$ANON_ID)) > 1){
+    mm = lmer(frm, data = labs.vitals.tmp[train,])
+    cf = coef(mm)
+    vit = "Pulse"
+    qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(top8[i]," ~ ",vit)) + ylab("count")
+    print(qq) 
+    #, vp = viewport(layout.pos.row = matchidx$row,
+    #                         layout.pos.col = matchidx$col))
+    
+    tt = labs.vitals.tmp[test,clin]
+    
+    # Evaluate LR model
+    frm = paste0(clin," ~ Pulse + Temp")
+    m0 = lm(frm, labs.vitals.tmp[train,])
+    pp = predict(m0, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+    
+    # Evaluate MM model
+    pp = predict(mm, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+    
+    # Evaluate LR model with ID
+    frm = paste0(clin," ~ ANON_ID")
+    m0 = lm(frm, labs.vitals.tmp[train,])
+    pp = predict(m0, newdata = labs.vitals.tmp[test,])
+    plot(pp, tt)
+    print(cor(pp,tt,use = "na.or.complete"))
+  }
+}
+
+
+
+
+
+
 
 ####################
 # Suppl. Figure 1  #
