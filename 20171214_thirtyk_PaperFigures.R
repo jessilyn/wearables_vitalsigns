@@ -712,14 +712,14 @@ top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that 
 ## Univariate Mixed-effect: True vs predicted 
 # !! Only patients with at least min_visits = 20
 
-top8 = top.names[1:8]
 min_visits = 20
-weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
-
-for (i in 1:length(top8)){
-  clin = top8[i]
-  #matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
-  
+mm.corr.coefs <- c()
+lr.corr.coefs <- c()
+id.corr.coefs <- c()
+clin.idx <- c()
+#for (i in 1:length(top.names)){
+for (i in 1:4){
+  clin = top.names[i]
   patients = sort(table(corDf[!is.na(corDf[[clin]]),]$ANON_ID))
   labs.vitals.tmp = corDf[corDf$ANON_ID %in% names(patients[patients > min_visits]),]
   labs.vitals.tmp$ANON_ID = factor(labs.vitals.tmp$ANON_ID)
@@ -732,41 +732,39 @@ for (i in 1:length(top8)){
   frm = paste0(clin," ~ Pulse + Temp + (Pulse + Temp|ANON_ID)")
   print(frm)
   if (nrow(labs.vitals.tmp[train,]) && length(unique(labs.vitals.tmp[train,]$ANON_ID)) > 1){
+    clin.idx <-c(clin.idx, clin)
     mm = lmer(frm, data = labs.vitals.tmp[train,])
     cf = coef(mm)
     vit = "Pulse"
-    qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(top8[i]," ~ ",vit)) + ylab("count")
-    print(qq) 
+    #qq = qplot(cf$ANON_ID[vit], geom="histogram")  + weartals_theme + xlab(paste0(top8[i]," ~ ",vit)) + ylab("count")
+    #print(qq) 
     #, vp = viewport(layout.pos.row = matchidx$row,
     #                         layout.pos.col = matchidx$col))
-    
     tt = labs.vitals.tmp[test,clin]
-    
+  
     # Evaluate LR model
     frm = paste0(clin," ~ Pulse + Temp")
     m0 = lm(frm, labs.vitals.tmp[train,])
     pp = predict(m0, newdata = labs.vitals.tmp[test,])
-    plot(pp, tt)
-    print(cor(pp,tt,use = "na.or.complete"))
+    #plot(pp, tt)
+    lr.corr.coefs <- c(lr.corr.coefs, cor(pp,tt,use = "na.or.complete")) # corr coef of LR model
     
     # Evaluate MM model
     pp = predict(mm, newdata = labs.vitals.tmp[test,])
-    plot(pp, tt)
-    print(cor(pp,tt,use = "na.or.complete"))
+    #plot(pp, tt)
+    mm.corr.coefs<-c(mm.corr.coefs, cor(pp,tt,use = "na.or.complete")) # corr coef of MM model
     
     # Evaluate LR model with ID
     frm = paste0(clin," ~ ANON_ID")
     m0 = lm(frm, labs.vitals.tmp[train,])
     pp = predict(m0, newdata = labs.vitals.tmp[test,])
-    plot(pp, tt)
-    print(cor(pp,tt,use = "na.or.complete"))
+    #plot(pp, tt)
+    id.corr.coefs <- c(id.corr.coefs, cor(pp,tt,use = "na.or.complete")) # corr coef of LR model only with patient ID
   }
 }
-
-
-
-
-
+indiv.corr.coefs <- cbind(lr.corr.coefs, mm.corr.coefs, id.corr.coefs)
+rownames(indiv.corr.coefs) <- clin.idx
+write.table(indiv.corr.coefs, "../SECURE_data/20180329_indiv_30k_corr_coeffs.csv",row.names=TRUE,col.names=TRUE, sep=",")
 
 
 ####################
