@@ -201,6 +201,22 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #  Figure 1D  - see Ryans_Figure1_Code.R #
 ##########################################
 
+################################################
+#  Figure 1E  - Canonical Correlation Analysis #
+################################################
+library("CCA")
+
+head(iPOPvitals)
+head(iPOPlabs)
+
+clinical.groups = list()
+clinical.groups[["cardio"]] = c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["blood"]] = c("PLT","GLOB","TP","HGB")
+
+model.cc = cc(iPOPcorDf[,colnames(iPOPcorDf) %in% clinical.groups[["blood"]]],
+              iPOPcorDf[,colnames(iPOPcorDf) %in% clinical.groups[["cardio"]]])
+model.cc$cor[1] # Correlation between "blood index" and "cardio index"
+
 #############################
 #    Suppl. Table 1A and B  #
 #############################
