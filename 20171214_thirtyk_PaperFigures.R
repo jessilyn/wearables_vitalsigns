@@ -228,7 +228,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 corr.coefs.lm<-c()
 corr.coefs.quad<-c()
 corr.coefs.rf<-c()
-for (i in 1:50){
+for (i in 1:2){
   print(i)
   ANON_ID = corDf$ANON_ID # Remember the list of subjects
   corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
@@ -283,8 +283,41 @@ ci<- apply(as.matrix(corr.coefs), 1, function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqr
 means <- apply(as.matrix(corr.coefs), 1, function(x){mean(x)})
 ci <- rbind(means, ci)
 corr.coefs <- as.matrix(means[ order(as.matrix(means), decreasing = TRUE) ])
-write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=TRUE,col.names=FALSE, sep=",")
+# write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=TRUE,col.names=FALSE, sep=",")
 # Checked against suppl. table 8:  least number of observations should correspond to largest corr.coef ranges in boxplot figure (e.g. AG, ALKP, GLU_Fasting, PLT)
+
+# create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
+# predicted values from simple bivariate models of (lab test ~ pulse + temp) using iPOP dataset
+# LOO cross validation at the subject level 
+patients = unique(iPOPcorDf$iPOP_ID)
+nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
+corr.coefs.ipop.lm <- c() 
+ipop.lm <- c()
+for (nm in nms){
+  print(nm)
+  for (i in 1:length(patients)){
+  print(patients[i])
+  train <- iPOPcorDf[!iPOPcorDf$iPOP_ID %in% patients[i],]
+  train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp)), train[[nm]]))
+  colnames(train)[4] <- nm
+  test <- iPOPcorDf[iPOPcorDf$iPOP_ID %in% patients[i],]
+  test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp)), test[[nm]]))
+  colnames(test)[4] <- nm
+  if (length(test[[nm]])>0){
+  bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
+  bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict
+  bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
+  ipop.lm= rbind(ipop.lm, c(nm,bivar.lm.cor.coef)) 
+  }
+  }
+}
+corr.coefs.ipop.lm <- ipop.lm
+corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2))
+means<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
+ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
+means <- means [order(means[,2] ,decreasing = TRUE),]
+means = means[means$Group.1 %in% top.names,]
+write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
@@ -293,9 +326,9 @@ top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that 
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 
 # Get the vitals models
-ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
+#ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
+ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm.csv",header = FALSE)
 ranked = ranked[ranked$V1 %in% top.names,]
-rm(rsq.all)
 rsq.all = t(as.matrix(ranked$V2))
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
 
@@ -686,8 +719,6 @@ ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model)
   geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=0.7,
                 position=position_dodge(.7)) + ylim(0,1.5)
 
-
-
 tot # total number of labs that have clin vitals measures corresponding to it
 # num lab tests in iPOP dataset
 tot <- 0; for (i in 7:56){
@@ -704,10 +735,10 @@ tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot
 library(lme4)
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
-corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")
-top.names<-rownames(corr.coefs) # names of lab tests from the 30k simple bivariate models
+#corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")
+corr.coefs <-read.table("../SECURE_data/20180403_ranked_models_ipop_lm.csv",row.names=1, sep=",")
+top.names<-rownames(corr.coefs) # names of lab tests from either the 30k or the iPOP simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
-
 
 ## Univariate Mixed-effect: True vs predicted 
 # !! Only patients with at least min_visits = 20
@@ -771,34 +802,25 @@ d <- melt(data, id.vars="X")
 ggplot(d, aes(x=X, y=value, col=variable, shape=variable))+
   geom_point(cex=2.5) + 
   weartals_theme
-  stat_smooth() 
-   + 
-  ylim(0,0.9) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
 
-
-####################
-#   Figure 5 (??)  #
-####################
+#########################
+#   Figure 2C / 5 (??)  #
+#########################
 #Run after running individual time course jobs that produced corr_coeffs and num_Records files   #
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 # read in each of the corr_coeffs from the different time windows
 # 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
 # save as pdf 4x12.5"
-data <-read.table("../SECURE_data/20180330/20180327/20180327_corr_coeffs_MonthPrior.csv",
+data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_AllData.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #png('SECURE_data/20180330/time_windows_AllData.png',width = 1700, height = 600,res=120)
-vitals_res = data[data$model == "vitals",]
+vitals_res = data[data$model == "vitals.ipop",]
 data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
 data$model = factor(data$model)
 ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
-  ylim(0,0.9) +
+  ylim(0,0.5) +
   scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
