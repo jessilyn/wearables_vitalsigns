@@ -213,78 +213,13 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 
 ###############
-#  Figure 2D  #
+#  Figure 2C  #
 ###############
 ## TODO: problem removing NAs for x.train and x.test for the multiple model runs (line 267)
 # the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
 
 # old scripts: load-data.R - now embedded at the top of this script
 # old scripts: population-30k.R - now embedded below in this script
-
-# create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
-# predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
-# Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
-
-corr.coefs.lm<-c()
-corr.coefs.quad<-c()
-corr.coefs.rf<-c()
-for (i in 1:2){
-  print(i)
-  ANON_ID = corDf$ANON_ID # Remember the list of subjects
-  corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
-  corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
-  nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
-  
-  # Do cross-validation per subject
-  subjects = unique(ANON_ID)
-  n = length(subjects) # total num of observations
-  test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
-  test.subj = subjects[test]
-  test.mask = ANON_ID %in% test.subj 
-  
-  ## Cross validated correlation
-  thirtyk.lm= c()
-  thirtyk.quad= c()
-  thirtyk.rf= c()
-  for (nm in nms){
-    df = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
-    ## lm
-    lm.model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
-    lm.pred = predict(lm.model, newdata = df[test.mask,]) # predict
-    lm.cor.coef <- cor(lm.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
-    thirtyk.lm= rbind(thirtyk.lm, c(nm,lm.cor.coef))
-    
-    # quadratic model
-    quad.model = lm(labtest ~ Pulse + Pulse^2, data=df[!test.mask,]) # build the model
-    quad.pred = predict(quad.model, newdata = df[test.mask,]) # predict
-    quad.cor.coef <- cor(quad.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
-    thirtyk.quad= rbind(thirtyk.quad, c(nm,quad.cor.coef))
-    
-    ## rf
-    # rf.model = randomForest(labtest ~ Pulse + Temp, data=na.omit(df[!test.mask,])) # build the model
-    # rf.pred = predict(rf.model, newdata = na.omit(df[test.mask,])) # predict
-    # rf.cor.coef <- cor(rf.pred, na.omit(df[test.mask,])$labtest, use = "complete.obs")
-    # thirtyk.rf= rbind(thirtyk.rf, c(nm,rf.cor.coef))
-    
-    print(nm)
-  }
-  corr.coefs.lm <- cbind(corr.coefs.lm, thirtyk.lm[,2]) 
-  corr.coefs.quad <- cbind(corr.coefs.quad, thirtyk.quad[,2])
-  corr.coefs.rf <- cbind(corr.coefs.quad, thirtyk.rf[,2])
-}
-corr.coefs <- corr.coefs.lm # change to calculate corr.coef for rf or quad models
-rownames(corr.coefs)<- thirtyk.lm[,1] 
-rownames(corr.coefs)[rownames(corr.coefs) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
-rownames(corr.coefs)[rownames(corr.coefs)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
-class(corr.coefs)<-"numeric"
-boxplot(t(corr.coefs), outpch=19, outcex=0.5, ylab="Corr. bt Obs/Pred", xlab="Lab Test", las=2)
-abline(h = 0, col = "red") 
-ci<- apply(as.matrix(corr.coefs), 1, function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
-means <- apply(as.matrix(corr.coefs), 1, function(x){mean(x)})
-ci <- rbind(means, ci)
-corr.coefs <- as.matrix(means[ order(as.matrix(means), decreasing = TRUE) ])
-# write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=TRUE,col.names=FALSE, sep=",")
-# Checked against suppl. table 8:  least number of observations should correspond to largest corr.coef ranges in boxplot figure (e.g. AG, ALKP, GLU_Fasting, PLT)
 
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using iPOP dataset
@@ -663,44 +598,65 @@ length(temp.diff.neut[!is.na(temp.diff.neut)])
 ##########################################
 #    Fig 3C; Suppl. Table 2 and 3        #
 ##########################################
-# RUN iPOP CORRELATIONS between labs and vitals
+# create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
+# predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
+# Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
+# RUN 30K CORRELATIONS between labs and vitals
 
+names(corDf)[names(corDf) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
+names(corDf)[names(corDf)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
 options("scipen"=100, "digits"=4)
 models=c(" ~ Pulse", # univariate with pulse only
          " ~ Temp",   # univariate with temp only
          " ~ Pulse + Temp", # bivariate with pulse + temp
          " ~ Pulse + I(Pulse^2)",
          " ~ Temp + I(Temp^2)" )
-for (k in 1:length(models)){
-  print(k)
-  r<-matrix(ncol = length(unique(iPOPcorDf$iPOP_ID)),nrow = length(allClin),
-            dimnames=list(
-              c(allClin),
-              c(unique(iPOPcorDf$iPOP_ID))))
-  rsq.pred <-r; p<-r; fstat <-r; degfree <- r; numObs <-r;
-  tmp=0
-  for (i in allClin){ # for each of the 50 clinical lab tests
-    tmp=tmp+1 # counter for index of allClin
-    tmp2=0    # counter for index of iPOP_ID
-    for (j in unique(iPOPcorDf$iPOP_ID)){ 
-      tmp2=tmp2+1  # counter for index of iPOP_ID
-      iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
-      df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
-      df <- na.omit(df)
-      model<-lm(as.formula(paste0(i,models[k])),data=iPOPcorDf2)
-      m <- summary(model) # quadratic univariate with pulse or temp only
-      # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
-      # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
-      numObs[tmp,tmp2]<-length(df$Pulse) # the number of each clinical lab test that has corresponding vital signs
-      iPOPcorDf3 <- iPOPcorDf[(iPOPcorDf$iPOP_ID %in% j),] # test set (the one person that was left out)
-      df3 <- cbind(iPOPcorDf3[[i]], iPOPcorDf3[,c("Pulse", "Temp")])
-      df3 <- na.omit(df3)
-      pred=predict(model, newdata=df3)# prediction on test person
-      rsq.pred[tmp,tmp2] = 1 - (mean( (pred - df3[,1])**2 ) / var( (df[,1]) )) # test r.sq
+cv.runs <- 5
+models.corr.coefs <- c()
+rsq.pred <- 0
+for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
+  print(i)
+  ANON_ID = corDf$ANON_ID # Remember the list of subjects
+  corDf.tmp = corDf[,-c(1,2)]  #remove ANON_ID and Clin_Result_Date
+  corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
+  nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
+
+  # Do cross-validation per subject
+  subjects = unique(ANON_ID)
+  n = length(subjects) # total num of observations
+  test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
+  test.subj = subjects[test]
+  test.mask = ANON_ID %in% test.subj
+
+    for (nm in top.names){ # for each of the 50 clinical lab tests
+      print(nm)
+      tmp=0
+      corDf2 = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
+      #df <- cbind(corDf2[[i]], corDf2[,c("Pulse", "Temp")])
+      corDf2 <- na.omit(corDf2)
+      test.data <- na.omit(corDf2[test.mask,])
+      train.data <-na.omit(corDf2[!test.mask,])
+        for (k in 1:length(models)){
+          # tmp=tmp+1 # counter for index of top.names (could also use allClin)
+          # tmp2=1    # counter for index of CV run
+          # r<-matrix(ncol = length(cv.runs),nrow = length(top.names),
+          #           dimnames=list(
+          #             c(top.names),
+          #             c(i)))
+          # rsq.pred <-r; p<-r; fstat <-r; degfree <- r; numObs <-r;
+
+          model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
+          m <- summary(model) # quadratic univariate with pulse or temp only
+          # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
+          # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
+          numObs[tmp,tmp2]<-length(train.data$Pulse) # the number of each clinical lab test that has corresponding vital signs
+          pred=predict(model, newdata=test.data)# prediction on test data set
+          rsq.pred = 1 - (mean( pred - test.data[,1])**2 ) / var( (test.data[,1]) ) # test r.sq
+          name.rsq <- paste("model.mean.rsq", k, sep = ".")
+          models.corr.coefs <- rbind(models.corr.coefs,
+                                     c(model = name.rsq, cv.step = i, test = nm, rsq.pred = rsq.pred))
     }
   }
-  name.rsq <- paste("model.mean.rsq", k, sep = "")
-  assign(name.rsq, data.frame(model = name.rsq, test = allClin, means = rowMeans(rsq.pred), sd =apply(rsq.pred, 1, sd))) 
 }
 
 rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.mean.rsq3, model.mean.rsq4, model.mean.rsq5))))
@@ -710,22 +666,67 @@ rsq.plot$model <- mapvalues(rsq.plot$model, from = c("model.mean.rsq1", "model.m
 ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model))) +
   geom_point() +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
-  axis.text.x = element_text(angle = 60, hjust = 1)) +
+        axis.text.x = element_text(angle = 60, hjust = 1)) +
   xlab("Clinical Laboratory Test") + ylab("Cross-Validated R-squared (+/- SD)") +
   labs(linetype='Model')
-  guides(guide_legend(title="Model"))
-  #guides(fill=guide_legend(title="Model"))
-  scale_fill_discrete(name="Model")+
+guides(guide_legend(title="Model"))
+#guides(fill=guide_legend(title="Model"))
+scale_fill_discrete(name="Model")+
   geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=0.7,
                 position=position_dodge(.7)) + ylim(0,1.5)
 
-tot # total number of labs that have clin vitals measures corresponding to it
-# num lab tests in iPOP dataset
-tot <- 0; for (i in 7:56){
-  tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot 
+# corr.coefs.lm<-c()
+# corr.coefs.quad<-c()
+# corr.coefs.rf<-c()
+#   ## Cross validated correlation
+#   thirtyk.lm= c()
+#   thirtyk.quad= c()
+#   thirtyk.rf= c()
+#   for (nm in nms){
+#     df = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp) # prepare data for LM
+#     ## lm
+#     lm.model = lm(labtest ~ Pulse + Temp, data=df[!test.mask,]) # build the model
+#     lm.pred = predict(lm.model, newdata = df[test.mask,]) # predict
+#     lm.cor.coef <- cor(lm.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
+#     thirtyk.lm= rbind(thirtyk.lm, c(nm,lm.cor.coef))
+#     
+#     
+#     # quadratic model
+#     quad.model = lm(labtest ~ Pulse + Pulse^2, data=df[!test.mask,]) # build the model
+#     quad.pred = predict(quad.model, newdata = df[test.mask,]) # predict
+#     quad.cor.coef <- cor(quad.pred, corDf.tmp[[nm]][test.mask], use = "complete.obs")
+#     thirtyk.quad= rbind(thirtyk.quad, c(nm,quad.cor.coef))
+#     
+#     ## rf
+#     # rf.model = randomForest(labtest ~ Pulse + Temp, data=na.omit(df[!test.mask,])) # build the model
+#     # rf.pred = predict(rf.model, newdata = na.omit(df[test.mask,])) # predict
+#     # rf.cor.coef <- cor(rf.pred, na.omit(df[test.mask,])$labtest, use = "complete.obs")
+#     # thirtyk.rf= rbind(thirtyk.rf, c(nm,rf.cor.coef))
+#     
+#     print(nm)
+#   }
+#   corr.coefs.lm <- cbind(corr.coefs.lm, thirtyk.lm[,2]) 
+#   corr.coefs.quad <- cbind(corr.coefs.quad, thirtyk.quad[,2])
+#   corr.coefs.rf <- cbind(corr.coefs.quad, thirtyk.rf[,2])
+# }
+# corr.coefs <- corr.coefs.lm # change to calculate corr.coef for rf or quad models
+# rownames(corr.coefs)<- thirtyk.lm[,1] 
+# rownames(corr.coefs)[rownames(corr.coefs) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
+# rownames(corr.coefs)[rownames(corr.coefs)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
+# class(corr.coefs)<-"numeric"
+# boxplot(t(corr.coefs), outpch=19, outcex=0.5, ylab="Corr. bt Obs/Pred", xlab="Lab Test", las=2)
+# abline(h = 0, col = "red") 
+# 
+# ci<- apply(as.matrix(corr.coefs), 1, function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
+# means <- apply(as.matrix(corr.coefs), 1, function(x){mean(x)})
+# ci <- rbind(means, ci)
+# corr.coefs <- as.matrix(means[ order(as.matrix(means), decreasing = TRUE) ])
+# write.table(corr.coefs, "../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=TRUE,col.names=FALSE, sep=",")
+# Checked against suppl. table 8:  least number of observations should correspond to largest corr.coef ranges in boxplot figure (e.g. AG, ALKP, GLU_Fasting, PLT)
 
-# num vital signs in iPOP dataset
-tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot
+
+
+
 
 ###############
 #   Figure 4  #
@@ -959,8 +960,12 @@ str(data.frame(as.list(p))); p<-sort(p)
 str(data.frame(as.list(fstat)))
 tot # total number of labs that have clin vitals measures corresponding to it
 
+# num lab tests in iPOP dataset
+tot <- 0; for (i in 7:56){
+  tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot 
 
-
+# num vital signs in iPOP dataset
+tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot
 
 
 
@@ -1103,6 +1108,76 @@ write.csv(allCors,
 write.csv(sigCors_Ranked,
           "~/Desktop/20170810_sigCorsRanked_VitalsVsLabs.csv",
           row.names=TRUE)
+
+################################
+#  Currently not used in paper #
+################################
+
+# RUN iPOP CORRELATIONS between labs and vitals
+options("scipen"=100, "digits"=4)
+models=c(" ~ Pulse", # univariate with pulse only
+         " ~ Temp",   # univariate with temp only
+         " ~ Pulse + Temp", # bivariate with pulse + temp
+         " ~ Pulse + I(Pulse^2)",
+         " ~ Temp + I(Temp^2)" )
+
+for (k in 1:length(models)){
+  print(k)
+  r<-matrix(ncol = length(unique(iPOPcorDf$iPOP_ID)),nrow = length(allClin),
+            dimnames=list(
+              c(allClin),
+              c(unique(iPOPcorDf$iPOP_ID))))
+  rsq.pred <-r; p<-r; fstat <-r; degfree <- r; numObs <-r;
+  tmp=0
+  for (i in allClin){ # for each of the 50 clinical lab tests
+    tmp=tmp+1 # counter for index of allClin
+    tmp2=0    # counter for index of iPOP_ID
+    for (j in unique(iPOPcorDf$iPOP_ID)){ 
+      tmp2=tmp2+1  # counter for index of iPOP_ID
+      iPOPcorDf2 <- iPOPcorDf[!(iPOPcorDf$iPOP_ID %in% j),] # leave one person out
+      df <- cbind(iPOPcorDf2[[i]], iPOPcorDf2[,c("Pulse", "Temp")])
+      df <- na.omit(df)
+      model<-lm(as.formula(paste0(i,models[k])),data=iPOPcorDf2)
+      m <- summary(model) # quadratic univariate with pulse or temp only
+      # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
+      # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
+      numObs[tmp,tmp2]<-length(df$Pulse) # the number of each clinical lab test that has corresponding vital signs
+      iPOPcorDf3 <- iPOPcorDf[(iPOPcorDf$iPOP_ID %in% j),] # test set (the one person that was left out)
+      df3 <- cbind(iPOPcorDf3[[i]], iPOPcorDf3[,c("Pulse", "Temp")])
+      df3 <- na.omit(df3)
+      pred=predict(model, newdata=df3)# prediction on test person
+      rsq.pred[tmp,tmp2] = 1 - (mean( (pred - df3[,1])**2 ) / var( (df[,1]) )) # test r.sq
+    }
+  }
+  name.rsq <- paste("model.mean.rsq", k, sep = "")
+  assign(name.rsq, data.frame(model = name.rsq, test = allClin, means = rowMeans(rsq.pred), sd =apply(rsq.pred, 1, sd))) 
+}
+
+rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.mean.rsq3, model.mean.rsq4, model.mean.rsq5))))
+rsq.plot$model <- mapvalues(rsq.plot$model, from = c("model.mean.rsq1", "model.mean.rsq2", "model.mean.rsq3", "model.mean.rsq4", "model.mean.rsq5"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + I(Pulse^2)", " ~ Temp + I(Temp^2)"))
+
+# plot how rsq changes with the different models, and add in error bars from sd.plot
+ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model))) +
+  geom_point() +
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1)) +
+  xlab("Clinical Laboratory Test") + ylab("Cross-Validated R-squared (+/- SD)") +
+  labs(linetype='Model')
+guides(guide_legend(title="Model"))
+#guides(fill=guide_legend(title="Model"))
+scale_fill_discrete(name="Model")+
+  geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=0.7,
+                position=position_dodge(.7)) + ylim(0,1.5)
+
+tot # total number of labs that have clin vitals measures corresponding to it
+# num lab tests in iPOP dataset
+tot <- 0; for (i in 7:56){
+  tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot 
+
+# num vital signs in iPOP dataset
+tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot
+
+
 
 #### END ####
 
