@@ -201,22 +201,6 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #  Figure 1D  - see Ryans_Figure1_Code.R #
 ##########################################
 
-################################################
-#  Figure 1E  - Canonical Correlation Analysis #
-################################################
-library("CCA")
-
-head(iPOPvitals)
-head(iPOPlabs)
-
-clinical.groups = list()
-clinical.groups[["cardio"]] = c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
-clinical.groups[["blood"]] = c("PLT","GLOB","TP","HGB")
-
-model.cc = cc(iPOPcorDf[,colnames(iPOPcorDf) %in% clinical.groups[["blood"]]],
-              iPOPcorDf[,colnames(iPOPcorDf) %in% clinical.groups[["cardio"]]])
-model.cc$cor[1] # Correlation between "blood index" and "cardio index"
-
 #############################
 #    Suppl. Table 1A and B  #
 #############################
@@ -419,6 +403,29 @@ ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shap
   labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
 #dev.off()
 write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+
+
+################################################
+#  Figure 2E  - Canonical Correlation Analysis #
+################################################
+library("CCA")
+clinical.groups = list()
+clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
+clinical.groups[["Cardio"]] = c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Blood"]] = c("PLT"," GLOB"," TP"," HGB"," HCT"," RDW"," MCH"," MCV"," RBC","MCHC")
+clinical.groups[["Diabetes"]] =c("A1C"," ALB"," GLU"," UALB"," CR"," ALCRU","EGFR")
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL"," LDLHDL"," HDL"," CHOLHDL"," NHDL"," TGL"," BMI"," LDL","Pulse","BP")
+clinical.groups[["Liver Function"]]=c("ALKP"," BUN"," ALT"," TBIL","AST")
+clinical.groups[["Inflammation"]]=c("BASO"," LYM"," LYMAB"," MONO"," MONOAB"," NEUT"," NEUTAB"," IGM"," EOS"," EOSAB"," BASOAB"," WBC"," HSCRP"," IGM","Temp")
+clinical.groups[["Cardiometabolic Disease"]]=c("A1C"," ALB"," GLU"," UALB"," CR"," ALCRU","EGFR","CHOL"," LDLHDL"," HDL"," CHOLHDL"," NHDL"," TGL"," BMI"," LDL","Pulse","BP")
+
+d <- cbind(wear[,colnames(wear) %in% clinical.groups[["Diabetes"]]], 
+           wear[,colnames(wear) %in% wear.variables])
+d <- na.omit(d)
+model.cc = cc(d[,colnames(d) %in% clinical.groups[["Diabetes"]]],
+              d[,colnames(d) %in% wear.variables])
+model.cc$cor[1] # Correlation between "electrolyte index" and "wearables features"
+
 
 ##############
 #  Figure 3A #
