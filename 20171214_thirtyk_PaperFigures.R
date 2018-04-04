@@ -627,7 +627,7 @@ models=c(" ~ Pulse", # univariate with pulse only
          " ~ Pulse + Temp", # bivariate with pulse + temp
          " ~ Pulse + I(Pulse^2)",
          " ~ Temp + I(Temp^2)" )
-cv.runs <- 5
+cv.runs <- 10
 models.corr.coefs <- c()
 rsq.pred <- 0
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
@@ -653,43 +653,42 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
       test.data <- na.omit(corDf2[test.mask,])
       train.data <-na.omit(corDf2[!test.mask,])
         for (k in 1:length(models)){
-          # tmp=tmp+1 # counter for index of top.names (could also use allClin)
-          # tmp2=1    # counter for index of CV run
-          # r<-matrix(ncol = length(cv.runs),nrow = length(top.names),
-          #           dimnames=list(
-          #             c(top.names),
-          #             c(i)))
-          # rsq.pred <-r; p<-r; fstat <-r; degfree <- r; numObs <-r;
-
           model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
           m <- summary(model) # quadratic univariate with pulse or temp only
           # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
           # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
-          numObs[tmp,tmp2]<-length(train.data$Pulse) # the number of each clinical lab test that has corresponding vital signs
+          numObs<-length(train.data$Pulse) # the number of each clinical lab test that has corresponding vital signs
           pred=predict(model, newdata=test.data)# prediction on test data set
-          rsq.pred = 1 - (mean( pred - test.data[,1])**2 ) / var( (test.data[,1]) ) # test r.sq
+          #rsq.pred = 1 - (mean( pred - test.data[,1])**2 ) / var( (test.data[,1]) ) # test r.sq
+          r.pred = cor(pred, test.data[,1]) # test r.sq
           name.rsq <- paste("model.mean.rsq", k, sep = ".")
           models.corr.coefs <- rbind(models.corr.coefs,
-                                     c(model = name.rsq, cv.step = i, test = nm, rsq.pred = rsq.pred))
+                                     c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, numObs = numObs))
     }
   }
 }
 
-rsq.plot<- as.data.frame(as.list((rbind(model.mean.rsq1, model.mean.rsq2, model.mean.rsq3, model.mean.rsq4, model.mean.rsq5))))
-rsq.plot$model <- mapvalues(rsq.plot$model, from = c("model.mean.rsq1", "model.mean.rsq2", "model.mean.rsq3", "model.mean.rsq4", "model.mean.rsq5"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + I(Pulse^2)", " ~ Temp + I(Temp^2)"))
+corr.coefs <- as.data.frame(models.corr.coefs)
+corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
+corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
+library(dplyr)
+model.corr.coefs <- (corr.coefs %>%
+  group_by(test, model) %>% 
+  summarise_at(vars("corr.coef"), funs(mean,sd)))
+model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + I(Pulse^2)", " ~ Temp + I(Temp^2)"))
 
 # plot how rsq changes with the different models, and add in error bars from sd.plot
-ggplot(rsq.plot, aes(x=test, y=means, group=model, col=as.factor(rsq.plot$model))) +
+ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs$model))) +
+  theme(legend.title = element_blank())+
   geom_point() +
+  #guides(fill=guide_legend(title="Model")) +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1)) +
-  xlab("Clinical Laboratory Test") + ylab("Cross-Validated R-squared (+/- SD)") +
-  labs(linetype='Model')
-guides(guide_legend(title="Model"))
-#guides(fill=guide_legend(title="Model"))
-scale_fill_discrete(name="Model")+
-  geom_errorbar(aes(ymin=means-sd, ymax=means+sd), width=0.7,
-                position=position_dodge(.7)) + ylim(0,1.5)
+  ylim(0,0.5) +
+  xlab("Clinical Laboratory Test") + ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  scale_fill_discrete(name="Model")+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
+  #, position=position_dodge(.7))
 
 # corr.coefs.lm<-c()
 # corr.coefs.quad<-c()
