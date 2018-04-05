@@ -434,7 +434,7 @@ for (nm in names(clinical.groups)){
   tmp <- cor(d[-c(1)])
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
-  d <- d[,!apply(tmp,2,function(x) any(x > 0.99))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
+  d <- d[,!apply(tmp,2,function(x) any(x > 0.999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
   
   # leave one person out CV
   for (i in 1:length(patients)){
@@ -447,8 +447,11 @@ for (nm in names(clinical.groups)){
   # build the CCA model
   # model.cc = cc(train[,1:ncol(data.clin)],
   #               train[,(ncol(data.clin) + 1):ncol(train)])
-  model.cc = cancor(train[,1:ncol(data.clin)],
-                    train[,(ncol(data.clin) + 1):ncol(train)])
+  model.cc = cancor(train[,(ncol(data.clin) + 1):(ncol(train))],
+                    train[,1:ncol(data.clin)],)
+  indexX = as.matrix(test[,(ncol(data.clin) + 1):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1])
+  indexY = as.matrix(test[,1:ncol(data.clin)]) %*% as.matrix(model.cc$ycoef[,1])
+  
   #cca.pred <- predict(model.cc, newdata = test) # test the CCA model
   
   #correlation between observed and predicted (???)
