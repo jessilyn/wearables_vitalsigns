@@ -429,9 +429,10 @@ for (nm in names(clinical.groups)){
   data.wear = wear[,which(colnames(wear) %in% wear.variables)]
   d <- cbind(data.clin, data.wear)
   d <- na.omit(d)
-  
+  iPOP.idx <- d[,1]
+  d<-d[-1]
   # remove correlated columns
-  tmp <- cor(d[-c(1)])
+  tmp <- cor(d)
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
   d <- d[,!apply(tmp,2,function(x) any(x > 0.999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
@@ -439,28 +440,27 @@ for (nm in names(clinical.groups)){
   # leave one person out CV
   for (i in 1:length(patients)){
     print(patients[i])
-    train <- d[!d$iPOP_ID %in% patients[i],]
-    train <- na.omit(cbind(subset(train, select = -c(iPOP_ID))))
-    test <- d[d$iPOP_ID %in% patients[i],]
-    test <- na.omit(cbind(subset(test, select = -c(iPOP_ID))))
+    train <- d[!iPOP.idx %in% patients[i],]
+    #train <- na.omit(train)
+    test <- d[iPOP.idx %in% patients[i],]
+    #test <- na.omit(test)
   
   # build the CCA model
-  # model.cc = cc(train[,1:ncol(data.clin)],
-  #               train[,(ncol(data.clin) + 1):ncol(train)])
-  model.cc = cancor(train[,(ncol(data.clin) + 1):(ncol(train))],
-                    train[,1:ncol(data.clin)],)
-  indexX = as.matrix(test[,(ncol(data.clin) + 1):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1])
-  indexY = as.matrix(test[,1:ncol(data.clin)]) %*% as.matrix(model.cc$ycoef[,1])
+  # model.cc = cc(train[,1:(ncol(data.clin))-1],
+  #               train[,(ncol(data.clin)):ncol(train)])
+  model.cc = cancor(train[,(ncol(data.clin)):(ncol(train))],
+                    train[,1:(ncol(data.clin)-1)])
+  indexX = as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1])
+  indexY = as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1])
   
-  #cca.pred <- predict(model.cc, newdata = test) # test the CCA model
-  
-  #correlation between observed and predicted (???)
-  #cca.corr <- cor(cca.pred, test[,1:ncol(data.clin)])
+  #plug in test data using coefficients from CCA model and compare right and left sides
+  cca.corr <- cor(indexX, indexY)
   #print(model.cc$cor[1])
-  cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, model.cc$cor[1], patients[i]))
-  #cca.corrc.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
+  #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, model.cc$cor[1], patients[i]))
+  cca.corr.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
   }
 }
+
 ##############
 #  Figure 3A #
 ##############
