@@ -408,6 +408,9 @@ write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
 ################################################
+
+# should we make this regularized - what is the right proportion between observations and features to decide this (I think there we have ~2X the numver of obs as features)
+
 library("CCA")
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
@@ -442,16 +445,19 @@ for (nm in names(clinical.groups)){
     test <- na.omit(cbind(subset(test, select = -c(iPOP_ID))))
   
   # build the CCA model
-  model.cc = cc(train[,1:ncol(data.clin)],
-                train[,(ncol(data.clin) + 1):ncol(train)])
-  cca.pred <- predict(model.cc, newdata = test) # test the CCA model
+  # model.cc = cc(train[,1:ncol(data.clin)],
+  #               train[,(ncol(data.clin) + 1):ncol(train)])
+  model.cc = cancor(train[,1:ncol(data.clin)],
+                    train[,(ncol(data.clin) + 1):ncol(train)])
+  #cca.pred <- predict(model.cc, newdata = test) # test the CCA model
   
   #correlation between observed and predicted (???)
-  cca.corr <- cor(cca.pred, test[,1:ncol(data.clin)])
-  print(model.cc$cor[1])
-  cca.corrc.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
+  #cca.corr <- cor(cca.pred, test[,1:ncol(data.clin)])
+  #print(model.cc$cor[1])
+  cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, model.cc$cor[1], patients[i]))
+  #cca.corrc.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
+  }
 }
-
 ##############
 #  Figure 3A #
 ##############
