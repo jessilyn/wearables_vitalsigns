@@ -411,32 +411,45 @@ write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names
 library("CCA")
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
-#clinical.groups[["Cardio"]] = c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
-clinical.groups[["Blood"]] = c("PLT"," GLOB"," TP"," HGB"," HCT"," RDW"," MCH"," MCV"," RBC","MCHC")
-clinical.groups[["Diabetes"]] =c("A1C"," ALB"," GLU"," UALB"," CR"," ALCRU","EGFR")
-#clinical.groups[["Cardiovascular.Disease"]]=c("CHOL"," LDLHDL"," HDL"," CHOLHDL"," NHDL"," TGL"," BMI"," LDL","Pulse","BP")
-clinical.groups[["Liver Function"]]=c("ALKP"," BUN"," ALT"," TBIL","AST")
-#clinical.groups[["Inflammation"]]=c("BASO"," LYM"," LYMAB"," MONO"," MONOAB"," NEUT"," NEUTAB"," IGM"," EOS"," EOSAB"," BASOAB"," WBC"," HSCRP"," IGM","Temp")
-clinical.groups[["Cardiometabolic Disease"]]=c("A1C"," ALB"," GLU"," UALB"," CR"," ALCRU","EGFR","CHOL"," LDLHDL"," HDL"," CHOLHDL"," NHDL"," TGL"," BMI"," LDL","Pulse","BP")
+clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB","CR","ALCRU")
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
+clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
+clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
+clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+cca.corr.coefs <- c()
+patients <- unique(wear$iPOP_ID)
 
 for (nm in names(clinical.groups)){
   # Remove rows with NAs
-  data.clin = wear[,which(colnames(wear) %in% clinical.groups[[nm]])]
+  data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
   data.wear = wear[,which(colnames(wear) %in% wear.variables)]
   d <- cbind(data.clin, data.wear)
   d <- na.omit(d)
   
   # remove correlated columns
-  tmp <- cor(d)
+  tmp <- cor(d[-c(1)])
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
-  d <- d[,!apply(tmp,2,function(x) any(x > 0.99))]
+  d <- d[,!apply(tmp,2,function(x) any(x > 0.99))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
+  
+  # leave one person out CV
+  for (i in 1:length(patients)){
+    print(patients[i])
+    train <- d[!d$iPOP_ID %in% patients[i],]
+    train <- na.omit(cbind(subset(train, select = -c(iPOP_ID))))
+    test <- d[d$iPOP_ID %in% patients[i],]
+    test <- na.omit(cbind(subset(test, select = -c(iPOP_ID))))
   
   # build the CCA model
-  model.cc = cc(d[,1:ncol(data.clin)],
-                d[,(ncol(data.clin) + 1):ncol(d)])
-  print(nm)
+  model.cc = cc(train[,1:ncol(data.clin)],
+                train[,(ncol(data.clin) + 1):ncol(train)])
+  cca.pred <- predict(model.cc, newdata = test) # test the CCA model
+  
+  #correlation between observed and predicted (???)
+  cca.corr <- cor(cca.pred, test[,1:ncol(data.clin)])
   print(model.cc$cor[1])
+  cca.corrc.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
 }
 
 ##############
