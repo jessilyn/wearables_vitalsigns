@@ -440,29 +440,23 @@ for (nm in names(clinical.groups)){
   diag(tmp) <- 0
   d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
 
-  d = scale(d,scale = FALSE)
-  # leave one person out CV
+  d = scale(d,scale = FALSE) # why scale it?
   indexX = c()
   indexY = c()
-  for (i in 1:length(patients)){
-#    print(patients[i])
-    train <- d[!iPOP.idx %in% patients[i],,drop=FALSE]
-    #train <- na.omit(train)
-    test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
-    #test <- na.omit(test)
-    if (nrow(test) != 1){
-      
   
+  # leave one person out CV
+  for (i in 1:length(patients)){
+    train <- d[!iPOP.idx %in% patients[i],,drop=FALSE]
+    test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
+    if (nrow(test) != 1){ #maybe make this > 0?
+
   # build the CCA model
   model.cc = cc(train[,(ncol(data.clin)):(ncol(train))],
                 train[,1:(ncol(data.clin)-1)])
-#  model.cc = cancor(train[,(ncol(data.clin)):(ncol(train))],
-#                    train[,1:(ncol(data.clin)-1)])
-
+  #plug in test data using coefficients from CCA model and compare right and left sides
   indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1]))
   indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1]))
   
-  #plug in test data using coefficients from CCA model and compare right and left sides
   #cca.corr <- cor(indexX, indexY)
   #print(model.cc$cor[1])
   #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, model.cc$cor[1], patients[i]))
@@ -472,10 +466,10 @@ for (nm in names(clinical.groups)){
   cca.corr <- cor(indexX, indexY)
   print(cca.corr)
 }
-library(dplyr)
-data <- (cca.corr.coefs %>%
-                       group_by(nm) %>% 
-                       summarise_at(vars("cca.corr"), funs(mean,sd)))
+# library(dplyr)
+# data <- (cca.corr.coefs %>%
+#                        group_by(nm) %>% 
+#                        summarise_at(vars("cca.corr"), funs(mean,sd)))
 ggplot(data, aes(x=nm, y=mean)) +
   theme(legend.title = element_blank()) +
   geom_point() +
