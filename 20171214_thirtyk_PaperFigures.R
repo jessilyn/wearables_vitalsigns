@@ -460,6 +460,18 @@ for (nm in names(clinical.groups)){
   cca.corr.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
   }
 }
+library(dplyr)
+data <- (cca.corr.coefs %>%
+                       group_by(nm) %>% 
+                       summarise_at(vars("cca.corr"), funs(mean,sd)))
+ggplot(data, aes(x=nm, y=mean)) +
+  theme(legend.title = element_blank()) +
+  geom_point() +
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1)) +
+  #ylim(0,0.5) +
+  labs(x = "Physiology Subsets", y ="Correlation Coefficient")
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 
 ##############
 #  Figure 3A #
