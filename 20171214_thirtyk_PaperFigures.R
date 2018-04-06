@@ -415,15 +415,18 @@ library("CCA")
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB","CR","ALCRU")
-clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+#clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
 clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
 clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
-clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+#clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 cca.corr.coefs <- c()
 patients <- unique(wear$iPOP_ID)
 
+#wear$LDL = as.numeric(wear$LDL)
+
 for (nm in names(clinical.groups)){
+  print(nm)
   # Remove rows with NAs
   data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
   data.wear = wear[,which(colnames(wear) %in% wear.variables)]
@@ -435,30 +438,39 @@ for (nm in names(clinical.groups)){
   tmp <- cor(d)
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
-  d <- d[,!apply(tmp,2,function(x) any(x > 0.999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
-  
+  d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
+
+  d = scale(d,scale = FALSE)
   # leave one person out CV
+  indexX = c()
+  indexY = c()
   for (i in 1:length(patients)){
-    print(patients[i])
-    train <- d[!iPOP.idx %in% patients[i],]
+#    print(patients[i])
+    train <- d[!iPOP.idx %in% patients[i],,drop=FALSE]
     #train <- na.omit(train)
-    test <- d[iPOP.idx %in% patients[i],]
+    test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
     #test <- na.omit(test)
+    if (nrow(test) != 1){
+      
   
   # build the CCA model
-  # model.cc = cc(train[,1:(ncol(data.clin))-1],
-  #               train[,(ncol(data.clin)):ncol(train)])
-  model.cc = cancor(train[,(ncol(data.clin)):(ncol(train))],
-                    train[,1:(ncol(data.clin)-1)])
-  indexX = as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1])
-  indexY = as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1])
+  model.cc = cc(train[,(ncol(data.clin)):(ncol(train))],
+                train[,1:(ncol(data.clin)-1)])
+#  model.cc = cancor(train[,(ncol(data.clin)):(ncol(train))],
+#                    train[,1:(ncol(data.clin)-1)])
+
+  indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1]))
+  indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1]))
   
   #plug in test data using coefficients from CCA model and compare right and left sides
-  cca.corr <- cor(indexX, indexY)
+  #cca.corr <- cor(indexX, indexY)
   #print(model.cc$cor[1])
   #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, model.cc$cor[1], patients[i]))
-  cca.corr.coefs <- rbind(cca.corrc.coefs, c(nm, cca.corr, patients[i]))
+  #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, cca.corr, patients[i]))
+    }
   }
+  cca.corr <- cor(indexX, indexY)
+  print(cca.corr)
 }
 library(dplyr)
 data <- (cca.corr.coefs %>%
