@@ -451,8 +451,9 @@ for (nm in names(clinical.groups)){
     if (nrow(test) != 1){ #maybe make this > 0?
 
   # build the CCA model
-  model.cc = cc(train[,(ncol(data.clin)):(ncol(train))],
-                train[,1:(ncol(data.clin)-1)])
+  model.cc = rcc(train[,(ncol(data.clin)):(ncol(train))],
+                train[,1:(ncol(data.clin)-1)],1e-4,1)
+
   #plug in test data using coefficients from CCA model and compare right and left sides
   indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1]))
   indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1]))
@@ -464,6 +465,7 @@ for (nm in names(clinical.groups)){
     }
   }
   cca.corr <- cor(indexX, indexY)
+  plot(indexX,indexY)
   print(cca.corr)
 }
 # library(dplyr)
