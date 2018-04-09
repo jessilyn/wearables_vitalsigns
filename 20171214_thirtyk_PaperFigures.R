@@ -117,12 +117,14 @@ names(iPOPlabs)[which(names(iPOPlabs)=="RESULT_TIME")] <- "Clin_Result_Date"
 iPOPlabs$Clin_Result_Date <- format(
   as.Date(iPOPlabs$Clin_Result_Date, "%d-%b-%Y"), "%Y-%m-%d")
 
-allClin <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
-             "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
-             "CR","EGFR","EOS","EOSAB","GLOB","GLU","HCT","HDL",
-             "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
-             "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
-             "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC") #removed "ESR"
+# allClin <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
+#              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
+#              "CR","EGFR","EOS","EOSAB","ESR","GLOB","GLU","HCT","HDL",
+#              "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
+#              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
+#              "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC") 
+
+allClin <- c("ALKP", "LYM", "HSCRP", "ALT", "NEUT", "TBIL", "IGM", "TGL", "MCV", "MCH", "CO2", "LYMAB", "NEUTAB", "UALB", "CHOL", "MONOAB", "ALB", "NA.", "HDL", "PLT", "AG", "HGB", "EOS", "CL", "BUN", "GLOB", "CA", "CHOLHDL", "HCT", "BASOAB", "A1C", "GLU", "LDLHDL", "TP", "EOSAB", "K", "NHDL", "RBC", "MONO", "AST", "MCHC", "RDW", "BASO", "LDL")
 
 for(i in 1:length(allClin)){ #this removes non-numeric characters
   cache <- iPOPlabs[,c(allClin[i])]
@@ -265,17 +267,16 @@ write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demograph
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
-top.names<-rownames(corr.coefs) # names of lab tests from the 30k simple bivariate models
+top.names<-as.character(means$Group.1) # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-
+demo.variables <- c("AgeIn2016", "Gender", "Ethn")
 # Get the vitals models
 #ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
-ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm.csv",header = FALSE)
+ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE)
 ranked = ranked[ranked$V1 %in% top.names,]
 rsq.all = t(as.matrix(ranked$V2))
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
-
 
 # LOO
 patients = unique(wear$iPOP_ID)
@@ -294,6 +295,7 @@ for (mode in modes){
   # Build models using wearables data
   
   for (k in 1:length(patients)){
+  #for (k in 1:4){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
     ######################
@@ -301,20 +303,23 @@ for (mode in modes){
     # We will predict one by one, let's create a vector of tests
     res.true <- list()
     res.pred = list(lm=list(),rf=list())
-
+    p.value<-list()
     cat("Patient",patients[k],"\n") # LOO
     
+    #for (l in 1:3){
     for (l in 1:length(top.names)){
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
-      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
+      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
       predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
+      predictors <- as.matrix(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
+      
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
       
       # create test set
       x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
-      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables)] # subset input data by lab: only take current lab test of interest
+      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
 
@@ -328,6 +333,7 @@ for (mode in modes){
         num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
         idx=idx+1 # to index entry into num.Records
         variables.to.use = wear.variables
+        #variables.to.use = c(wear.variables, demo.variables) # later, add in demographics
       }
       if(mode == "lasso"){
         # lasso 
@@ -353,6 +359,11 @@ for (mode in modes){
                           data = x.train)
                           # , weights = labs.wear$weight) # TODO: do we need to include this line?
       res.pred[["lm"]][[l]] = predict(models.wear.lm, newdata = x.test)
+      # create a null model for significance testing
+      fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~ 1")
+      lm.D0<-lm(as.formula(fml), data=x.train) 
+      t<- anova(lm.D0, models.wear.lm)
+      p.value[["lm"]][[l]] <- as.numeric(t[2,][["Pr(>F)"]])
       # if (!nrow(res.pred[["lm"]][[l]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
       #   res.pred[["lm"]][[l]] = NA
       #   res.pred[["rf"]][[l]] = NA
@@ -388,7 +399,7 @@ for (mode in modes){
   }
 }
 num.Records <- do.call("cbind",num.Records) 
-write.table(num.Records, "../SECURE_data/num_Records_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+#write.table(num.Records, "../SECURE_data/num_Records_day_prior_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 rownames(rsq.all)[1] = "vitals"
   df = data.frame(rsq.all)
