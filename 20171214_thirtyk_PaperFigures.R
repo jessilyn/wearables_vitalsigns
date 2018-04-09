@@ -77,6 +77,10 @@ labs <- fread(paste0(dir, "all_labs.csv"),
 corDf <- read.csv(paste0(dir, "20170905_Cleaned_joined_30k_labs_vitals.csv"),
                    header=TRUE,sep=',',stringsAsFactors=FALSE)
 
+#iPOP demographics
+iPOPdemographics <- read.csv(paste0(dir, "SECURE_ClinWearDemo_SamplePop.csv"),
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+
 ###################
 ### CLEAN DATA ####
 ###################
@@ -115,10 +119,10 @@ iPOPlabs$Clin_Result_Date <- format(
 
 allClin <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
-             "CR","EGFR","EOS","EOSAB","ESR", "GLOB","GLU","HCT","HDL",
+             "CR","EGFR","EOS","EOSAB","GLOB","GLU","HCT","HDL",
              "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
-             "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC")
+             "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC") #removed "ESR"
 
 for(i in 1:length(allClin)){ #this removes non-numeric characters
   cache <- iPOPlabs[,c(allClin[i])]
@@ -228,18 +232,23 @@ patients = unique(iPOPcorDf$iPOP_ID)
 nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
 corr.coefs.ipop.lm <- c() 
 ipop.lm <- c()
+iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 for (nm in nms){
   print(nm)
   for (i in 1:length(patients)){
   print(patients[i])
-  train <- iPOPcorDf[!iPOPcorDf$iPOP_ID %in% patients[i],]
-  train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp)), train[[nm]]))
-  colnames(train)[4] <- nm
-  test <- iPOPcorDf[iPOPcorDf$iPOP_ID %in% patients[i],]
-  test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp)), test[[nm]]))
-  colnames(test)[4] <- nm
+  train <- iPOPcorDf.demo[!iPOPcorDf.demo$iPOP_ID %in% patients[i],]
+  #train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp)), train[[nm]]))
+  train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp, AgeIn2016, Gender, Ethn)), train[[nm]])) # with demographics
+  colnames(train)[7] <- nm
+  test <- iPOPcorDf.demo[iPOPcorDf.demo$iPOP_ID %in% patients[i],]
+  #test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp)), test[[nm]])) 
+  test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp, AgeIn2016, Gender, Ethn)), test[[nm]])) # with demographics
+  colnames(test)[7] <- nm
   if (length(test[[nm]])>0){
-  bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
+  bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
+  #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
+  
   bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict
   bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
   ipop.lm= rbind(ipop.lm, c(nm,bivar.lm.cor.coef)) 
@@ -251,8 +260,8 @@ corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); corr.coefs.ipo
 means<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
 ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
 means <- means [order(means[,2] ,decreasing = TRUE),]
-means = means[means$Group.1 %in% top.names,]
-write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm.csv",row.names=FALSE,col.names=FALSE, sep=",")
+means = means[means$Group.1 %in% allClin,]
+write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
