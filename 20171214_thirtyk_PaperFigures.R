@@ -53,7 +53,7 @@ timespans <-c("AllData",
               "DayPrior" )
 
 wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Ryan_Runge_Framework_Paper_All_Materials/Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
-                "Basis2016_Clean_Norm_", timespans[4], "_20171020.csv"),
+                "Basis2016_Clean_Norm_", timespans[7], "_20171020.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
@@ -269,18 +269,21 @@ colnames(means)<- c("test", "corr.coef", "p.val")
 means = means[means$test %in% allClin,]
 write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-# Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
+# Script to compare different models for predicting lab tests from iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
-top.names<-as.character(means$Group.1) # names of lab tests from the 30k simple bivariate models
-top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
+
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
 demo.variables <- c("AgeIn2016", "Gender", "Ethn")
+wear$Gender <- as.factor(wear$Gender)
+wear$Ethn <- as.factor(wear$Ethn)
+
 # Get the vitals models
 #ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
 ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE)
-ranked = ranked[ranked$V1 %in% top.names,]
+top.names<-as.character(ranked$V1) # names of lab tests from the 30k simple bivariate models
+top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 rsq.all = t(as.matrix(ranked$V2))
-colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs 
+colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- will change this 
 
 # LOO
 patients = unique(wear$iPOP_ID)
@@ -298,8 +301,8 @@ for (mode in modes){
   cat("Feature selection:",mode,"\n")
   # Build models using wearables data
   
-  for (k in 1:length(patients)){
-  #for (k in 1:4){
+  #for (k in 1:length(patients)){
+  for (k in 1:5){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
     ######################
@@ -310,13 +313,14 @@ for (mode in modes){
     p.value<-list()
     cat("Patient",patients[k],"\n") # LOO
     
-    #for (l in 1:3){
-    for (l in 1:length(top.names)){
+    for (l in 1:5){
+    #for (l in 1:length(top.names)){
+      print(l)
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
       x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-      predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
+      #predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
       predictors <- as.matrix(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
       
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
@@ -336,8 +340,8 @@ for (mode in modes){
         num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
         num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
         idx=idx+1 # to index entry into num.Records
-        variables.to.use = wear.variables
-        #variables.to.use = c(wear.variables, demo.variables) # later, add in demographics
+        #variables.to.use = wear.variables
+        variables.to.use = c(wear.variables, demo.variables) # later, add in demographics
       }
       if(mode == "lasso"){
         # lasso 
@@ -384,9 +388,8 @@ for (mode in modes){
 
       if (l <= length(val.true))
         val.true[[l]] = append(val.true[[l]], res.true[[l]]) 
-      else
+       else 
         val.true[[l]] = res.true[[l]] # initiate val.true matrix
-      
     }
     # ----
   }
@@ -402,6 +405,7 @@ for (mode in modes){
     
   }
 }
+
 num.Records <- do.call("cbind",num.Records) 
 #write.table(num.Records, "../SECURE_data/num_Records_day_prior_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
@@ -409,6 +413,8 @@ rownames(rsq.all)[1] = "vitals"
   df = data.frame(rsq.all)
 #df[df<0] = 0 # clamp correlations to 0
 df$name = rownames(rsq.all)
+df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
+
 
 # Plot the correlations
 data = melt(df, id = "name")
