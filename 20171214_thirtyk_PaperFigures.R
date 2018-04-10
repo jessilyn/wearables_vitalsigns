@@ -280,7 +280,7 @@ wear$Ethn <- as.factor(wear$Ethn)
 # Get the vitals models
 #ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
 ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE)
-top.names<-as.character(ranked$V1) # names of lab tests from the 30k simple bivariate models
+top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 rsq.all = t(as.matrix(ranked$V2))
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- will change this 
@@ -293,16 +293,17 @@ model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
+#top.names <- top.names[1:5] # for troubleshooting
+
 for (mode in modes){
   # Build two lists: predicted vs true
   val.true = list()
   val.pred = list(lm=list(),rf=list())
-
   cat("Feature selection:",mode,"\n")
-  # Build models using wearables data
   
+  # Build models using wearables data
   #for (k in 1:length(patients)){
-  for (k in 1:5){
+  for (k in 1:2){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
     ######################
@@ -313,8 +314,8 @@ for (mode in modes){
     p.value<-list()
     cat("Patient",patients[k],"\n") # LOO
     
-    for (l in 1:5){
-    #for (l in 1:length(top.names)){
+
+    for (l in 1:length(top.names)){
       print(l)
       cat("Test",top.names[l],"\n")
       x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
@@ -377,8 +378,7 @@ for (mode in modes){
       #   res.pred[["rf"]][[l]] = NA
       # }
       # Add predictions and true values for the patient k
-      
-      
+
       for (mdl.name in model.names){
         if (l <= length(val.pred[[mdl.name]])) # TODO: I don't understand what the if else statements below are doing
           val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]]) #append new predictions to val.pred matrix
@@ -397,8 +397,8 @@ for (mode in modes){
   # Get correlation coeffs for each model
   for (mdl.name in model.names){
     rsq.wear = c()
-    for (l in 1:length(top.names))
-      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[l]], na.omit(val.true[[l]])))
+    for (j in 1:length(top.names))
+      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[j]], na.omit(val.true[[j]])))
     names(rsq.wear) = top.names
     rsq.all = rbind(rsq.all, rsq.wear)
     rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
