@@ -233,6 +233,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 patients = unique(iPOPcorDf$iPOP_ID)
 nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
 corr.coefs.ipop.lm <- c() 
+p.value <-0
 ipop.lm <- c()
 iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 for (nm in nms){
@@ -250,19 +251,22 @@ for (nm in nms){
   if (length(test[[nm]])>0){
   bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
   #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
-  
+  lm.D0<-lm(train[[nm]] ~ 1)
+  t<- anova(lm.D0, bivar.lm.model)
+  p.value <- as.numeric(t[2,][["Pr(>F)"]])
   bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict
   bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
-  ipop.lm= rbind(ipop.lm, c(nm,bivar.lm.cor.coef)) 
+  ipop.lm= rbind(ipop.lm, c(nm,bivar.lm.cor.coef, p.value)) 
   }
   }
 }
 corr.coefs.ipop.lm <- ipop.lm
-corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2))
-means<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
+corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3))
+means<-aggregate(corr.coefs.ipop.lm[,2:3], by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
 ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
 means <- means [order(means[,2] ,decreasing = TRUE),]
-means = means[means$Group.1 %in% allClin,]
+colnames(means)<- c("test", "corr.coef", "p.val")
+means = means[means$test %in% allClin,]
 write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from 30k vitals or iPOP wearables data (adapted from population-models.R)
