@@ -293,7 +293,7 @@ model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
-#top.names <- top.names[1:5] # for troubleshooting
+top.names <- top.names[1:5] # for troubleshooting
 
 for (mode in modes){
   # Build two lists: predicted vs true
@@ -322,7 +322,7 @@ for (mode in modes){
       x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
       #predictors <- as.matrix(x.train[,colnames(x.train) %in% wear.variables]) # matrix of predictors for model building
-      predictors <- as.matrix(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
+      predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
       
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
       
