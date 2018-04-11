@@ -293,7 +293,7 @@ model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
-top.names <- top.names[1:5] # for troubleshooting
+# top.names <- top.names[1:5] # for troubleshooting
 
 for (mode in modes){
   # Build two lists: predicted vs true
@@ -347,12 +347,15 @@ for (mode in modes){
       if(mode == "lasso"){
         # lasso 
         n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
-        glm.res = cv.glmnet(x=predictors,y=outcome,
+
+        dem = c("Gender", "Ethn") # do not use demographics for lasso
+        glm.res = cv.glmnet(x=as.matrix(predictors[,-which(names(predictors) %in% dem)]),y=outcome,
                             standardize.response=FALSE,
                             family="gaussian",
 			                      nfolds=n,
                             nlambda=100)
         variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
+        variables.to.use = c(dem,variables.to.use) # add back Gender and ethn
       }
       
       # Random forest
