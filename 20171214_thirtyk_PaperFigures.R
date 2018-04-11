@@ -444,7 +444,12 @@ write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names
 
 # should we make this regularized - what is the right proportion between observations and features to decide this (I think there we have ~2X the numver of obs as features)
 
-library("CCA")
+# library("devtools)
+# install_url("https://cran.r-project.org/src/contrib/Archive/impute/impute_1.26.0.tar.gz")
+# install.packages("PMA)
+
+library("PMA")
+library("Hmisc")
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB","CR","ALCRU")
@@ -484,12 +489,12 @@ for (nm in names(clinical.groups)){
     if (nrow(test) != 1){ #maybe make this > 0?
 
   # build the CCA model
-  model.cc = rcc(train[,(ncol(data.clin)):(ncol(train))],
-                train[,1:(ncol(data.clin)-1)],1e-4,1)
+  model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],
+                train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1)
 
   #plug in test data using coefficients from CCA model and compare right and left sides
-  indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% as.matrix(model.cc$xcoef[,1]))
-  indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% as.matrix(model.cc$ycoef[,1]))
+  indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% model.cc$u)
+  indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% model.cc$v)
   
   #cca.corr <- cor(indexX, indexY)
   #print(model.cc$cor[1])
@@ -498,7 +503,12 @@ for (nm in names(clinical.groups)){
     }
   }
   cca.corr <- cor(indexX, indexY)
-  plot(indexX,indexY)
+  print(ggplot(data.frame(indexX = indexX, indexY = indexY),aes(indexX,indexY)) +
+    weartals_theme +
+    geom_point() +
+    ggtitle(nm) +
+    stat_summary(fun.data=mean_cl_normal) +
+    geom_smooth(method='lm',formula=y~x))
   print(cca.corr)
 }
 # library(dplyr)
