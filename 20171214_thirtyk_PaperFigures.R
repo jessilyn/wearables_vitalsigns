@@ -731,7 +731,7 @@ models=c(" ~ Pulse", # univariate with pulse only
          " ~ Pulse + Temp", # bivariate with pulse + temp
          " ~ Pulse + I(Pulse^2)",
          " ~ Temp + I(Temp^2)" )
-cv.runs <- 10
+cv.runs <- 50
 models.corr.coefs <- c()
 rsq.pred <- 0
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
@@ -775,21 +775,26 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
 corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
+
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
   group_by(test, model) %>% 
   summarise_at(vars("corr.coef"), funs(mean,sd)))
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + I(Pulse^2)", " ~ Temp + I(Temp^2)"))
+model.corr.coefs <- na.omit(model.corr.coefs)
+model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
 
 # plot how rsq changes with the different models, and add in error bars from sd.plot
 ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs$model))) +
   theme(legend.title = element_blank())+
   geom_point() +
   #guides(fill=guide_legend(title="Model")) +
-  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(angle = 60, hjust = 1)) +
-  ylim(0,0.5) +
   xlab("Clinical Laboratory Test") + ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        axis.text.y = element_text(hjust = 1)) +
+  ylim(0,0.5) +
   scale_fill_discrete(name="Model")+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
   #, position=position_dodge(.7))
