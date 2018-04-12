@@ -416,12 +416,12 @@ rownames(rsq.all)[1] = "vitals"
   df = data.frame(rsq.all)
 #df[df<0] = 0 # clamp correlations to 0
 df$name = rownames(rsq.all)
-df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
-
+#df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
 
 # Plot the correlations
 data = melt(df, id = "name")
 colnames(data) = c("model","test","r_squared")
+
 
 #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
@@ -437,6 +437,38 @@ ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shap
 #dev.off()
 write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
+####################################
+#   Figure 2C Timecourse / 5 (??)  #
+####################################
+#Run after running individual time course jobs that produced corr_coeffs and num_Records files   #
+weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+# read in each of the corr_coeffs from the different time windows
+# 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
+# save as pdf 4x12.5"
+data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_AllData.csv",
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+
+#png('SECURE_data/20180330/time_windows_AllData.png',width = 1700, height = 600,res=120)
+vitals_res = data[data$model == "vitals.ipop",]
+data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
+data$model = factor(data$model)
+data$r_squared <- pmax(data$r_squared, 0)
+# model.corr.coefs <- na.omit(model.corr.coefs)
+data$test = factor(data$test, levels = data[order(-data$r_squared),][,2])
+# model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
+
+
+ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(0,0.5) +
+  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(paste("Corr Coeff")))
+#dev.off()
+# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
+# can we create one more layer of mixed effects models in the iPOP analysis here?
 
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
@@ -783,6 +815,7 @@ model.corr.coefs <- (corr.coefs %>%
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + I(Pulse^2)", " ~ Temp + I(Temp^2)"))
 model.corr.coefs <- na.omit(model.corr.coefs)
 model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
+model.corr.coefs$mean <- pmax(model.corr.coefs$mean, 0)
 
 # plot how rsq changes with the different models, and add in error bars from sd.plot
 ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs$model))) +
@@ -928,32 +961,6 @@ ggplot(d, aes(x=X, y=value, col=variable, shape=variable))+
   geom_point(cex=2.5) + 
   weartals_theme
 
-#########################
-#   Figure 2C / 5 (??)  #
-#########################
-#Run after running individual time course jobs that produced corr_coeffs and num_Records files   #
-weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
-# read in each of the corr_coeffs from the different time windows
-# 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
-# save as pdf 4x12.5"
-data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_AllData.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-
-#png('SECURE_data/20180330/time_windows_AllData.png',width = 1700, height = 600,res=120)
-vitals_res = data[data$model == "vitals.ipop",]
-data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
-data$model = factor(data$model)
-ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(0,0.5) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
-#dev.off()
-# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
-# can we create one more layer of mixed effects models in the iPOP analysis here?
 
 
 
