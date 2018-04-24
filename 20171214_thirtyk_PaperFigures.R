@@ -427,8 +427,6 @@ df$name = rownames(rsq.all)
 # Plot the correlations
 data = melt(df, id = "name")
 colnames(data) = c("model","test","r_squared")
-
-
 #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
 data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
@@ -449,13 +447,19 @@ write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names
 #Run after running individual time course jobs that produced corr_coeffs and num_Records files   #
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 # read in each of the corr_coeffs from the different time windows
-# 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
+# had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
+# with demographics: 20180411_corr_coeffs_DayPrior_demog.csv, 20180411_corr_coeffs_ThreeDayPrior_demog.csv, 20180411_corr_coeffs_WeekPrior_demog.csv, 20180411_corr_coeffs_TwoWeekPrior_demog.csv, 20180411_corr_coeffs_MonthPrior_demog.csv, 20180411_corr_coeffs_AllData_demog.csv
 # save as pdf 4x12.5"
-data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_AllData.csv",
+# data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_DayPrior.csv",
+#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_AllData.csv",
+#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-
 #png('SECURE_data/20180330/time_windows_AllData.png',width = 1700, height = 600,res=120)
-vitals_res = data[data$model == "vitals.ipop",]
+vitals_res = data[data$model == "vitals",]
+#vitals_res = data[data$model == "vitals.ipop",]
+
 data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
 data$model = factor(data$model)
 data$r_squared <- pmax(data$r_squared, 0)
@@ -466,7 +470,7 @@ data$test = factor(data$test, levels = data[order(-data$r_squared),][,2])
 
 ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
-  ylim(0,0.5) +
+  ylim(0,0.52) +
   scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
@@ -476,6 +480,27 @@ ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shap
 # make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
 # can we create one more layer of mixed effects models in the iPOP analysis here?
 
+# Look at differences between with and without demog
+data.nodemog <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_TwoWeekPrior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_TwoWeekPrior_demog.csv",
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+data$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+df <- merge(data, data.nodemog, by = c("model", "test"))
+colnames(df)[3:4] <- c("r_w_demog", "r_no_demog")
+df$delta <- df[,3] - df[,4]
+df<- df[order(-df$delta),]
+
+ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
 ################################################
@@ -591,7 +616,7 @@ length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 ########################
 #  Figure 3A 3D and 3E #
 ########################
-#30 K Univariate Correlation Fit Plots by Lukasz 
+#30 K Univariate Correlation Fit Plots by Lukasz/Jessie
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
 allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
@@ -606,15 +631,24 @@ clinVars <- which(names(corDf) %in% allClin)
 
 #clin subset of the top 10 most predictive models from bivariate analysis:
 clinTopTen <- c("GLU_fasting","CR","HSCRP", "NEUTAB","NEUT","LYM", "RDW","ALB","AG", "PLT","PROCALCITONIN", "ESR")
-clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL")
+clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL", "LYM")
 
-
+clinTopTwo <- c("NEUT", "LYM") 
 # boxplots #http://www.cookbook-r.com/Graphs/Plotting_means_and_error_bars_(ggplot2)/#Helper functions
 summary.pulse<-list()
 summary.Temp<-list()
 r.squared <-c()
 
-for (j in clinTopTen){
+for (j in clinTopTwo){
+  ## 30k All data scatterplots for Fig 3D and 3E
+  print(ggplot(corDf, aes(y = corDf[[j]], x = corDf$Temp)) +
+          stat_density_2d(aes(fill = ..level..), geom = 'polygon') +
+          #scale_fill_viridis_c(name = "density") +
+          geom_point(shape = '.') +
+          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
+          theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+          ylab(paste0(c(j ," Bin"))))
+}
   corDf$bin2<-ntile(corDf[[j]], 40)
   # for Temp
   # corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
