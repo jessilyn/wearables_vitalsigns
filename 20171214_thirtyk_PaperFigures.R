@@ -157,7 +157,10 @@ iPOPcorDf[, -c(1,2)] <- apply(iPOPcorDf[, -c(1,2)], 2, remove_outliers)
 ### clean corDf ### 
 corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers) 
 
-
+### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
+# wear2<-wear
+# wear[,-c(1:6)] <- sapply(wear[,-c(1:6)], as.numeric)
+# wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
 
 ####################
 #### Figure 1  #####
@@ -240,7 +243,7 @@ patients = unique(iPOPcorDf$iPOP_ID)
 nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
 corr.coefs.ipop.lm <- c() 
 p.value <-0
-ipop.lm <- c()
+ipop.lm.cor.coef <- c()
 iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 for (nm in nms){
   print(nm)
@@ -257,23 +260,32 @@ for (nm in nms){
   if (length(test[[nm]])>0){
   bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
   #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
-  lm.D0<-lm(train[[nm]] ~ 1)
-  t<- anova(lm.D0, bivar.lm.model)
-  p.value <- as.numeric(t[2,][["Pr(>F)"]])
-  bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict
+  bivar.null.lm.model<-lm(train[[nm]] ~ 1) # create null model for hypothesis testing and for calculating RSS0
+  t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
+  p.value <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
+  bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict on trained model
+  bivar.null.lm.pred = predict(bivar.null.lm.model, newdata = test) # predict on null model
+  # predict on null model
   bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
-  ipop.lm= rbind(ipop.lm, c(nm,bivar.lm.cor.coef, p.value)) 
+  rssm <- sum((test[[nm]] - bivar.lm.pred)^2) # rss of the trained model
+  print(rssm)
+  rss0 <- sum((test[[nm]] - bivar.null.lm.pred)^2)  # rss of the null model
+  print(rss0)
+  bivar.lm.pct.dev <- 1 - (rssm / rss0)
+  ipop.lm.cor.coef= rbind(ipop.lm.cor.coef, c(nm, bivar.lm.cor.coef, p.value, bivar.lm.pct.dev)) 
   }
   }
 }
-corr.coefs.ipop.lm <- ipop.lm
-corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3))
-means<-aggregate(corr.coefs.ipop.lm[,2:3], by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
+#names(ipop.lm.cor.coef) <- c("lab", "pred/obs_corr_coef", "")
+corr.coefs.ipop.lm <- ipop.lm.cor.coef
+corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); 
+corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3))
+means<-aggregate(corr.coefs.ipop.lm[,2:4], by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
 ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
 means <- means [order(means[,2] ,decreasing = TRUE),]
 colnames(means)<- c("test", "corr.coef", "p.val")
 means = means[means$test %in% allClin,]
-write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
+#write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
