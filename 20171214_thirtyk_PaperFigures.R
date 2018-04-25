@@ -286,6 +286,7 @@ means <- means [order(means[,2] ,decreasing = TRUE),]
 colnames(means)<- c("test", "corr.coef", "p.val")
 means = means[means$test %in% allClin,]
 #write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(means, "../SECURE_data/20180425_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Script to compare different models for predicting lab tests from iPOP wearables data (adapted from population-models.R)
 source("ggplot-theme.R") # just to make things look nice
@@ -296,12 +297,15 @@ wear$Gender <- as.factor(wear$Gender)
 wear$Ethn <- as.factor(wear$Ethn)
 
 # Get the vitals models
-#ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE)
-ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE)
+#ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE) # didnt include demog, now obsolete
+#ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE) # was corr coeffs, now obsolete
+ranked = read.csv("../SECURE_data/20180425_ranked_models_ipop_lm_with_demographics.csv",header = FALSE) # fixed to be pct dev explained
 top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
 rsq.all = t(as.matrix(ranked$V2))
-colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- will change this 
+colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- changed later on
+pct.dev.all = t(as.matrix(ranked$V2))
+colnames(pct.dev.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <-  changed later on
 
 # LOO
 patients = unique(wear$iPOP_ID)
@@ -311,17 +315,18 @@ model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
-# top.names <- top.names[1:5] # for troubleshooting
+top.names <- top.names[1:3] # for troubleshooting
 
 for (mode in modes){
   # Build two lists: predicted vs true
   val.true = list()
   val.pred = list(lm=list(),rf=list())
+  val.nullmod.pred = list(lm=list(),rf=list())
   cat("Feature selection:",mode,"\n")
   
   # Build models using wearables data
   #for (k in 1:length(patients)){
-  for (k in 1:2){
+  for (k in 1:3){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
     ######################
@@ -329,6 +334,7 @@ for (mode in modes){
     # We will predict one by one, let's create a vector of tests
     res.true <- list()
     res.pred = list(lm=list(),rf=list())
+    res.nullmod.pred = list(lm=list(),rf=list())
     p.value<-list()
     cat("Patient",patients[k],"\n") # LOO
     
@@ -378,17 +384,25 @@ for (mode in modes){
       
       # Random forest
       fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(variables.to.use,collapse=" + "))
+      fml.null = paste(top.names[l]," ~ 1") # check with Trevor that this is the correct Null model - it sets the intercept equal to mean(outcome) so I think it is right
       set.seed(1)
       models.wear.rf = randomForest(as.formula(fml),
                                     data = x.train)
                                     #weights = labs.wear$weight) # TODO: do we need to include this line?
       res.pred[["rf"]][[l]] = predict(models.wear.rf, newdata = x.test) # predict on left out person
+      models.wear.null.rf = lm(as.formula(fml.null),  ## this is wrong; need to ask Trevor how to fix; should be something like randomForest()
+                               data = x.train)
+      res.nullmod.pred[["rf"]][[l]] = predict(models.wear.null.rf, newdata = x.test)
       
       # LM  - always throws warnings; not sure why
       models.wear.lm = lm(as.formula(fml),
                           data = x.train)
                           # , weights = labs.wear$weight) # TODO: do we need to include this line?
       res.pred[["lm"]][[l]] = predict(models.wear.lm, newdata = x.test)
+      models.wear.null.lm = lm(as.formula(fml.null),
+                               data = x.train)
+      res.nullmod.pred[["lm"]][[l]] = predict(models.wear.null.lm, newdata = x.test)
+      
       # create a null model for significance testing
       fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~ 1")
       lm.D0<-lm(as.formula(fml), data=x.train) 
@@ -401,57 +415,96 @@ for (mode in modes){
       # Add predictions and true values for the patient k
 
       for (mdl.name in model.names){
-        if (l <= length(val.pred[[mdl.name]])) # TODO: I don't understand what the if else statements below are doing
+        if (l <= length(val.pred[[mdl.name]]) & l <= length(val.nullmod.pred[[mdl.name]])){
           val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]]) #append new predictions to val.pred matrix
-        else
-          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]] # initiate val.pred matrix
+          val.nullmod.pred[[mdl.name]][[l]] = append(val.nullmod.pred[[mdl.name]][[l]], res.nullmod.pred[[mdl.name]][[l]]) } #append new null model predictions to val.nullmod.pred matrix for RSS0 calculations
+        else {
+          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]] }# initiate val.pred matrix
+          val.nullmod.pred[[mdl.name]][[l]] = res.nullmod.pred[[mdl.name]][[l]] # initiate val.pred matrix
       }
 
-      if (l <= length(val.true))
+      if (l <= length(val.true)){
         val.true[[l]] = append(val.true[[l]], res.true[[l]]) 
-       else 
+      }
+       else {
         val.true[[l]] = res.true[[l]] # initiate val.true matrix
+       }
     }
     # ----
   }
   
-  # Get correlation coeffs for each model
+  # Get correlation coeffs for each model & Get RSSm and RSS0 to calculate % variance explained (aka %  deviance explained )
   for (mdl.name in model.names){
     rsq.wear = c()
-    for (j in 1:length(top.names))
+    rssm.wear = c()
+    rss0.wear = c()
+    pct.dev.explained = c()
+    for (j in 1:length(top.names)){
       rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[j]], na.omit(val.true[[j]])))
+      rssm.wear = c(rssm.wear, sum((na.omit(val.true[[j]]) - val.pred[[mdl.name]][[j]])^2))
+      rss0.wear = c(rss0.wear, sum((na.omit(val.true[[j]]) - val.nullmod.pred[[mdl.name]][[j]])^2))
+      pct.dev.explained = 1 - ( rssm.wear / rss0.wear )
+      }
     names(rsq.wear) = top.names
     rsq.all = rbind(rsq.all, rsq.wear)
     rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
     
+    names(pct.dev.explained) = top.names
+    pct.dev.all = rbind(pct.dev.all, pct.dev.explained)
+    rownames(pct.dev.all)[nrow(pct.dev.all)] = paste(mode,mdl.name,sep="-")
   }
 }
 
 num.Records <- do.call("cbind",num.Records) 
 #write.table(num.Records, "../SECURE_data/num_Records_day_prior_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-rownames(rsq.all)[1] = "vitals"
-  df = data.frame(rsq.all)
+### in the end discovered that the corr coef method with LOO is not correct- see Trevor's blog. Replaced this with the pct dev explained method below.
+# rownames(rsq.all)[1] = "vitals"
+# df = data.frame(rsq.all)
+# df$name = rownames(rsq.all)
+# #df[df<0] = 0 # clamp correlations to 0
+# #df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
+# 
+# # Plot the correlations
+# data = melt(df, id = "name")
+# colnames(data) = c("model","test","r_squared")
+# #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
+# vitals_res = data[data$model == "vitals",]
+# data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
+# ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+#   weartals_theme + 
+#   ylim(0,0.5) +
+#   scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+#                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+#   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+#                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+#   labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
+# #dev.off()
+# write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+
+
+rownames(pct.dev.all)[1] = "vitals"
+df = data.frame(pct.dev.all)
+df$name = rownames(pct.dev.all)
 #df[df<0] = 0 # clamp correlations to 0
-df$name = rownames(rsq.all)
 #df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
 
 # Plot the correlations
 data = melt(df, id = "name")
-colnames(data) = c("model","test","r_squared")
+colnames(data) = c("model","test","pct_dev_explained")
 #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
-data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
-ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
+ggplot(data, aes(test,pct_dev_explained, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
-  ylim(0,0.5) +
+  #ylim(0,1) +
   scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+                       labels=c("RF", "RF + LASSO", "LM all variables", "LASSO", "LM vitals")) +
   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+                       labels=c("RF", "RF + LASSO", "LM all variables", "LASSO", "LM vitals")) +
   labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
 #dev.off()
-write.table(data, "../SECURE_data/20180123_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(data, "../SECURE_data/20180425_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
