@@ -258,8 +258,8 @@ for (nm in nms){
   test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp, AgeIn2016, Gender, Ethn)), test[[nm]])) # with demographics
   colnames(test)[7] <- nm
   if (length(test[[nm]])>0){
+  #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
   bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
-  #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp, data=train) # build the model
   bivar.null.lm.model<-lm(train[[nm]] ~ 1) # create null model for hypothesis testing and for calculating RSS0
   t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
   p.value <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
@@ -268,22 +268,20 @@ for (nm in nms){
   # predict on null model
   bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
   rssm <- sum((test[[nm]] - bivar.lm.pred)^2) # rss of the trained model
-  print(rssm)
   rss0 <- sum((test[[nm]] - bivar.null.lm.pred)^2)  # rss of the null model
-  print(rss0)
   bivar.lm.pct.dev <- 1 - (rssm / rss0)
-  ipop.lm.cor.coef= rbind(ipop.lm.cor.coef, c(nm, bivar.lm.cor.coef, p.value, bivar.lm.pct.dev)) 
+  ipop.lm.cor.coef= rbind(ipop.lm.cor.coef, c(nm, bivar.lm.cor.coef**2, p.value, bivar.lm.pct.dev, length(test[[nm]]))) 
   }
   }
 }
 #names(ipop.lm.cor.coef) <- c("lab", "pred/obs_corr_coef", "")
 corr.coefs.ipop.lm <- ipop.lm.cor.coef
 corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); 
-corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3))
+corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3)); corr.coefs.ipop.lm$V4 <- as.numeric(as.character(corr.coefs.ipop.lm$V4))
 means<-aggregate(corr.coefs.ipop.lm[,2:4], by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
 ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
-means <- means [order(means[,2] ,decreasing = TRUE),]
-colnames(means)<- c("test", "corr.coef", "p.val")
+means <- means [order(means[,4] ,decreasing = TRUE),]
+colnames(means)<- c("test", "corr.coef", "p.val", "pct.dev")
 means = means[means$test %in% allClin,]
 #write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(means, "../SECURE_data/20180425_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
@@ -315,7 +313,7 @@ model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
-top.names <- top.names[1:3] # for troubleshooting
+top.names <- top.names[22] # for troubleshooting
 
 for (mode in modes){
   # Build two lists: predicted vs true
@@ -325,8 +323,8 @@ for (mode in modes){
   cat("Feature selection:",mode,"\n")
   
   # Build models using wearables data
-  #for (k in 1:length(patients)){
-  for (k in 1:3){
+  for (k in 1:length(patients)){
+  #for (k in 1:3){
     train <- patients[patients != patients[k]]
     test <- patients[patients == patients[k]]
     ######################
@@ -441,9 +439,9 @@ for (mode in modes){
     pct.dev.explained = c()
     for (j in 1:length(top.names)){
       rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[j]], na.omit(val.true[[j]])))
-      rssm.wear = c(rssm.wear, sum((na.omit(val.true[[j]]) - val.pred[[mdl.name]][[j]])^2))
-      rss0.wear = c(rss0.wear, sum((na.omit(val.true[[j]]) - val.nullmod.pred[[mdl.name]][[j]])^2))
-      pct.dev.explained = 1 - ( rssm.wear / rss0.wear )
+      rssm.wear = sum((na.omit(val.true[[j]]) - val.pred[[mdl.name]][[j]])^2)
+      rss0.wear = sum((na.omit(val.true[[j]]) - val.nullmod.pred[[mdl.name]][[j]])^2)
+      pct.dev.explained = c(pct.dev.explained, (1 - ( rssm.wear / rss0.wear )))
       }
     names(rsq.wear) = top.names
     rsq.all = rbind(rsq.all, rsq.wear)
