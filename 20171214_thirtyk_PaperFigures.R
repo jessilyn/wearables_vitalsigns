@@ -162,6 +162,9 @@ corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers)
 # wear[,-c(1:6)] <- sapply(wear[,-c(1:6)], as.numeric)
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
 
+## merge iPOP and demographics
+iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+
 ####################
 #### Figure 1  #####
 ####################
@@ -239,12 +242,16 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using iPOP dataset
 # LOO cross validation at the subject level 
+rm(list=setdiff(ls(), "corDf", "iPOPcorDf", "iPOPcorDf.demo", "iPOPdemographics", "iPOPlabs", "iPOPvitals", "labs", "thirtyKdemog", "vitals", "wear"))
+
 patients = unique(iPOPcorDf$iPOP_ID)
 nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
 corr.coefs.ipop.lm <- c() 
 p.value <-0
 ipop.lm.cor.coef <- c()
-iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+
+# this next script is to get the corr coefs / % dev explained from just the iPOP simple vitals models (no wear data)
+# should combine this into the next script using wear data to streamline this code, but prob isnt necessary at this point...
 for (nm in nms){
   print(nm)
   for (i in 1:length(patients)){
@@ -294,29 +301,31 @@ demo.variables <- c("AgeIn2016", "Gender", "Ethn")
 wear$Gender <- as.factor(wear$Gender)
 wear$Ethn <- as.factor(wear$Ethn)
 
-# Get the vitals models
+# Get the vitals models from the previous loop- later will build this into the current loop
 #ranked = read.csv("../SECURE_data/20180322_ranked_models_test_lm.csv",header = FALSE) # didnt include demog, now obsolete
 #ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE) # was corr coeffs, now obsolete
 ranked = read.csv("../SECURE_data/20180425_ranked_models_ipop_lm_with_demographics.csv",header = FALSE) # fixed to be pct dev explained
+
+# choose clinical labs that will be predicted
 top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
-rsq.all = t(as.matrix(ranked$V2))
+top.names <- c("MONOAB", "HGB", "HCT") # for troubleshooting
+
+# create empty data frames to store num.Records, corr coefs, and % dev explained
+rsq.all = t(as.matrix(ranked$V2[ranked$V1 %in% top.names])) # empty data frame for adding corr coefs from models
 colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- changed later on
-pct.dev.all = t(as.matrix(ranked$V2))
+pct.dev.all = t(as.matrix(ranked$V2[ranked$V1 %in% top.names])) # empty data frame for adding pct dev explained from models
 colnames(pct.dev.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <-  changed later on
-
-# LOO
-patients = unique(wear$iPOP_ID)
-
-modes = c("all","lasso")
-model.names = c("lm","rf")
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
 
-top.names <- top.names[22] # for troubleshooting
+# LOO
+patients = unique(wear$iPOP_ID)
+modes = c("all","lasso") # feature selection methods
+model.names = c("lm","rf") # model types
 
 for (mode in modes){
-  # Build two lists: predicted vs true
+  # Build 3 lists: predicted vs true vs null model
   val.true = list()
   val.pred = list(lm=list(),rf=list())
   val.nullmod.pred = list(lm=list(),rf=list())
@@ -485,6 +494,7 @@ rownames(pct.dev.all)[1] = "vitals"
 df = data.frame(pct.dev.all)
 df$name = rownames(pct.dev.all)
 #df[df<0] = 0 # clamp correlations to 0
+data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
 #df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
 
 # Plot the correlations
@@ -492,17 +502,16 @@ data = melt(df, id = "name")
 colnames(data) = c("model","test","pct_dev_explained")
 #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 vitals_res = data[data$model == "vitals",]
-data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
 ggplot(data, aes(test,pct_dev_explained, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
-  #ylim(0,1) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "RF + LASSO", "LM all variables", "LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "RF + LASSO", "LM all variables", "LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("correlation"))) + ggtitle("Model comparison")
+  ylim(-1,1) +
+  scale_shape_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(paste("Percent Variance Explained"))) + ggtitle("Model comparison")
 #dev.off()
-write.table(data, "../SECURE_data/20180425_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+#write.table(data, "../SECURE_data/20180425_corr_coeffs_week_prior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
