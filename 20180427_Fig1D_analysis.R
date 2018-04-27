@@ -3,11 +3,11 @@
 dir = "../SECURE_data"
 #dir = "/srv/gsfs0/projects/snyder/jdunn/framework_paper/SECURE_data" # For use on scg
 
-## Hypothesis: 
+## Hypotheses: 
 # 1) Watch RHR < Clinic Pulse (white coat syndrome)
 # 2) Watch variance per individual < clinic pulse variance per individual (power of many tests)
 
-### Goal: explore how time of day and resting thresholds affect comparison of mean and variance between watch RHR and clinic pulse
+### Goal: explore how time of day and resting thresholds affect comparison of mean and variability between watch RHR and clinic pulse
 
 #### REQUIRED
 require(data.table)
@@ -36,7 +36,6 @@ df<-df.source[!is.na(df.source$iPOP_ID),] # only keep wearables data that has an
 df[,6] <- apply(df[,6], 2, remove_outliers) # clean data based on HR, Skin Temp, Steps
 df <- df[which(!is.na(df[,6]))] # remove observations where HR = NA
 df$Date <- as.POSIXct(paste(df$Timestamp_Local),format="%Y-%m-%d %H:%M:%S")
-df2<-df
 
 ##### SAMPLE DEMOGRAPHICS 
 inven <- fread(paste0(dir, "/ClinWearDemo_SamplePop.csv"),
@@ -52,13 +51,10 @@ colnames(vitals)[1:2] <- c("iPOP_ID", "Date")
 ###############
 restingDf <- c() 
 restingDf.all <- c() # keep all resting data for boxplots later
-#restingDf.all.byTime <- list() # keep all resting data by time of day for boxplots later
 window=10 # define time window for resting threshold
 maxsteps <- 1 #define max steps for resting threshold
 indiv.means <- c()
 indiv.sd <- c()
-indiv.clinDay.means <- data.frame()
-indiv.clinDay.sd <- data.frame()
 
 for(i in unique(df$iPOP_ID)){
     print(i)
@@ -112,6 +108,8 @@ ggplot(restingDf.vitals.melt) +
 ###############################
 # Differences by Hour of Day  #
 ###############################
+indiv.clinDay.means <- data.frame()
+indiv.clinDay.sd <- data.frame()
 
 for (j in 1:6){ # vary the hour of the day
   subDfClinDay <- with( restingDf , restingDf[ hour( Date ) >= j+2 & hour( Date ) < j+3 , ] ) #pull data only from specific time window
