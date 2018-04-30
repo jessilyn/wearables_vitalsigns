@@ -379,14 +379,30 @@ for (mode in modes){
         # lasso 
         n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
 
-        dem = c("Gender", "Ethn") # do not use demographics for lasso
-        glm.res = cv.glmnet(x=as.matrix(predictors[,-which(names(predictors) %in% dem)]),y=outcome,
+        x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
+        glm.res = cv.glmnet(x=x_train,y=outcome,
                             standardize.response=FALSE,
                             family="gaussian",
 			                      nfolds=n,
                             nlambda=100)
         variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
-        variables.to.use = c(dem,variables.to.use) # add back Gender and ethn
+
+        # check if Gender selected
+        ethn.sel = grep("^Ethn",variables.to.use)
+        gend.sel = grep("^Gender",variables.to.use)
+      
+        # remove Gender* and add Gender if present
+        # remove Ethn* and add Ethn if present
+        torm = c(ethn.sel, gend.sel)
+        if (length(torm) > 0){
+          variables.to.use = variables.to.use[-torm]
+          if (length(ethn.sel) > 0)
+            variables.to.use = c("Ethn",variables.to.use)
+          if (length(gend.sel) > 0)
+            variables.to.use = c("Gender",variables.to.use)
+        }        
+
+        # After that variables.to.use contains all variables selected by LASSO        
       }
       
       # Random forest
