@@ -53,7 +53,7 @@ timespans <-c("AllData",
               "DayPrior" )
 
 wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Ryan_Runge_Framework_Paper_All_Materials/Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
-                "Basis2016_Clean_Norm_", timespans[7], "_20171020.csv"),
+                "Basis2016_Clean_Norm_", timespans[7], "_20180420.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
@@ -309,7 +309,7 @@ ranked = read.csv("../SECURE_data/20180425_ranked_models_ipop_lm_with_demographi
 # choose clinical labs that will be predicted
 top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
-top.names <- c("MONOAB", "HGB", "HCT") # for troubleshooting
+#top.names <- c("MONOAB", "HGB", "HCT") # for troubleshooting
 
 # create empty data frames to store num.Records, corr coefs, and % dev explained
 rsq.all = t(as.matrix(ranked$V2[ranked$V1 %in% top.names])) # empty data frame for adding corr coefs from models
@@ -475,9 +475,9 @@ num.Records <- do.call("cbind",num.Records)
 # # Plot the correlations
 # data = melt(df, id = "name")
 # colnames(data) = c("model","test","r_squared")
-# #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 # vitals_res = data[data$model == "vitals",]
-# data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
+# data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
+# #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
 # ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
 #   weartals_theme + 
 #   ylim(0,0.5) +
@@ -494,14 +494,14 @@ rownames(pct.dev.all)[1] = "vitals"
 df = data.frame(pct.dev.all)
 df$name = rownames(pct.dev.all)
 #df[df<0] = 0 # clamp correlations to 0
-data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
 #df <- df [order(df[,*make this the RF_all or LM_LASSO*] ,decreasing = TRUE),]
 
 # Plot the correlations
 data = melt(df, id = "name")
 colnames(data) = c("model","test","pct_dev_explained")
+vitals_res = data[data$model == "lasso-lm",]
+data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$pct_dev_explained)])
 #png('SECURE_data/figure2C.png',width = 1700, height = 600,res=120)
-vitals_res = data[data$model == "vitals",]
 ggplot(data, aes(test,pct_dev_explained, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
   weartals_theme + 
   ylim(-1,1) +
