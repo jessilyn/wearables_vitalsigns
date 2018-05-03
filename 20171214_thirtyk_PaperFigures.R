@@ -431,6 +431,11 @@ fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct
 colnames(fig.2c.df)<-c("test", "vitals", "lasso", "rf")
 fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 
+fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso), as.data.frame(rsq.rf), row.names=NULL)
+colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso", "rf")
+fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
+fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
+
 fig.2c.plot <- melt(fig.2c.df)
 fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
 fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
@@ -444,8 +449,11 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
   scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
                        labels=c("LM vitals", "LASSO", "RF")) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
+
+# store the results
 write.table(num.Records, "../SECURE_data/20180503_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(fig.2c.df, "../SECURE_data/20180503_pct_var_Dayprior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(fig.2c.corr.coefs, "../SECURE_data/20180503_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
