@@ -233,305 +233,219 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 ###############
 #  Figure 2C  #
 ###############
-## TODO: problem removing NAs for x.train and x.test for the multiple model runs (line 267)
-# the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+# creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
-# old scripts: load-data.R - now embedded at the top of this script
-# old scripts: population-30k.R - now embedded below in this script
+source("ggplot-theme.R") # just to make things look nice
+#top.names<-c("MONOAB", "HGB", "HCT", "MCHC") # for testing model on small subset
+top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 
-# create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values
-# predicted values from simple bivariate models of (lab test ~ pulse + temp) using iPOP dataset
-# LOO cross validation at the subject level 
-rm(list=setdiff(ls(), "corDf", "iPOPcorDf", "iPOPcorDf.demo", "iPOPdemographics", "iPOPlabs", "iPOPvitals", "labs", "thirtyKdemog", "vitals", "wear"))
+####
+# CODE FOR SIMPLE LM
+#
 
+rsq.all = c()
+pct.var.all = c()
+vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
+iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 patients = unique(iPOPcorDf$iPOP_ID)
-nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
-corr.coefs.ipop.lm <- c() 
-p.value <-0
-ipop.lm.cor.coef <- c()
 
-# this next script is to get the corr coefs / % dev explained from just the iPOP simple vitals models (no wear data)
-# should combine this into the next script using wear data to streamline this code, but prob isnt necessary at this point...
-for (nm in nms){
-  print(nm)
-  for (i in 1:length(patients)){
-  print(patients[i])
-  train <- iPOPcorDf.demo[!iPOPcorDf.demo$iPOP_ID %in% patients[i],]
-  #train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp)), train[[nm]]))
-  train <- na.omit(cbind(subset(train, select = c(iPOP_ID, Pulse, Temp, AgeIn2016, Gender, Ethn)), train[[nm]])) # with demographics
-  colnames(train)[7] <- nm
-  test <- iPOPcorDf.demo[iPOPcorDf.demo$iPOP_ID %in% patients[i],]
-  #test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp)), test[[nm]])) 
-  test <- na.omit(cbind(subset(test, select = c(iPOP_ID, Pulse, Temp, AgeIn2016, Gender, Ethn)), test[[nm]])) # with demographics
-  colnames(test)[7] <- nm
-  if (length(test[[nm]])>0){
-  #bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
-  bivar.lm.model = lm(train[[nm]] ~ Pulse + Temp + AgeIn2016 + Gender + Ethn, data=train) # build the model
-  bivar.null.lm.model<-lm(train[[nm]] ~ 1) # create null model for hypothesis testing and for calculating RSS0
-  t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
-  p.value <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
-  bivar.lm.pred = predict(bivar.lm.model, newdata = test) # predict on trained model
-  bivar.null.lm.pred = predict(bivar.null.lm.model, newdata = test) # predict on null model
-  # predict on null model
-  bivar.lm.cor.coef <- cor(bivar.lm.pred, test[[nm]], use = "complete.obs")
-  rssm <- sum((test[[nm]] - bivar.lm.pred)^2) # rss of the trained model
-  rss0 <- sum((test[[nm]] - bivar.null.lm.pred)^2)  # rss of the null model
-  bivar.lm.pct.dev <- 1 - (rssm / rss0)
-  ipop.lm.cor.coef= rbind(ipop.lm.cor.coef, c(nm, bivar.lm.cor.coef**2, p.value, bivar.lm.pct.dev, length(test[[nm]]))) 
-  }
+val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
+val.pred <- rep(list(NA),length(top.names)) # list of vectors to store trained model predicted values; each vector is for 1 clinical lab
+val.null.pred <- rep(list(NA),length(top.names)) # list of vectors to store null model predicted values; each vector is for 1 clinical lab
+# p.value<-list()  # TODO: decide if this is a relevant parameter to collect
+num.true <-rep(0, 44)
+
+for (k in 1:length(patients)){
+  train <- patients[patients != patients[k]]
+  test <- patients[patients == patients[k]]
+  cat("Patient",patients[k],"\n") # LOO
+  dat.train<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% train, ] # subset input data by training set
+  dat.test<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% test, ] # subset input data by testing set
+  
+  for (l in 1:length(top.names)){
+    cat("Test",top.names[l],"\n")
+    # create training set
+    x.train<-dat.train[,colnames(dat.train) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+    x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
+    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+    # create test set
+    x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+    val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
+    num.true[l]<-num.true[l] + length(val.true[[l]])
+    fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(vitals.variables,collapse=" + "))
+    fml.null = paste(top.names[l]," ~ 1")
+    bivar.lm.model = lm(as.formula(fml), data = x.train) # build the model
+    val.pred[[l]] = c(val.pred[[l]], predict(bivar.lm.model, newdata = x.test)) # predict on trained model
+    bivar.null.lm.model<-lm(as.formula(fml.null), data = x.train) # create null model for hypothesis testing and for calculating RSS0
+    val.null.pred[[l]] = c(val.null.pred[[l]], predict(bivar.null.lm.model, newdata = x.test)) # predict on null model
+    # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
+    # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
 }
-#names(ipop.lm.cor.coef) <- c("lab", "pred/obs_corr_coef", "")
-corr.coefs.ipop.lm <- ipop.lm.cor.coef
-corr.coefs.ipop.lm <- na.omit(as.data.frame(corr.coefs.ipop.lm)); 
-corr.coefs.ipop.lm$V2 <- as.numeric(as.character(corr.coefs.ipop.lm$V2)); corr.coefs.ipop.lm$V3 <- as.numeric(as.character(corr.coefs.ipop.lm$V3)); corr.coefs.ipop.lm$V4 <- as.numeric(as.character(corr.coefs.ipop.lm$V4))
-means<-aggregate(corr.coefs.ipop.lm[,2:4], by=list(corr.coefs.ipop.lm$V1), mean, na.action = na.omit)
-ci<-aggregate(corr.coefs.ipop.lm$V2, by=list(corr.coefs.ipop.lm$V1), function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))})
-means <- means [order(means[,4] ,decreasing = TRUE),]
-colnames(means)<- c("test", "corr.coef", "p.val", "pct.dev")
-means = means[means$test %in% allClin,]
-#write.table(means, "../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(means, "../SECURE_data/20180425_ranked_models_ipop_lm_with_demographics.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-# Script to compare different models for predicting lab tests from iPOP wearables data (adapted from population-models.R)
-source("ggplot-theme.R") # just to make things look nice
+rsq.vitals = c()
+rssm.vitals = c()
+rss0.vitals = c()
+pct.var.explained = c()
+num.Records <- c()
+for (j in 1:length(top.names)){
+  rsq.vitals = c(rsq.vitals, cor(val.pred[[j]], val.true[[j]], use = "complete.obs"))
+  rssm.vitals = sum(na.omit((val.true[[j]] - val.pred[[j]])^2))
+  rss0.vitals = sum(na.omit((val.true[[j]] - val.null.pred[[j]])^2))
+  pct.var.explained = c(pct.var.explained, (1 - ( rssm.vitals / rss0.vitals )))
+  num.Records <- c(num.Records, length(val.pred[[j]]))
+}
+names(rsq.vitals) = top.names
+names(pct.var.explained) = top.names
+sqrt.pct.var <- sqrt(pct.var.explained)
 
-patients = unique(iPOPcorDf$iPOP_ID)
-nms = names(subset(iPOPcorDf, select=-c(iPOP_ID, Clin_Result_Date, Pulse, Temp, BMI, systolic, diastolic)))
-corr.coefs.ipop.lm <- c() 
-p.value <-0
-ipop.lm <- c()
-iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+####
+# CODE FOR LASSO, RF
 
-# Script to compare different models for predicting lab tests from iPOP wearables data (adapted from population-models.R)
+#clean wear data frame
 wear[,8:length(names(wear))] <- apply(
   wear[,8:length(names(wear))], 2,
   function(x) as.numeric(as.character(x)))
-
-wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-demo.variables <- c("AgeIn2016", "Gender", "Ethn")
 wear$Gender <- as.factor(wear$Gender)
 wear$Ethn <- as.factor(wear$Ethn)
+wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+demo.variables <- c("AgeIn2016", "Gender", "Ethn")
 
-# Get the vitals models
-ranked = read.csv("../SECURE_data/20180403_ranked_models_ipop_lm_with_demographics.csv",header = FALSE)
-top.names<-c("MONOAB", "HGB", "HCT", "RBC", "CHOL", "LDL")
-#top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
-#top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
-
-rsq.all = t(as.matrix(ranked$V2[ranked$V1 %in% top.names]))
-colnames(rsq.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <- will change this 
-pct.var.all = t(as.matrix(ranked$V2[ranked$V1 %in% top.names])) # empty data frame for adding pct var explained from models
-colnames(pct.var.all) = ranked$V1[ranked$V1 %in% top.names] # Ordering same as corr.coefs <-  changed later on
-
-patients = unique(wear$iPOP_ID) # LOO
-modes = c("all","lasso")
-model.names = c("lm","rf")
+val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
+null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
+lasso.val.pred <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
+rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
-# p.val.lm <- as.data.frame()
 
-for (mode in modes){
-  # Build two lists: predicted vs true
-  val.true = list()
-  val.pred = list(lm=list(),rf=list())
-  val.nullmod.pred = list(lm=list(),rf=list())
-  cat("Feature selection:",mode,"\n")
+for (k in 1:length(patients)){
+  train <- patients[patients != patients[k]]
+  test <- patients[patients == patients[k]]
+  cat("Patient",patients[k],"\n") # LOO
+  dat.train<- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
+  dat.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
   
-  # Build models using wearables data
-  for (k in 1:length(patients)){
-    #for (k in 1:2){
-    train <- patients[patients != patients[k]]
-    test <- patients[patients == patients[k]]
-    ######################
-    ## Build random forest and linear models
-    # We will predict one by one, let's create a vector of tests
-    res.true <- list()
-    res.pred = list(lm=list(),rf=list())
-    res.nullmod.pred = list(lm=list(),rf=list())
-    p.value<-list()
-    cat("Patient",patients[k],"\n") # LOO
+  for (l in 1:length(top.names)){
+    cat("Test",top.names[l],"\n")
+    x.train<-dat.train[,colnames(dat.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
+    x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
+    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     
-    for (l in 1:length(top.names)){
-      print(l)
-      cat("Test",top.names[l],"\n")
-      x.train<-wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
-      x.train<-x.train[,colnames(x.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-      x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-      predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
-      outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
-      
-      # create test set
-      x.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
-      x.test<-x.test[,colnames(x.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-      x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
-      res.true[[l]] = as.matrix(x.test[,top.names[l]]) # true values of left out person
-      
-      if (!nrow(x.test)){ # if there are no true values for the left out person, record as NAs
-        res.true[[l]] = NA # TODO: keep track of number of people this happens to
-      }
-      if(mode == "all"){
-        
-        # record the number of observations for each LOO run.
-        num.Records[[1]][[idx]] <- patients[k]
-        num.Records[[2]][[idx]] <- top.names[l]
-        num.Records[[3]][[idx]] <-length(outcome) ## store num training obs
-        num.Records[[4]][[idx]] <- length(res.true[[l]]) ## store num test obs
-        idx=idx+1 # to index entry into num.Records
-        variables.to.use = c(wear.variables, demo.variables) # add in demographics
-        
-      }
-      if(mode == "lasso"){
-        # lasso 
-        n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
-        
-        x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
-        glm.res = cv.glmnet(x=x_train,y=outcome,
-                            standardize.response=FALSE,
-                            family="gaussian",
-                            nfolds=n,
-                            nlambda=100)
-        variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
-        
-        # check if Gender* / Ethn* selected into LASSO models
-        ethn.sel = grep("^Ethn",variables.to.use)
-        gend.sel = grep("^Gender",variables.to.use)
-        
-        # remove Gender* and add Gender if present
-        # remove Ethn* and add Ethn if present
-        torm = c(ethn.sel, gend.sel)
-        if (length(torm) > 0){
-          variables.to.use = variables.to.use[-torm]
-          if (length(ethn.sel) > 0)
-            variables.to.use = c("Ethn",variables.to.use)
-          if (length(gend.sel) > 0)
-            variables.to.use = c("Gender",variables.to.use) # variables.to.use contains all variables selected by LASSO    
-        }        
-      }
-      
-      # Random forest
-      fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(variables.to.use,collapse=" + "))
-      fml.null = paste(top.names[l]," ~ 1") # check with Trevor that this is the correct Null model - it sets the intercept equal to mean(outcome) so I think it is right
-      set.seed(1)
-      models.wear.rf = randomForest(as.formula(fml),
-                                    data = x.train)
-      #weights = labs.wear$weight) # TODO: do we need to include this line?
-      res.pred[["rf"]][[l]] = predict(models.wear.rf, newdata = x.test) # predict on left out person
-      models.wear.null.rf = lm(as.formula(fml.null),  ## this is wrong; need to ask Trevor how to fix; should be something like randomForest()
-                               data = x.train)
-      res.nullmod.pred[["rf"]][[l]] = predict(models.wear.null.rf, newdata = x.test)
-      
-      # LM  - warnings that prediction from a rank-deficient fit may be misleading (way more model features than observations)
-      models.wear.lm = lm(as.formula(fml),
-                          data = x.train)
-      # , weights = labs.wear$weight) # TODO: do we need to include this line?
-      res.pred[["lm"]][[l]] = predict(models.wear.lm, newdata = x.test)
-      models.wear.null.lm = lm(as.formula(fml.null),
-                               data = x.train)
-      res.nullmod.pred[["lm"]][[l]] = predict(models.wear.null.lm, newdata = x.test)
-      # create a null model for significance testing
-      fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~ 1")
-      lm.D0<-lm(as.formula(fml), data=x.train) 
-      t<- anova(lm.D0, models.wear.lm)
-      # p.value[["lm"]][[l]] <- as.numeric(t[2,][["Pr(>F)"]])
-      # if (mdl.name %in% "lm"){
-      # print(p.value[["lm"]][[l]])
-      # p.val.lm[k, l] <- as.numeric(t[2,][["Pr(>F)"]])}
-      # if (!nrow(res.pred[["lm"]][[l]])){ # clarify w/ lukasz --> if there are no predictions from error in lm or rf, record pred values as NA
-      #   res.pred[["lm"]][[l]] = NA
-      #   res.pred[["rf"]][[l]] = NA
-      # }
-      # Add predictions and true values for the patient k
-      
-      for (mdl.name in model.names){
-        if (l <= length(val.pred[[mdl.name]]) & l <= length(val.nullmod.pred[[mdl.name]])){ # TODO: I don't understand what the if else statements below are doing
-          val.pred[[mdl.name]][[l]] = append(val.pred[[mdl.name]][[l]], res.pred[[mdl.name]][[l]]) #append new predictions to val.pred matrix
-          val.nullmod.pred[[mdl.name]][[l]] = append(val.nullmod.pred[[mdl.name]][[l]], res.nullmod.pred[[mdl.name]][[l]])#append new null model predictions to val.nullmod.pred matrix for RSS0 calculations
-        }
-        else{
-          val.pred[[mdl.name]][[l]] = res.pred[[mdl.name]][[l]] # initiate val.pred matrix
-          val.nullmod.pred[[mdl.name]][[l]] = res.nullmod.pred[[mdl.name]][[l]] # initiate val.pred matrix
-        } 
-      }
-      
-      if (l <= length(val.true)) {
-        val.true[[l]] = append(val.true[[l]], res.true[[l]])
-      }
-      else {
-        val.true[[l]] = res.true[[l]] # initiate val.true matrix
-      }
+    # create test set
+    x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
+    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+    val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
+    
+    # TODO: need to fix this - records the number of observations for each LOO run - 
+    num.Records[[1]][[idx]] <- patients[k]
+    num.Records[[2]][[idx]] <- top.names[l]
+    num.Records[[3]][[idx]] <- length(outcome) ## store num training obs
+    num.Records[[4]][[idx]] <- length(x.test[,top.names[l]]) ## store num test obs
+    idx=idx+1 # to index entry into num.Records
+    
+    rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
+    
+    ## run lasso for variable selection
+    n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
+    x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
+    glm.res = cv.glmnet(x=x_train,y=outcome,
+                        standardize.response=FALSE,
+                        family="gaussian",
+                        nfolds=n,
+                        nlambda=100)
+    lasso.variables.to.use = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,25]) > 1e-10,]) # TODO: this is an arbitrary rule for now
+    # check if Gender* / Ethn* selected into LASSO models
+    ethn.sel = grep("^Ethn",lasso.variables.to.use)
+    gend.sel = grep("^Gender",lasso.variables.to.use)
+    
+    # remove Gender* and add Gender if present
+    # remove Ethn* and add Ethn if present
+    torm = c(ethn.sel, gend.sel)
+    if (length(torm) > 0){
+      lasso.variables.to.use = lasso.variables.to.use[-torm]
+      if (length(ethn.sel) > 0){
+        lasso.variables.to.use = c("Ethn",lasso.variables.to.use) }
+      if (length(gend.sel) > 0){
+        lasso.variables.to.use = c("Gender",lasso.variables.to.use) # variables.to.use contains all variables selected by LASSO    
+      }        
     }
     
-  }
-  
-  # Get correlation coeffs for each model
-  for (mdl.name in model.names){
-    rsq.wear = c()
-    rssm.wear = c()
-    rss0.wear = c()
-    pct.var.explained = c()
-    for (j in 1:length(top.names)){
-      rsq.wear = c(rsq.wear, cor(val.pred[[mdl.name]][[j]], na.omit(val.true[[j]])))
-      rssm.wear = sum((na.omit(val.true[[j]]) - val.pred[[mdl.name]][[j]])^2)
-      rss0.wear = sum((na.omit(val.true[[j]]) - val.nullmod.pred[[mdl.name]][[j]])^2)
-      pct.var.explained = c(pct.var.explained, (1 - ( rssm.wear / rss0.wear )))
-    }
-    names(rsq.wear) = top.names
-    rsq.all = rbind(rsq.all, rsq.wear)
-    rownames(rsq.all)[nrow(rsq.all)] = paste(mode,mdl.name,sep="-")
+    # build null, lasso, and rf models
+    set.seed(1)
+    null.fml = paste(top.names[l]," ~ 1")
+    null.model = lm(as.formula(null.fml), data = x.train) # create null model for hypothesis testing and for calculating RSS0
+    null.val.pred[[l]] = c(null.val.pred[[l]], predict(null.model, newdata = x.test)) # predict on null model
     
-    names(pct.var.explained) = top.names
-    pct.var.all = rbind(pct.var.all, pct.var.explained)
-    rownames(pct.var.all)[nrow(pct.var.all)] = paste(mode,mdl.name,sep="-")
+    lasso.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use,collapse=" + "))
+    lasso.model = lm(as.formula(lasso.fml), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+    lasso.val.pred[[l]] = c(lasso.val.pred[[l]], predict(lasso.model, newdata = x.test)) # predict on trained model
+    
+    rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
+    rf.model = randomForest(as.formula(rf.fml), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
+    rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
+    
+    # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
+    # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
 }
 
-num.Records <- do.call("cbind",num.Records) 
-#write.table(num.Records, "../SECURE_data/20180430/20180430_num_Records_DayPrior_demog_full.csv",row.names=FALSE,col.names=FALSE, sep=",")
+## calculate correlation coefficients and pct var explained by the models
+rsq.lasso = c()
+rssm.lasso = c()
+rss0.lasso = c()
+lasso.pct.var.explained = c()
+lasso.num.Records <- c()
+rsq.rf = c()
+rssm.rf = c()
+rss0.rf = c()
+rf.pct.var.explained = c()
+rf.num.Records <- c()
 
-# organize corr coeffs into table
-rownames(rsq.all)[1] = "vitals"
-df.corr.coef = data.frame(rsq.all)
-df.corr.coef$name = rownames(rsq.all)
-data.corr.coef = melt(df.corr.coef, id = "name")
-colnames(data.corr.coef) = c("model","test","corr.coef")
-vitals_res = data.corr.coef[data.corr.coef$model == "all-rf",]
-data.corr.coef$test = factor(data.corr.coef$test, levels = vitals_res$test[order(-vitals_res$corr.coef)])
-#write.table(data.corr.coef, "../SECURE_data/20180430/20180430_corr_coeffs_Dayprior_full.csv",row.names=FALSE,col.names=FALSE, sep=",")
+for (j in 1:length(top.names)){
+  #lasso
+  rsq.lasso = c(rsq.lasso, cor(lasso.val.pred[[j]], val.true[[j]], use = "complete.obs"))
+  rssm.lasso = sum(na.omit((val.true[[j]] - lasso.val.pred[[j]])^2))
+  rss0.lasso = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
+  lasso.pct.var.explained = c(lasso.pct.var.explained, (1 - ( rssm.lasso / rss0.lasso )))
+  lasso.num.Records <- c(num.Records, length(lasso.val.pred[[j]]))
+  #rf
+  rsq.rf = c(rsq.rf, cor(rf.val.pred[[j]], val.true[[j]], use = "complete.obs"))
+  rssm.rf = sum(na.omit((val.true[[j]] - rf.val.pred[[j]])^2))
+  rss0.rf = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
+  rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
+  rf.num.Records <- c(num.Records, length(rf.val.pred[[j]]))
+  
+}
+names(rsq.lasso) = top.names
+names(lasso.pct.var.explained) = top.names
+lasso.sqrt.pct.var <- sqrt(lasso.pct.var.explained)
 
-# organize % var explained into table
-rownames(pct.var.all)[1] = "vitals"
-df.pct.var = data.frame(pct.var.all)
-df.pct.var$name = rownames(pct.var.all)
-data.pct.var = melt(df.pct.var, id = "name")
-colnames(data.pct.var) = c("model","test","pct_var_explained")
-vitals_res = data.pct.var[data.pct.var$model == "all-rf",]
-data.pct.var$test = factor(data.pct.var$test, levels = vitals_res$test[order(-vitals_res$pct_var_explained)])
-#write.table(data.pct.var, "../SECURE_data/20180430/20180430_pct_var_Dayprior_full.csv",row.names=FALSE,col.names=FALSE, sep=",")
+names(rsq.rf) = top.names
+names(rf.pct.var.explained) = top.names
+rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
 
-# Plot the correlations
-data.pct.var$pct_var_explained[data.pct.var$pct_var_explained<0] = 0 # clamp pct_var_explained and corr_coefs to 0
-data.pct.var$sqrt_pct_var_explained <- sqrt(data.pct.var$pct_var_explained)
-data.corr.coef$corr.coef[data.corr.coef$corr.coef<0] = 0 # clamp pct_var_explained and corr_coefs to 0
+fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var), as.data.frame(rf.sqrt.pct.var), row.names=NULL)
+colnames(fig.2c.df)<-c("test", "vitals", "lasso", "rf")
+fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 
-ggplot(data.pct.var, aes(test,sqrt_pct_var_explained, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+fig.2c.plot <- melt(fig.2c.df)
+fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+
+# Plot the % var explained
+ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("Square Root of Percent Variance Explained")))
-
-ggplot(data.corr.coef, aes(test,corr.coef, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme +
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF", "LM all variables", "LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("Corr Coefficients"))) 
-
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
+write.table(num.Records, "../SECURE_data/20180503_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(fig.2c.df, "../SECURE_data/20180503_pct_var_Dayprior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
