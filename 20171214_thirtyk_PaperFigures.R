@@ -233,6 +233,9 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 ###############
 #  Figure 2C  #
 ###############
+
+#TODO: Do we need to weight the prediction/obs. vector by # of obs. per individual?
+
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
@@ -242,6 +245,9 @@ top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP"
 ####
 # CODE FOR SIMPLE LM
 #
+sum.vectors.in.list <- function(x) {
+  c(sum(na.omit(x)))
+}
 
 rsq.all = c()
 pct.var.all = c()
@@ -253,7 +259,8 @@ val.true <- rep(list(NA),length(top.names)) # list of vectors to store true valu
 val.pred <- rep(list(NA),length(top.names)) # list of vectors to store trained model predicted values; each vector is for 1 clinical lab
 val.null.pred <- rep(list(NA),length(top.names)) # list of vectors to store null model predicted values; each vector is for 1 clinical lab
 # p.value<-list()  # TODO: decide if this is a relevant parameter to collect
-num.true <-rep(0, 44)
+num.true <- rep(list(NA),length(top.names)) # number of observations per individual per clinic test
+#num.true <-rep(0, 44)
 
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
@@ -273,7 +280,7 @@ for (k in 1:length(patients)){
     x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
     x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
-    num.true[l]<-num.true[l] + length(val.true[[l]])
+    num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) # number of test observations for left out person
     fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(vitals.variables,collapse=" + "))
     fml.null = paste(top.names[l]," ~ 1")
     bivar.lm.model = lm(as.formula(fml), data = x.train) # build the model
@@ -284,6 +291,7 @@ for (k in 1:length(patients)){
     # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
 }
+num.test.obs <- lapply(num.true, sum.vectors.in.list)
 
 rsq.vitals = c()
 rssm.vitals = c()
@@ -295,7 +303,7 @@ for (j in 1:length(top.names)){
   rssm.vitals = sum(na.omit((val.true[[j]] - val.pred[[j]])^2))
   rss0.vitals = sum(na.omit((val.true[[j]] - val.null.pred[[j]])^2))
   pct.var.explained = c(pct.var.explained, (1 - ( rssm.vitals / rss0.vitals )))
-  num.Records <- c(num.Records, length(val.pred[[j]]))
+  num.Records <- c(num.Records, (length(val.pred[[j]])-1)) # same as num.test.obs
 }
 names(rsq.vitals) = top.names
 names(pct.var.explained) = top.names
@@ -319,8 +327,8 @@ lasso.val.pred <- rep(list(NA),length(top.names)) # list of vectors to store las
 rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 idx=1 # index for entry into num.Records
-
-for (k in 1:length(patients)){
+for (k in 1:5){
+#for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
   cat("Patient",patients[k],"\n") # LOO
@@ -340,11 +348,12 @@ for (k in 1:length(patients)){
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
     
     # TODO: need to fix this - records the number of observations for each LOO run - 
-    num.Records[[1]][[idx]] <- patients[k]
-    num.Records[[2]][[idx]] <- top.names[l]
-    num.Records[[3]][[idx]] <- length(outcome) ## store num training obs
-    num.Records[[4]][[idx]] <- length(x.test[,top.names[l]]) ## store num test obs
-    idx=idx+1 # to index entry into num.Records
+    #num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) 
+    num.Records[[1]][[l]] <- patients[k]
+    num.Records[[2]][[l]] <- top.names[l]
+    num.Records[[3]][[l]] <- length(outcome) ## store num training obs
+    num.Records[[4]][[l]] <- length(x.test[,top.names[l]]) ## store num test obs
+    #idx=idx+1 # to index entry into num.Records
     
     rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
     
@@ -452,45 +461,36 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
 
 # store the results
 write.table(num.Records, "../SECURE_data/20180503_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(fig.2c.df, "../SECURE_data/20180503_pct_var_Dayprior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(fig.2c.corr.coefs, "../SECURE_data/20180503_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(fig.2c.df, "../SECURE_data/20180503_pct_var_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.corr.coefs, "../SECURE_data/20180503_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
 ####################################
-#Run after running individual time course jobs that produced corr_coeffs and num_Records files   #
+#Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 # read in each of the corr_coeffs from the different time windows
 # had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
-# with demographics: 20180411_corr_coeffs_DayPrior_demog.csv, 20180411_corr_coeffs_ThreeDayPrior_demog.csv, 20180411_corr_coeffs_WeekPrior_demog.csv, 20180411_corr_coeffs_TwoWeekPrior_demog.csv, 20180411_corr_coeffs_MonthPrior_demog.csv, 20180411_corr_coeffs_AllData_demog.csv
 # save as pdf 4x12.5"
-# data <-read.table("../SECURE_data/20180330/20180327/20180403_corr_coeffs_DayPrior.csv",
+# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
 #                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_AllData.csv",
-#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
+fig.2c.df.2 <-read.csv("../SECURE_data/20180503_pct_var_Dayprior.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-#png('SECURE_data/20180330/time_windows_AllData.png',width = 1700, height = 600,res=120)
-vitals_res = data[data$model == "vitals",]
-#vitals_res = data[data$model == "vitals.ipop",]
+fig.2c.plot <- melt(fig.2c.df)
+fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+# Plot the % var explained
+ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+  weartals_theme +
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
 
-data$test = factor(data$test, levels = vitals_res$test[order(-vitals_res$r_squared)])
-data$model = factor(data$model)
-data$r_squared <- pmax(data$r_squared, 0)
-# model.corr.coefs <- na.omit(model.corr.coefs)
-data$test = factor(data$test, levels = data[order(-data$r_squared),][,2])
-# model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
 
-
-ggplot(data, aes(test,r_squared, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(0,0.52) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(paste("Corr Coeff")))
-#dev.off()
+### THE PART BELOW IS UNDER CONSTRUCTION
 # make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
 # can we create one more layer of mixed effects models in the iPOP analysis here?
 
