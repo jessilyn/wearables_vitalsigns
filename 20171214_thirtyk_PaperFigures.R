@@ -643,66 +643,112 @@ allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
              "NEUTAB","NHDL","PLT","PROCALCITONIN", "RBC","RDW","TBIL","TGL","TP","TroponinI","WBC")
 clinVars <- which(names(corDf) %in% allClin)
-
-
 #clin subset of the top 10 most predictive models from bivariate analysis:
-clinTopTen <- c("GLU_fasting","CR","HSCRP", "NEUTAB","NEUT","LYM", "RDW","ALB","AG", "PLT","PROCALCITONIN", "ESR")
-clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL", "LYM")
+# clinTopTen <- c("GLU_fasting","CR","HSCRP", "NEUTAB","NEUT","LYM", "RDW","ALB","AG", "PLT","PROCALCITONIN", "ESR")
+# clinTopTen <- c("NA." , "NEUT", "HSCRP", "RBC", "LDLHDL", "ALB", "NHDL", "HGB", "GLU_fasting", "CL", "LYM")
+clin.WBCs<- c("NEUT", "LYM", "BASO","MONO","EOS",
+              "NEUTAB", "LYMAB", "BASOAB","MONOAB","EOSAB",) 
+summary.pulse<-list()
+summary.Temp<-list()
+r.squared <-c()
+plots <- list()
+idx=0
+for (j in clin.WBCs){
+  idx=idx+1
+  ## 30k All data scatterplots for Fig 3D and 3E
+  pname <- paste0("Plot-",i)
+  p<-ggplot(corDf, aes_string(y = corDf[[j]], x = corDf$Pulse)) +
+    #ggplot(corDf, aes(y = corDf[[j]], x = corDf$Temp)) +
+    stat_density_2d(aes(fill = ..level..), geom = 'polygon') +
+    #scale_fill_viridis_c(name = "density") +
+    geom_point(shape = '.') +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
+    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    ylab(paste0(c(j ," Bin")))+
+    xlab("cHR")
+  ggsave(paste0(pname,".png"),p)
+  plots[[idx]] = p   
+}
+p <- grid.arrange(grobs=plots,ncol=5)
 
-clinTopTwo <- c("NEUT", "LYM") 
-# boxplots #http://www.cookbook-r.com/Graphs/Plotting_means_and_error_bars_(ggplot2)/#Helper functions
+clin.WBCs<- c("NEUT", "LYM", "BASO","MONO","EOS",
+              "NEUTAB", "LYMAB", "BASOAB","MONOAB","EOSAB") 
 summary.pulse<-list()
 summary.Temp<-list()
 r.squared <-c()
 
-for (j in clinTopTwo){
+## All points with curves
+plots <- list()
+idx=0
+for (j in clin.WBCs){
+  idx=idx+1
   ## 30k All data scatterplots for Fig 3D and 3E
-  print(ggplot(corDf, aes(y = corDf[[j]], x = corDf$Temp)) +
-          stat_density_2d(aes(fill = ..level..), geom = 'polygon') +
-          #scale_fill_viridis_c(name = "density") +
-          geom_point(shape = '.') +
-          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
-          theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-          ylab(paste0(c(j ," Bin"))))
+  #pname <- paste0("Plot-",i)
+  p<-ggplot(
+    #corDf, aes_string(y = corDf[[j]], x = corDf$Pulse)) +
+    corDf, aes_string(y = corDf[[j]], x = corDf$Temp)) +
+    stat_density_2d(aes(fill = ..level..), geom = 'polygon') +
+    #scale_fill_viridis_c(name = "density") +
+    geom_point(shape = '.') +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
+    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    ylab(paste0(c(j ," Bin")))+
+    xlab("cTemp")
+  #ggsave(paste0(pname,".png"),p)
+  plots[[idx]] = p   
 }
+
+p <- grid.arrange(grobs=plots,ncol=5)
+
+## Just the binned curves
+plots1 <- list()
+plots2 <- list()
+idx=0
+for (j in clin.WBCs){
+  idx=idx+1
   corDf$bin2<-ntile(corDf[[j]], 40)
-  # for Temp
+  # for Temp - point plot of bin values (looks like line of points)
   # corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
-  # print(ggplot(corDf2, aes(x=bin2, y=Temp)) +
-  # geom_point(stat="identity", fill="darkblue") +
+  # p1<- ggplot(corDf2, aes(x=bin2, y=Temp)) +
+  #   geom_point(stat="identity", fill="darkblue") +
   #   geom_errorbar(aes(ymin=Temp-se, ymax=Temp+se), width=.4) +
   #   xlab(paste(c(j, "bins", sep=" ")))+
-  #   scale_y_continuous(limits = c(97,99)) 
-  # + theme(text = element_text(size=9),
-  #         axis.text.x = element_text(angle = 60, hjust = 1)))
-  # For Pulse
+  #   scale_y_continuous(limits = c(97,99))+
+  #   theme(text = element_text(size=9),
+  #         axis.text.x = element_text(angle = 60, hjust = 1))
+  # # For Pulse
   corDf2 <- summarySE(corDf, measurevar="Pulse", groupvars="bin2", na.rm=TRUE)
-  # print(ggplot(corDf2, aes(x=bin2, y=Pulse)) +
-  #  geom_bar(stat="identity", fill="darkred") +
-  # geom_errorbar(aes(ymin=Pulse-se, ymax=Pulse+se), width=.2) +
-  # xlab(paste(c(j, "bins", sep=" ")))
-  # + theme(text = element_text(size=9),
-  #         axis.text.x = element_text(angle = 60, hjust = 1)))
-  print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
-  #model <-lm(corDf2$Pulse  ~ corDf2$bin2 + I((corDf2$bin2)^2))
-  print(ggplot(corDf2, aes(x = bin2, y = Pulse)) +
-          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
-          theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-          geom_point(col="black") +
-          xlab(paste0(c(j ," Bin"))))
-  
-
-  summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
-  r.squared[j] <- summary.pulse$adj.r.squared
-  # print(ggplot(corDf2, aes(x = bin2, y = Temp)) +
-  #         stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
-  #         geom_point(col="black") +
-  #         #ylim(c(96,98.5))+
-  #         theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-  #         xlab(paste0(c(j ," Bin"))))
-  # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
-  # r.squared[j] <- summary.Temp$adj.r.squared
+  # barplot of bin values (looks like the line of points but with bars instead)
+  # p1 <- ggplot(corDf2, aes(x=bin2, y=Pulse)) +
+  #   geom_bar(stat="identity", fill="darkred") +
+  #   geom_errorbar(aes(ymin=Pulse-se, ymax=Pulse+se), width=.2) +
+  #   xlab(paste(c(j, "bins", sep=" "))) +
+  #   theme(text = element_text(size=9),
+  #         axis.text.x = element_text(angle = 60, hjust = 1))
+  # print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
+  # quadratic models of bins
+  model <-lm(corDf2$Pulse  ~ corDf2$bin2 + I((corDf2$bin2)^2))
+  p1 <- ggplot(corDf2, aes(x = bin2, y = Pulse)) +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
+    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    #geom_point(col="black") +
+    xlab(paste0(c(j ," Bin")))
+  # summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
+  # r.squared[j] <- summary.pulse$adj.r.squared
+  corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
+  p2<-ggplot(corDf2, aes(x = bin2, y = Temp)) +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
+    #geom_point(col="black") +
+    #ylim(c(96,98.5))+
+    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    xlab(paste0(c(j ," Bin")))
+  # # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
+  # # r.squared[j] <- summary.Temp$adj.r.squared
+  plots1[[idx]] = p1
+  plots2[[idx]] = p2
 }
+p <- grid.arrange(grobs=plots1,ncol=5)
+p2 <- grid.arrange(grobs=plots2,ncol=5)
 as.matrix(r.squared)
 
 
@@ -721,7 +767,6 @@ hist(corDf$Temp, col="darkgrey", breaks=100,
 #####################
 #  Figure 3F and 3G #
 #####################
-
 
 #for (i in clinTopTen){
 i <- "NEUT"
@@ -933,12 +978,15 @@ folds <- createFolds(factor(corDf.demog$Ethn), k = cv.runs, list = FALSE) # brea
 corDf.demog$cv.folds <- folds; # ddply(corDf.demog, 'cv.folds', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
 
 options("scipen"=100, "digits"=4)
-models=c(" ~ Systolic + Age + Gender + Ethn", # univariate with sys only
-         " ~ Diastolic + Age + Gender + Ethn",   # univariate with dias only
-         " ~ Respiration + Age + Gender + Ethn", # univariate with resp only
-         " ~ Systolic + Diastolic + Respiration + Age + Gender + Ethn", # trivariate - this is the info we are losing by not having a wearable that measures these things
-         " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
+models=c(" ~ Pulse", # univariate with pulse only
+         " ~ Temp", # univariate with temp only
+         " ~ Systolic", # univariate with sys only
+         " ~ Diastolic",   # univariate with dias only
+         " ~ Respiration", # univariate with resp only
+         " ~ Pulse + Temp + Systolic + Diastolic + Respiration", # this is the total possible info we can gain from vitals
+         " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn") # this is the total possible info we can gain from vitals and demog
 
+         # " ~ Systolic + Diastolic + Respiration + Age + Gender + Ethn", # trivariate - this is the info we are losing by not having a wearable that measures these things
          # " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)
          # + Systolic + I(Systolic^2) + Diastolic + I(Diastolic^2) + Respiration + I(Respiration^2) + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
 
@@ -998,7 +1046,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
 }
 
 
-write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_pct_var_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
@@ -1008,9 +1056,10 @@ corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("corr.coef"), funs(mean,sd)))
-model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), 
-                                    to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
+                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
+model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7"), 
+                                    to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ All Vitals + Demographics"))
+                                    # to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
 model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
 model.corr.coefs$mean <- pmax(model.corr.coefs$mean, 0)
@@ -1021,8 +1070,8 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
   geom_point() +
   #guides(fill=guide_legend(title="Model")) +
   xlab("Clinical Laboratory Test") + 
-  ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
-  #ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
+  #ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
