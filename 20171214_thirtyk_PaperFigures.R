@@ -87,6 +87,9 @@ iPOPdemographics <- read.csv(paste0(dir, "SECURE_ClinWearDemo_SamplePop.csv"),
 thirtyKdemog <- read.csv(paste0(dir, "SECURE_20180412_thirtyKDemog.csv"),
          header=TRUE,sep=',',stringsAsFactors=FALSE)
 
+# names of top clinical tests that will be used for the downstream analyses
+top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
+
 ###################
 ### CLEAN DATA ####
 ###################
@@ -240,7 +243,6 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 source("ggplot-theme.R") # just to make things look nice
 #top.names<-c("MONOAB", "HGB", "HCT", "MCHC") # for testing model on small subset
-top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
 
 ####
 # CODE FOR SIMPLE LM
@@ -819,7 +821,8 @@ models=c(" ~ Pulse", # univariate with pulse only
          " ~ Temp + I(Temp^2)", " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)" )
 cv.runs <- 50
 models.corr.coefs <- c()
-rsq.pred <- 0
+models.pct.var <- c()
+
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
   ANON_ID = corDf$ANON_ID # Remember the list of subjects
@@ -827,7 +830,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
   nms = names(subset(corDf.tmp, select=-c(Pulse, Temp)))
 
-  # Do cross-validation per subject
+  # Do cross-validation
   subjects = unique(ANON_ID)
   n = length(subjects) # total num of observations
   test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
@@ -845,27 +848,36 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
         for (k in 1:length(models)){
           model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
           m <- summary(model) # quadratic univariate with pulse or temp only
+          model.null <- lm(as.formula(paste0("labtest"," ~ 1")),data=train.data)
           # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
           # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
-          numObs<-length(train.data$Pulse) # the number of each clinical lab test that has corresponding vital signs
+          numTrainObs<-length(train.data$Pulse) # train: the number of each clinical lab test that has corresponding vital signs
+          numTestObs<-length(test.data[,1]) #  test: the number of each clinical lab test that has corresponding vital signs
           pred=predict(model, newdata=test.data)# prediction on test data set
+          pred.null=predict(model.null, newdata=test.data)# prediction on test data set
           #rsq.pred = 1 - (mean( pred - test.data[,1])**2 ) / var( (test.data[,1]) ) # test r.sq
-          r.pred = cor(pred, test.data[,1]) # test r.sq
+          if (length(pred)<1){next}
+          r.pred = cor(pred, test.data[,1], use = "complete.obs") # test r.sq
+          rssm <- sum((test.data[,1] - pred)^2)
+          rss0 <- sum((test.data[,1]- pred.null)^2)
+          sqrt.pct.var <- sqrt(1- (rssm/rss0))
           name.rsq <- paste("model.mean.rsq", k, sep = ".")
           models.corr.coefs <- rbind(models.corr.coefs,
-                                     c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, numObs = numObs))
+                                     c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, sqrt.pct.var = sqrt.pct.var, numTestObs = numTestObs, numTrainObs = numTrainObs))
     }
   }
 }
 
+# models.corr.coefs <-read.csv("/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180503_pct_var_30k_noDemog.csv")
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
 corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
+corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
   group_by(test, model) %>% 
-  summarise_at(vars("corr.coef"), funs(mean,sd)))
+  summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6"), to = c("~ Pulse", "~ Temp", "~ Pulse + Temp", " ~ Pulse + P^2", " ~ Temp + T^2", " ~ Pulse + P^2 + Temp + T^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
 model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
@@ -876,7 +888,9 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
   theme(legend.title = element_blank())+
   geom_point() +
   #guides(fill=guide_legend(title="Model")) +
-  xlab("Clinical Laboratory Test") + ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  xlab("Clinical Laboratory Test") + 
+  #ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
@@ -886,17 +900,25 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
   #, position=position_dodge(.7))
 
-### Eventually want to include demographics
-# thirtyKdemog
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_pct_var_30k_noDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+#write.table(models.corr.coefs, "../SECURE_data/20180503_pct_var_30k_noDemog.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-###########################################
-#    Fig 3C + BloodPressure + Respiration #
-###########################################
+##########################################################
+#    Fig 3C + Demographics + BloodPressure + Respiration #
+##########################################################
+library(caret)
+library(plyr)
+
 names(corDf)[names(corDf) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
 names(corDf)[names(corDf)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
 corDf.demog <- merge(thirtyKdemog, corDf, by="ANON_ID")
 corDf.demog$Gender <- as.factor(corDf.demog$Gender)
 corDf.demog$Ethn <- as.factor(corDf.demog$Ethn)
+cv.runs <- 2
+folds <- createFolds(factor(corDf.tmp$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+
+#check that your folds work the way you expect
+corDf.tmp$fold <- folds; ddply(corDf.tmp, 'fold', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
 
 options("scipen"=100, "digits"=4)
 models=c(" ~ Systolic + Age + Gender + Ethn", # univariate with sys only
@@ -905,9 +927,8 @@ models=c(" ~ Systolic + Age + Gender + Ethn", # univariate with sys only
          " ~ Systolic + Diastolic + Respiration + Age + Gender + Ethn", # trivariate - this is the info we are losing by not having a wearable that measures these things
          " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)
          + Systolic + I(Systolic^2) + Diastolic + I(Diastolic^2) + Respiration + I(Respiration^2) + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
-cv.runs <- 50
+
 models.corr.coefs <- c()
-rsq.pred <- 0
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
   ANON_ID = corDf.demog$ANON_ID # Remember the list of subjects
@@ -915,7 +936,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
   nms = names(subset(corDf.tmp, select=-c(Pulse, Temp, Systolic, Diastolic, Respiration, Age, Gender, Ethn)))
   
-  # Do cross-validation per subject
+  # Do stratified cross-validation per subject
   subjects = unique(ANON_ID)
   n = length(subjects) # total num of observations
   test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
@@ -936,15 +957,22 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
     for (k in 1:length(models)){
       model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
       m <- summary(model) # quadratic univariate with pulse or temp only
+      model.null <- lm(as.formula(paste0("labtest"," ~ 1")),data=train.data)
       # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
       # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
-      numObs<-length(train.data$Pulse) # the number of each clinical lab test that has corresponding vital signs
+      numTrainObs<-length(train.data$Pulse) # train: the number of each clinical lab test that has corresponding vital signs
+      numTestObs<-length(test.data[,1]) # test: the number of each clinical lab test that has corresponding vital signs
       pred=predict(model, newdata=test.data)# prediction on test data set
+      pred.null=predict(model.null, newdata=test.data)# prediction on test data set
       #rsq.pred = 1 - (mean( pred - test.data[,1])**2 ) / var( (test.data[,1]) ) # test r.sq
-      r.pred = cor(pred, test.data[,1]) # test r.sq
+      if (length(pred)<1){next}
+      r.pred = cor(pred, test.data[,1], use = "complete.obs") # test r.sq
+      rssm <- sum((test.data[,1] - pred)^2)
+      rss0 <- sum((test.data[,1]- pred.null)^2)
+      sqrt.pct.var <- sqrt(1- (rssm/rss0))
       name.rsq <- paste("model.mean.rsq", k, sep = ".")
       models.corr.coefs <- rbind(models.corr.coefs,
-                                 c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, numObs = numObs))
+                                 c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, sqrt.pct.var = sqrt.pct.var, numTestObs = numTestObs, numTrainObs = numTrainObs))
     }
   }
 }
@@ -952,11 +980,12 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
 corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
+corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("corr.coef"), funs(mean,sd)))
+                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), 
                                     to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
