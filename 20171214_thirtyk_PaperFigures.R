@@ -914,46 +914,66 @@ names(corDf)[names(corDf)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same betw
 corDf.demog <- merge(thirtyKdemog, corDf, by="ANON_ID")
 corDf.demog$Gender <- as.factor(corDf.demog$Gender)
 corDf.demog$Ethn <- as.factor(corDf.demog$Ethn)
-cv.runs <- 2
-folds <- createFolds(factor(corDf.tmp$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+
+# make sure you have sufficient # of tests
+summaries <- summary(corDf.demog) ; to.remove <-c() 
+for (i in 6:65){
+  if ( #as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) != "NA" &
+    as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) > (dim(corDf.demog)[1] - .001*dim(corDf.demog)[1])){
+    to.remove <- c(to.remove, names(summaries[7,][i]))
+  }
+}
+to.remove <- gsub("\\s", "", to.remove)
+corDf.demog <- corDf.demog[ , -which(names(corDf.demog) %in% c(to.remove))]
+
+cv.runs <- 50
+folds <- createFolds(factor(corDf.demog$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
 
 #check that your folds work the way you expect
-corDf.tmp$fold <- folds; ddply(corDf.tmp, 'fold', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
+corDf.demog$cv.folds <- folds; # ddply(corDf.demog, 'cv.folds', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
 
 options("scipen"=100, "digits"=4)
 models=c(" ~ Systolic + Age + Gender + Ethn", # univariate with sys only
          " ~ Diastolic + Age + Gender + Ethn",   # univariate with dias only
          " ~ Respiration + Age + Gender + Ethn", # univariate with resp only
          " ~ Systolic + Diastolic + Respiration + Age + Gender + Ethn", # trivariate - this is the info we are losing by not having a wearable that measures these things
-         " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)
-         + Systolic + I(Systolic^2) + Diastolic + I(Diastolic^2) + Respiration + I(Respiration^2) + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
+         " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
+
+         # " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)
+         # + Systolic + I(Systolic^2) + Diastolic + I(Diastolic^2) + Respiration + I(Respiration^2) + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
 
 models.corr.coefs <- c()
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
-  ANON_ID = corDf.demog$ANON_ID # Remember the list of subjects
-  corDf.tmp = corDf.demog[,-c(1,5)]  #remove ANON_ID and Clin_Result_Date & demographics
-  corDf.tmp <- subset(corDf.tmp, select=-c(ALCRU, CR)) # all values for ALCRU tests are NA, only 20 values for CR are not NA
+  corDf.tmp = corDf.demog[corDf.demog$cv.folds==i,]  #remove ANON_ID and Clin_Result_Date & demographics
+  # ANON_ID = corDf.tmp$ANON_ID # Remember the list of subjects
+  corDf.tmp = corDf.tmp[,-c(1,5)]  #remove ANON_ID and Clin_Result_Date & demographics
   nms = names(subset(corDf.tmp, select=-c(Pulse, Temp, Systolic, Diastolic, Respiration, Age, Gender, Ethn)))
   
   # Do stratified cross-validation per subject
-  subjects = unique(ANON_ID)
-  n = length(subjects) # total num of observations
-  test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
-  test.subj = subjects[test]
-  test.mask = ANON_ID %in% test.subj
+  # split into training and test
+  folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  corDf.tmp$test.train <- folds
   
-  for (nm in top.names){ # for each of the 50 clinical lab tests
+  # subjects = unique(ANON_ID)
+  # n = length(subjects) # total num of observations
+  # test = sample(n)[1:floor(n*0.1)] # 10% of subjects are held for testing
+  # test.subj = subjects[test]
+  # test.mask = ANON_ID %in% test.subj
+  
+  for (nm in nms){ # for each of the 50 clinical lab tests
     print(nm)
-    tmp=0
+    #tmp=0
     corDf2 = data.frame(labtest = corDf.tmp[[nm]], Pulse = corDf.tmp$Pulse, Temp = corDf.tmp$Temp,
                         Systolic = corDf.tmp$Systolic, Diastolic = corDf.tmp$Diastolic, Respiration = corDf.tmp$Respiration,
-                        Age = corDf.tmp$Age, Gender = corDf.tmp$Gender, Ethn = corDf.tmp$Ethn
+                        Age = corDf.tmp$Age, Gender = corDf.tmp$Gender, Ethn = corDf.tmp$Ethn, test.train = corDf.tmp$test.train
                          ) # prepare data for LM
     #df <- cbind(corDf2[[i]], corDf2[,c("Pulse", "Temp")])
     corDf2 <- na.omit(corDf2)
-    test.data <- na.omit(corDf2[test.mask,])
-    train.data <-na.omit(corDf2[!test.mask,])
+    train.data <- corDf2[corDf2$test.train<9,]
+    test.data <-corDf2[corDf2$test.train==10,] # training set is ~10% of total set, but not exactly because it is ba;ancing by ethnicities
+    t<-as.data.frame(table(train.data$Ethn)) # if there is an ethnicity that has zero entries in the training data
+    test.data <- test.data[!(test.data$Ethn %in% as.character(t[t[,2]<1,][,1])),] #remove that ethnicity from the test data
     for (k in 1:length(models)){
       model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
       m <- summary(model) # quadratic univariate with pulse or temp only
@@ -977,6 +997,9 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   }
 }
 
+
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_pct_var_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
 corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
@@ -985,7 +1008,7 @@ corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
+                       summarise_at(vars("corr.coef"), funs(mean,sd)))
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5"), 
                                     to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
@@ -997,7 +1020,9 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
   theme(legend.title = element_blank())+
   geom_point() +
   #guides(fill=guide_legend(title="Model")) +
-  xlab("Clinical Laboratory Test") + ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  xlab("Clinical Laboratory Test") + 
+  ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  #ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
