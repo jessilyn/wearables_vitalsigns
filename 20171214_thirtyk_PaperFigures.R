@@ -673,9 +673,11 @@ p <- grid.arrange(grobs=plots,ncol=5)
 
 clin.WBCs<- c("NEUT", "LYM", "BASO","MONO","EOS",
               "NEUTAB", "LYMAB", "BASOAB","MONOAB","EOSAB") 
+#clin.WBCs<- c("HSCRP")
 summary.pulse<-list()
 summary.Temp<-list()
 r.squared <-c()
+
 
 ## All points with curves
 plots <- list()
@@ -685,15 +687,15 @@ for (j in clin.WBCs){
   ## 30k All data scatterplots for Fig 3D and 3E
   #pname <- paste0("Plot-",i)
   p<-ggplot(
-    #corDf, aes_string(y = corDf[[j]], x = corDf$Pulse)) +
-    corDf, aes_string(y = corDf[[j]], x = corDf$Temp)) +
+    corDf, aes_string(y = corDf[[j]], x = corDf$Pulse)) +
+    #corDf, aes_string(y = corDf[[j]], x = corDf$Temp)) +
     stat_density_2d(aes(fill = ..level..), geom = 'polygon') +
     #scale_fill_viridis_c(name = "density") +
     geom_point(shape = '.') +
-    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
     theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
     ylab(paste0(c(j ," Bin")))+
-    xlab("cTemp")
+    xlab("cHR")
   #ggsave(paste0(pname,".png"),p)
   plots[[idx]] = p   
 }
@@ -728,20 +730,20 @@ for (j in clin.WBCs){
   # print(paste0(j, ": number of data points in bin = ", sum(corDf$bin2 %in% "2")))
   # quadratic models of bins
   model <-lm(corDf2$Pulse  ~ corDf2$bin2 + I((corDf2$bin2)^2))
-  p1 <- ggplot(corDf2, aes(x = bin2, y = Pulse)) +
+  p1 <- ggplot(corDf2, aes(y = bin2, x = Pulse)) +
     stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkred") +
-    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    theme(axis.title=element_text(face="bold",size="11"), axis.text.x = element_text(angle = 60, hjust = 1), axis.text=element_text(size=11,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
     #geom_point(col="black") +
-    xlab(paste0(c(j ," Bin")))
+    ylab(paste0(c(j ," Bin")))
   # summary.pulse <- summary(lm(corDf2$Pulse ~ corDf2$bin2 + I(corDf2$bin2^2)))
   # r.squared[j] <- summary.pulse$adj.r.squared
   corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
-  p2<-ggplot(corDf2, aes(x = bin2, y = Temp)) +
+  p2<-ggplot(corDf2, aes(y = bin2, x = Temp)) +
     stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
     #geom_point(col="black") +
     #ylim(c(96,98.5))+
-    theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-    xlab(paste0(c(j ," Bin")))
+    theme(axis.title=element_text(face="bold",size="11"), axis.text.x = element_text(angle = 60, hjust = 1), axis.text=element_text(size=11,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
+    ylab(paste0(c(j ," Bin")))
   # # summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
   # # r.squared[j] <- summary.Temp$adj.r.squared
   plots1[[idx]] = p1
@@ -984,6 +986,7 @@ models=c(" ~ Pulse", # univariate with pulse only
          " ~ Diastolic",   # univariate with dias only
          " ~ Respiration", # univariate with resp only
          " ~ Pulse + Temp + Systolic + Diastolic + Respiration", # this is the total possible info we can gain from vitals
+         " ~ Age + Gender + Ethn", # this is the total possible info we can gain from demog
          " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn") # this is the total possible info we can gain from vitals and demog
 
          # " ~ Systolic + Diastolic + Respiration + Age + Gender + Ethn", # trivariate - this is the info we are losing by not having a wearable that measures these things
@@ -1038,6 +1041,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
       rssm <- sum((test.data[,1] - pred)^2)
       rss0 <- sum((test.data[,1]- pred.null)^2)
       sqrt.pct.var <- sqrt(1- (rssm/rss0))
+      if ((1- (rssm/rss0)) <0) {sqrt.pct.var <- 0}
       name.rsq <- paste("model.mean.rsq", k, sep = ".")
       models.corr.coefs <- rbind(models.corr.coefs,
                                  c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, sqrt.pct.var = sqrt.pct.var, numTestObs = numTestObs, numTrainObs = numTrainObs))
@@ -1046,7 +1050,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
 }
 
 
-write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180505_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
@@ -1056,34 +1060,47 @@ corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
-model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7"), 
-                                    to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ All Vitals + Demographics"))
+                       summarise_at(vars("corr.coef"), funs(mean,sd)))
+model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7", "model.mean.rsq.8"), 
+                                    to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ Demographics", "~ All Vitals + Demographics"))
                                     # to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
 model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
 model.corr.coefs$mean <- pmax(model.corr.coefs$mean, 0)
+model.corr.coefs.top.names <- model.corr.coefs[model.corr.coefs$test %in% top.names,]
 
 # plot how rsq changes with the different models, and add in error bars from sd.plot
-ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs$model))) +
+ggplot(model.corr.coefs.top.names, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs.top.names$model))) +
   theme(legend.title = element_blank())+
-  geom_point() +
+  geom_point(position=position_dodge(.05)) +
   #guides(fill=guide_legend(title="Model")) +
   xlab("Clinical Laboratory Test") + 
-  #ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
-  ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
+  ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
+  #ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
         axis.text.y = element_text(hjust = 1)) +
   ylim(0,0.5) +
   scale_fill_discrete(name="Model")+
-  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5, position=position_dodge(.05))
 
-
-
-
-
+# Delta Corr Coeff between Demographics Only and Vitals + Demographics:
+# Which clinical lab models benefit the most by the addition of vital signs?
+delta.corr.coef <- model.corr.coefs.top.names[model.corr.coefs.top.names$model %in% "~ All Vitals + Demographics",][,3] - model.corr.coefs.top.names[model.corr.coefs.top.names$model %in% "~ Demographics",][,3]
+delta.corr.coef<-cbind(as.data.frame(model.corr.coefs.top.names[model.corr.coefs.top.names$model %in% "~ All Vitals + Demographics",][,1]), delta.corr.coef)
+delta.corr.coef$test  = factor(delta.corr.coef$test, levels=delta.corr.coef[order(-delta.corr.coef$mean),][,1])
+ggplot(delta.corr.coef, aes(x=test, y=mean))+
+  geom_point() +
+  theme(legend.title = element_blank())+
+  xlab("Clinical Laboratory Test") + 
+  ylab(expression(atop("Delta Cor Coef ", paste( "(~ Vitals + Demog ) - (~ Demog )")))) +
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        axis.text.y = element_text(hjust = 1))
+  #ylim(0,0.5)
+  
 ###############
 #   Figure 4  #
 ###############
