@@ -52,7 +52,7 @@ timespans <-c("AllData",
               "3DayPrior",
               "DayPrior" )
 
-wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Ryan_Runge_Framework_Paper_All_Materials/Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
+wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Figure2/20171103_Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/Subsets/", 
                 "Basis2016_Clean_Norm_", timespans[7], "_20180420.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
@@ -568,7 +568,7 @@ for (nm in names(clinical.groups)){
     if (nrow(test) != 1){ #maybe make this > 0?
 
   # build the CCA model
-  model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],
+  model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
                 train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1)
 
   #plug in test data using coefficients from CCA model and compare right and left sides
@@ -963,10 +963,12 @@ corDf.demog$Gender <- as.factor(corDf.demog$Gender)
 corDf.demog$Ethn <- as.factor(corDf.demog$Ethn)
 
 # make sure you have sufficient # of tests
-summaries <- summary(corDf.demog) ; to.remove <-c() 
-for (i in 6:65){
+summaries <- summary(corDf.demog) 
+to.remove <-c() 
+for (i in 6:dim(summaries)[2]){
   if ( #as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) != "NA" &
-    as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) > (dim(corDf.demog)[1] - .001*dim(corDf.demog)[1])){
+    as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) > (dim(corDf.demog)[1] - .005*dim(corDf.demog)[1])){ #remove anything that is missing X% of our total # of observations 
+    print(i)
     to.remove <- c(to.remove, names(summaries[7,][i]))
   }
 }
