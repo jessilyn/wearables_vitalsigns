@@ -52,8 +52,8 @@ timespans <-c("AllData",
               "3DayPrior",
               "DayPrior" )
 
-wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Figure2/20171103_Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/Subsets/", 
-                "Basis2016_Clean_Norm_", timespans[7], "_20180420.csv"),
+wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Figure2/20171103_Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
+                "Basis2016_Clean_Norm_", timespans[7], "_20180504.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
@@ -327,7 +327,8 @@ val.true <- rep(list(NA),length(top.names)) # list of vectors to store true valu
 null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
 lasso.val.pred <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
 rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
-num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
+#num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
+num.Records <- data.frame()
 idx=1 # index for entry into num.Records
 for (k in 1:5){
 #for (k in 1:length(patients)){
@@ -351,10 +352,11 @@ for (k in 1:5){
     
     # TODO: need to fix this - records the number of observations for each LOO run - 
     #num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) 
-    num.Records[[1]][[l]] <- patients[k]
-    num.Records[[2]][[l]] <- top.names[l]
-    num.Records[[3]][[l]] <- length(outcome) ## store num training obs
-    num.Records[[4]][[l]] <- length(x.test[,top.names[l]]) ## store num test obs
+    num.Records <- rbind(num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs = length(outcome), TestObs = length(x.test[,top.names[l]])))
+    # num.Records[[1]][[l]] <- patients[k]
+    # num.Records[[2]][[l]] <- top.names[l]
+    # num.Records[[3]][[l]] <- length(outcome) ## store num training obs
+    # num.Records[[4]][[l]] <- length(x.test[,top.names[l]]) ## store num test obs
     #idx=idx+1 # to index entry into num.Records
     
     rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
@@ -447,7 +449,7 @@ colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso", "rf")
 fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
 fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
 
-fig.2c.plot <- melt(fig.2c.df)
+fig.2c.plot <- melt(fig.2c.corr.coefs)
 fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
 fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
@@ -462,9 +464,9 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
 
 # store the results
-write.table(num.Records, "../SECURE_data/20180503_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(fig.2c.df, "../SECURE_data/20180503_pct_var_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs, "../SECURE_data/20180503_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(num.Records, "../SECURE_data/20180506_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(fig.2c.df, "../SECURE_data/20180506_pct_var_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.corr.coefs, "../SECURE_data/20180506_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
@@ -1052,7 +1054,7 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
 }
 
 
-write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180505_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180506_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
@@ -1062,7 +1064,7 @@ corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 library(dplyr)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("corr.coef"), funs(mean,sd)))
+                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7", "model.mean.rsq.8"), 
                                     to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ Demographics", "~ All Vitals + Demographics"))
                                     # to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
@@ -1103,6 +1105,132 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
         axis.text.y = element_text(hjust = 1))
   #ylim(0,0.5)
   
+
+###############################
+#    Fig 3E:  CCA on 30k data #
+###############################
+
+#######
+# CCA for 30k
+
+library(caret)
+library(plyr)
+
+names(corDf)[names(corDf) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
+names(corDf)[names(corDf)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
+corDf.demog <- merge(thirtyKdemog, corDf, by="ANON_ID")
+corDf.demog$Gender <- as.factor(corDf.demog$Gender)
+corDf.demog$Ethn <- as.factor(corDf.demog$Ethn)
+
+# make sure you have sufficient # of tests
+summaries <- summary(corDf.demog) 
+to.remove <-c() 
+for (i in 6:dim(summaries)[2]){
+  if ( #as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) != "NA" &
+    as.numeric(unlist(strsplit(summaries[7,][i], ":"))[2]) > (dim(corDf.demog)[1] - .005*dim(corDf.demog)[1])){ #remove anything that is missing X% of our total # of observations 
+    print(i)
+    to.remove <- c(to.remove, names(summaries[7,][i]))
+  }
+}
+to.remove <- gsub("\\s", "", to.remove)
+corDf.demog <- corDf.demog[ , -which(names(corDf.demog) %in% c(to.remove))]
+
+cv.runs <- 50
+folds <- createFolds(factor(corDf.demog$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+#check that your folds work the way you expect
+corDf.demog$cv.folds <- folds; # ddply(corDf.demog, 'cv.folds', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
+
+
+library("PMA")
+library("Hmisc")
+wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+clinical.groups = list()
+# remove tests with insufficient data (found by to.remove in section Fig 3C + Demographics + BloodPressure + Respiration)
+clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.") # took out AG because didn't have enough tests
+clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB") # took out  "ALCRU" and "CR", bc not enough tests
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Liver Function"]]=c("BUN","ALT","TBIL","AST") # took out "ALKP"
+clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
+clinical.groups[["Blood"]] = c("GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC") # removed "PLT"
+clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL") # removed "CR","ALCRU",
+
+vitals.variables <- c("Pulse", "Temp", "Systolic", "Diastolic", "Respiration")
+demog.variables <- c("Age", "Gender", "Ethn")
+cca.corr.coefs <- c()
+
+for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
+  print(i)
+  corDf.tmp = corDf.demog[corDf.demog$cv.folds==i,]  #remove ANON_ID and Clin_Result_Date & demographics
+  corDf.tmp = corDf.tmp[,-c(1,5)]  #remove ANON_ID and Clin_Result_Date & demographics
+  # Do ethnicity-stratified cross-validation per subject; split into training and test
+  folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  corDf.tmp$test.train <- folds
+  
+  for (nm in names(clinical.groups)){
+    print(nm)
+    # Remove rows with NAs
+    corDf.tmp.clin = corDf.tmp[,which(colnames(corDf.tmp) %in% c(clinical.groups[[nm]]))]
+    corDf.tmp.vitals = corDf.tmp[,which(colnames(corDf.tmp) %in% vitals.variables)]
+    corDf.tmp.demog = corDf.tmp[,which(colnames(corDf.tmp) %in% demog.variables)]
+    d <- cbind(corDf.tmp.clin, corDf.tmp.vitals, corDf.tmp.demog, corDf.tmp$test.train)
+    num.vars <- (length(names(corDf.tmp.clin)) + length(names(corDf.tmp.vitals)))
+    d<- d[rowSums(is.na(d[,1:num.vars]))<1,]
+    #new.d <- subset(d[,1:num.vars], is.na(d[,1:num.vars])) #na.omit
+    # remove correlated columns
+    tmp <- cor(d[,1:num.vars]) # calculate correlation matrix
+    tmp[upper.tri(tmp)] <- 0; diag(tmp) <- 0 #remove upper triangle of corr matrix
+    d[,1:num.vars] <- d[,1:num.vars][,!apply(tmp,2,function(x) any(x > 0.9999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
+    d[,c(1:num.vars,dim(d)[2]-1) ] = scale(d[,c(1:num.vars,dim(d)[2]-1)][,-length(names(d))],scale = FALSE) # why scale it?
+    d <- as.data.frame(d)
+    indexX = c()
+    indexY = c()
+    train.data <- d[d[length(names(d))]<9,]
+    test.data <-d[d[length(names(d))]==10,] # training set is ~10% of total set, but not exactly because it is ba;ancing by ethnicities
+    ## TODO: Add in demog variables
+    # t<-as.data.frame(table(train.data$Ethn)) # if there is an ethnicity that has zero entries in the training data
+    # test.data <- test.data[!(test.data$Ethn %in% as.character(t[t[,2]<1,][,1])),] #remove that ethnicity from the test data
+    ## build the CCA model
+    # model.cc = cc(train.data[,(ncol(corDf.tmp.clin)+1):(ncol(train.data)-1)],
+    #               train.data[,1:(ncol(corDf.tmp.clin))]) # may allow factors
+    model.cc = CCA(train.data[,(ncol(corDf.tmp.clin)+1):(ncol(train.data)-1)],
+                   train.data[,1:(ncol(corDf.tmp.clin))],trace = FALSE,K=1)
+    
+    #plug in test data using coefficients from CCA model and compare right and left sides
+    indexX = c(indexX, as.matrix(test.data[,(ncol(corDf.tmp.clin)+1):(ncol(test.data)-1)]) %*% model.cc$u)
+    indexY = c(indexY, as.matrix(test.data[,1:(ncol(corDf.tmp.clin))]) %*% model.cc$v)
+    cca.corr <- cor(indexX, indexY)
+    cca.corr.coefs <- rbind(cca.corr.coefs, 
+                            c(cv.step = i, test = nm, corr.coef = cca.corr, numTestObs = dim(test.data)[1], numTrainObs = dim(train.data)[1]))
+  }
+}
+
+cca.corr.coefs <- as.data.frame(cca.corr.coefs)
+cca.corr.coefs$cv.step <- as.numeric(as.character(cca.corr.coefs$cv.step))
+cca.corr.coefs$corr.coef <- as.numeric(as.character(cca.corr.coefs$corr.coef))
+
+library(dplyr)
+model.corr.coefs <- (cca.corr.coefs %>%
+                       group_by(test) %>% 
+                       summarise_at(vars("corr.coef"), funs(mean,sd)))
+model.corr.coefs <- na.omit(model.corr.coefs)
+model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
+model.corr.coefs$mean <- pmax(model.corr.coefs$mean, 0)
+
+# plot how rsq changes with the different models, and add in error bars from sd.plot
+ggplot(model.corr.coefs, aes(x=test, y=mean)) +
+  theme(legend.title = element_blank())+
+  geom_point(pch=19) +
+  #guides(fill=guide_legend(title="Model")) +
+  xlab("Clinical Laboratory Test") + 
+  ylab(expression(atop("Cross-Validated", paste( "CCA Cor Coef (+/- SD)")))) +
+  #ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
+  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        axis.text.y = element_text(hjust = 1)) +
+  ylim(0,0.5) +
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
+
 ###############
 #   Figure 4  #
 ###############
