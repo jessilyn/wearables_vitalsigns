@@ -326,10 +326,7 @@ val.true <- rep(list(NA),length(top.names)) # list of vectors to store true valu
 null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
 lasso.val.pred <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
 rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
-#num.Records = list(left.Out=list(),lab.Test=list(), num.Train.Obs=list(), num.Test.Obs=list()) # make sure sufficient number of observations for each test and training set
 num.Records <- c()
-colnames(num.Records)<-c("IPOP_ID, test", "TrainingObs", "TestObs")
-idx=1 # index for entry into num.Records
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
@@ -348,14 +345,7 @@ for (k in 1:length(patients)){
     x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
     
-    # TODO: need to fix this - records the number of observations for each LOO run - 
-    #num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) 
     num.Records <- rbind(num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
-    # num.Records[[1]][[l]] <- patients[k]
-    # num.Records[[2]][[l]] <- top.names[l]
-    # num.Records[[3]][[l]] <- length(outcome) ## store num training obs
-    # num.Records[[4]][[l]] <- length(x.test[,top.names[l]]) ## store num test obs
-    #idx=idx+1 # to index entry into num.Records
     
     rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
     
@@ -451,7 +441,9 @@ fig.2c.plot <- melt(fig.2c.corr.coefs)
 fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
 fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
-num.Records[c("IPOP_ID, test", "TrainingObs", "TestObs")] <- sapply(num.Records[c("IPOP_ID, test", "TrainingObs", "TestObs")],as.numeric)
+num.Records <- as.data.frame(num.Records)
+num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs), 
+               TestObs = as.numeric(TestObs))
 
 # Plot the % var explained
 ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
@@ -463,13 +455,14 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
                        labels=c("LM vitals", "LASSO", "RF")) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
 
-
-
-
 # store the results
 write.table(num.Records, "../SECURE_data/20180506_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(fig.2c.df, "../SECURE_data/20180506_pct_var_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
 write.table(fig.2c.corr.coefs, "../SECURE_data/20180506_corr_coefs_Dayprior.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(num.Records, "../SECURE_data/20180507/20180507_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_RF_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.num.Records, "../SECURE_data/20180507/20180507_Dayprior_LASSO_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
