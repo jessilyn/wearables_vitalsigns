@@ -237,8 +237,6 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #  Figure 2C  #
 ###############
 
-#TODO: Do we need to weight the prediction/obs. vector by # of obs. per individual?
-
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
@@ -491,6 +489,31 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
 
 
 ### THE PART BELOW IS UNDER CONSTRUCTION
+# Look at differences between DayPrior and AllData
+data.allData <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180503_pct_var_Dayprior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data.dayPrior <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+#data.dayPrior$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+#df <- merge(data.dayPrior, data.allData, by = c("model", "test"))
+#colnames(df)[3:4] <- c("DayPrior", "AllData")
+df <- data.dayPrior[,3:4] - data.allData[,3:4]
+df2 <- melt(df)
+df2<- df2[order(-df2$value),]
+df2<-cbind(data.dayPrior[,1], df2)
+colnames(df2)<-c("test", "model", "pct.var")
+ggplot(df2, aes(test,pct.var, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  scale_color_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by using Day Prior vs All Watch Data"))))
+
+### THE PART BELOW IS UNDER CONSTRUCTION
 # make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
 # can we create one more layer of mixed effects models in the iPOP analysis here?
 
@@ -515,6 +538,9 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
   scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
                        labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
   labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
+
+
+
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
 ################################################
