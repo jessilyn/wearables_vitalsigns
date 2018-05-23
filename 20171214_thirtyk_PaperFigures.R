@@ -1128,7 +1128,12 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
   #ylim(0,0.5)
   
 ###############
-#   Figure 4  #
+#   Figure 4B #
+###############
+source("individual-models-ipop.R") # this script automatically generates plots in "plots" directory
+
+###############
+#   Figure 4C #
 ###############
 # run after reading in and cleaning data and running Figure 2D section to get top.names
 
