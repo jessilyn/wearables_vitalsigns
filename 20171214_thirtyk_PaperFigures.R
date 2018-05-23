@@ -222,6 +222,9 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #  Figure 1D  - see Ryans_Figure1_Code.R #
 ##########################################
 
+
+
+
 #############################
 #    Suppl. Table 1A and B  #
 #############################
@@ -427,6 +430,7 @@ names(rf.pct.var.explained) = top.names
 rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
 
 fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var), as.data.frame(rf.sqrt.pct.var), row.names=NULL)
+
 colnames(fig.2c.df)<-c("test", "vitals", "lasso", "rf")
 fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 
@@ -472,11 +476,13 @@ weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border =
 # save as pdf 4x12.5"
 # data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
 #                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-fig.2c.df.2 <-read.csv("../SECURE_data/20180503_pct_var_Dayprior.csv",
+fig.2c.df <-read.csv("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 fig.2c.plot <- melt(fig.2c.df)
 fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c$test <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c$test = factor(fig.2c$test, levels = order(-fig.2c.plot[,3]))
+
 # Plot the % var explained
 ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
@@ -1084,9 +1090,10 @@ corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
 corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
 
 library(dplyr)
+## plot corr coefs or sqrt pct var explained (need to change code to plot second one)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
-                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd)))
+                       summarise_at(vars("sqrt.pct.var"), funs(mean,sd))) # change to summarise_at(vars("sqrt.pct.var") or "corr.coef"
 model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7", "model.mean.rsq.8"), 
                                     to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ Demographics", "~ All Vitals + Demographics"))
                                     # to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
@@ -1101,8 +1108,8 @@ ggplot(model.corr.coefs.top.names, aes(x=test, y=mean, group=model, col=as.facto
   geom_point(position=position_dodge(.05)) +
   #guides(fill=guide_legend(title="Model")) +
   xlab("Clinical Laboratory Test") + 
-  ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) +
-  #ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) +
+  #ylab(expression(atop("Cross-Validated", paste( "Cor Coef (+/- SD)")))) + # if corr coefs
+  ylab(expression(atop("Cross-Validated", paste( "Sqrt of % Variance Explained (+/- SD)")))) + # if sqrt pct var
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
@@ -1110,6 +1117,7 @@ ggplot(model.corr.coefs.top.names, aes(x=test, y=mean, group=model, col=as.facto
   ylim(0,0.5) +
   scale_fill_discrete(name="Model")+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5, position=position_dodge(.05))
+
 
 # Delta Corr Coeff between Demographics Only and Vitals + Demographics:
 # Which clinical lab models benefit the most by the addition of vital signs?
@@ -1120,7 +1128,8 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
   geom_point() +
   theme(legend.title = element_blank())+
   xlab("Clinical Laboratory Test") + 
-  ylab(expression(atop("Delta Cor Coef ", paste( "(~ Vitals + Demog ) - (~ Demog )")))) +
+  #ylab(expression(atop("Delta Cor Coef ", paste( "(~ Vitals + Demog ) - (~ Demog )")))) + # if corr coefs
+  ylab(expression(atop("Delta Sqrt % Var Explained ", paste( "(~ Vitals + Demog ) - (~ Demog )")))) + 
   theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), 
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
