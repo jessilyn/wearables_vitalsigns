@@ -332,6 +332,15 @@ rf.val.pred.lambda.min <- rep(list(NA),length(top.names))  # list of vectors to 
 lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
 rf.val.pred.lambda.1se <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 num.Records <- c()
+lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
+                                           "left.out.person"=character(),"feature"=character(),
+                                           "coef.value"=character())
+lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"feature"=character(),
+                                        "coef.value"=character())
+lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"feature"=character(),
+                                        "coef.value"=character())
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
@@ -372,15 +381,34 @@ for (k in 1:length(patients)){
     lasso.nonZero.variables.lambda.1se = factors.lambda.1se[abs(factors.lambda.1se)!=0]
     
     #print all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda manual):"))
-    print(lasso.nonZero.variables.lambda.manual)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda min):"))
-    print(lasso.nonZero.variables.lambda.min)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda 1se):"))
-    print(lasso.nonZero.variables.lambda.1se)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda manual):"))
+    # print(lasso.nonZero.variables.lambda.manual)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda min):"))
+    # print(lasso.nonZero.variables.lambda.min)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda 1se):"))
+    # print(lasso.nonZero.variables.lambda.1se)
     
-    # ^This is just a concept demo; we can now store these in tables/text files from here as needed.
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.manual)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.manual)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.manual)),
+                      "feature"=names(lasso.nonZero.variables.lambda.manual),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.manual))
+    lasso.features.lambda.manual <- rbind(lasso.features.lambda.manual,tmp)
     
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.min)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.min)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.min)),
+                      "feature"=names(lasso.nonZero.variables.lambda.min),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.min))
+    lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
+    
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.1se)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.1se)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.1se)),
+                      "feature"=names(lasso.nonZero.variables.lambda.1se),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.1se))
+    lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
+
     #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
     lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
