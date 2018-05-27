@@ -858,10 +858,12 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
 
 library("PMA")
 library("Hmisc")
+
+#TODO: UALAB coding causes problems! I removedit from diabetes
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
-clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB","CR","ALCRU")
-#clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
 clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
 clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
@@ -869,24 +871,38 @@ clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","
 cca.corr.coefs <- c()
 patients <- unique(wear$iPOP_ID)
 
-#wear$LDL = as.numeric(wear$LDL)
+wear$AG = as.numeric(wear$AG)
+wear$AST = as.numeric(wear$AST)
+wear$TBIL = as.numeric(wear$TBIL)
+wear$HSCRP = as.numeric(wear$HSCRP)
+wear$IGM = as.numeric(wear$IGM)
+wear$LDL = as.numeric(wear$LDL)
+wear$TGL = as.numeric(wear$TGL)
 
 for (nm in names(clinical.groups)){
   print(nm)
   # Remove rows with NAs
   data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
-  data.wear = wear[,which(colnames(wear) %in% wear.variables)]
+  data.wear = wear[,which(colnames(wear) %in% c(wear.variables))]
+  data.wear$AgeIn2016 = wear$AgeIn2016
+  
+  data.wear$male = wear$Gender == "M"
+  data.wear$ethnA = wear$Ethn == "A"
+  data.wear$ethnB = wear$Ethn == "B"
+  data.wear$ethnC = wear$Ethn == "C"
+  
   d <- cbind(data.clin, data.wear)
   d <- na.omit(d)
   iPOP.idx <- d[,1]
   d<-d[-1]
+
   # remove correlated columns
   tmp <- cor(d)
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
   d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
 
-  d = scale(d,scale = FALSE) # why scale it?
+  d = scale(d,center = TRUE, scale = FALSE) # why scale it?
   indexX = c()
   indexY = c()
   
@@ -897,9 +913,13 @@ for (nm in names(clinical.groups)){
     if (nrow(test) != 1){ #maybe make this > 0?
 
   # build the CCA model
+  model.cc = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
+                             train[,1:(ncol(data.clin)-1)],trace = FALSE)
   model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
-                train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1)
-
+                        train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1,
+                        penaltyx = model.cc$bestpenaltyx,
+                        penaltyz = model.cc$bestpenaltyz)
+      
   #plug in test data using coefficients from CCA model and compare right and left sides
   indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% model.cc$u)
   indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% model.cc$v)
