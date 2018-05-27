@@ -267,22 +267,6 @@ ggplot(dd, aes_string(x = clin, y = vit)) + weartals_theme +
   stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5)
 ggsave("plots/neut-extreme-pos.png")
 
-toppat = names(sort(-table(corDf$ANON_ID))[c(1:10)])
-
-dd = corDf[corDf$ANON_ID %in% c("N-7881","D-6050",toppat) ,c("ANON_ID",vit,clin)]
-
-if (!("ww" %in% ls()))
-  ww = loess(paste0(vit," ~ ",clin), corDf)
-grid = seq(min(corDf[[clin]], na.rm = T),max(corDf[[clin]],na.rm = T),length.out = 100)
-ff = approxfun(grid, predict(ww,grid))
-
-ggplot(dd, aes_string(clin, vit, group = "ANON_ID", colour = "ANON_ID")) + 
-  weartals_theme + theme(text = element_text(size=20)) +
-#  geom_point(size=0) + 
-  geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1, fill=NA) +
-  stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
-ggsave("plots/neut-slopes.png")
-
 res = c()
 for (iid in c(1:3)){
   vit = "Temp"
