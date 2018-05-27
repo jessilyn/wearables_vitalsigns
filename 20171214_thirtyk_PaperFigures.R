@@ -1463,7 +1463,7 @@ generate4A = function(dataset, threshold = 4, cap = 10){
     corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
     testids = c()
 
-    if (length(atleastafew) > 1){
+    if (length(atleastafew) > 10){
     
       # Select the last observation from each patient who qualified (at least n0 obs)
       for (id in atleastafew){
@@ -1626,6 +1626,99 @@ generate4D = function(dataset){
 }
 generate4D("iPOP")
 generate4D("30k")
+
+###############
+#  Figure 5A #
+###############
+# Visits vs R^2
+generate5A = function(clin,dataset = "30k",cap=200){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Temp"]]),]
+  
+  # Here we select people with the largest number of observations
+  toppat = table(corDf.tmp[[identifier]])
+  toppat = toppat[toppat > 10]
+  toppat = names(toppat)
+  toppat = toppat[1:min(cap,length(toppat))]
+  
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin)]
+  
+  # Compute R for individual models
+  res = c()
+  for (pat in toppat){
+    frm = paste0(clin," ~ Pulse + Pulse^2 + Temp + Temp^2")
+    
+    # Crossval
+    allpreds = c()
+    for (i in 1:10){
+      ind.data = dd[dd[[identifier]] == pat,]
+      nsmpl = nrow(ind.data)
+      test.idx = sample(nsmpl)[1:floor(0.8 * nsmpl)]
+      model = lm(frm, data = ind.data[test.idx,])
+      preds = predict(model,ind.data[-test.idx,])
+      
+      allpreds = rbind(allpreds, cbind(ind.data[-test.idx,clin], preds))
+    }
+    
+    err = cor(allpreds[,1],allpreds[,2])
+    res = rbind(res, c(sum(dd[[identifier]] == pat),err))
+  }
+  dres = data.frame(visits = res[,1], r = res[,2])
+  ggplot(dres, aes(visits, r)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_point(size=2) + 
+    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1)
+  ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
+}
+generate5A("MONOAB","30k",cap=100)
+
+###############
+#  Figure 5B #
+###############
+# Temporal evolution of the estimate of the mean
+generate5B = function(clin,vit,dataset = "30k",window=50){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[[vit]]),]
+
+  # Here we select people with the largest number of observations
+  toppat = table(corDf.tmp[[identifier]])
+  toppat = names(sort(-toppat))[1]
+
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat, c(identifier,"Clin_Result_Date",vit,clin)]
+  
+  dates = c()
+  slopes = c()
+  for (i in (window+1):nrow(dd)){
+    model = lm(formula(paste(clin,"~",vit)), data = dd[(i-window):i, ])
+    slopes = c(slopes, model$coefficients[1])
+    dates = c(dates, dd$Clin_Result_Date[i])
+  }
+  
+  dres = data.frame(date = as.POSIXct(dates), slope = slopes)
+  ggplot(dres, aes(date, slope)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    #  geom_smooth(method="loess", size=1) +
+    geom_point(size=2) 
+  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,".png"),width = 9,height = 6,units = "in")
+}
+generate5B("MONOAB","Pulse","30k",window = 50)
 
 ###############
 #   Figure 5 #
