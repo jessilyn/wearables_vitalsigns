@@ -912,13 +912,16 @@ for (nm in names(clinical.groups)){
     test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
     if (nrow(test) != 1){ #maybe make this > 0?
 
+  pensx = c(0.0001, 0.001, 0.005, 0.01, 0.05, 1:7/10.0)
+  pensz = rep(0.7, length(pensx))
+      
   # build the CCA model
-  model.cc = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
-                             train[,1:(ncol(data.clin)-1)],trace = FALSE)
+  model.cc.cv = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
+                             train[,1:(ncol(data.clin)-1)],trace = FALSE,penaltyxs = pensx,penaltyzs = pensz)
   model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
                         train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1,
-                        penaltyx = model.cc$bestpenaltyx,
-                        penaltyz = model.cc$bestpenaltyz)
+                        penaltyx = model.cc.cv$bestpenaltyx,
+                        penaltyz = model.cc.cv$bestpenaltyz)
       
   #plug in test data using coefficients from CCA model and compare right and left sides
   indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% model.cc$u)
