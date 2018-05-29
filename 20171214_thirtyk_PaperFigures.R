@@ -1497,7 +1497,16 @@ generate4A = function(dataset, threshold = 4, cap = 10){
       # Build individual models and check correlation predicted vs true
       model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
       preds = predict(model, newdata = corDf.tmp[testids,])
-      res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
+
+      # Correlation
+      # res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
+      
+      # Sqrd root of variance explained
+      var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
+      var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
+      if (test.name=="CO2")
+        plot(corDf.tmp[testids,test.name], preds)
+      res.meanpred = c(res.meanpred, sqrt(1 - var.exp/var.null) )
     }
     else {
       res.meanpred = c(res.meanpred, 0)
