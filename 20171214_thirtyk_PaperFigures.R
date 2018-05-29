@@ -1481,13 +1481,13 @@ generate4A = function(dataset, threshold = 4, cap = 10){
   for (test.name in test.names){
     corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
     ids = sort(table(corDf.tmp[[identifier]]))
-    atleastafew = names(ids[ids >= threshold])
+    atleastafew = names(ids[ids >= threshold]) # select patients with at least 10 tests
     atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
     corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
     testids = c()
 
+    # compute correlation if we have at least 10 patients 
     if (length(atleastafew) > 10){
-    
       # Select the last observation from each patient who qualified (at least n0 obs)
       for (id in atleastafew){
         lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
@@ -1495,6 +1495,7 @@ generate4A = function(dataset, threshold = 4, cap = 10){
       }
     
       # Build individual models and check correlation predicted vs true
+      # model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
       model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
       preds = predict(model, newdata = corDf.tmp[testids,])
 
@@ -1504,7 +1505,7 @@ generate4A = function(dataset, threshold = 4, cap = 10){
       # Sqrd root of variance explained
       var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
       var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
-      if (test.name=="CO2")
+      if (test.name=="GLOB")
         plot(corDf.tmp[testids,test.name], preds)
       res.meanpred = c(res.meanpred, sqrt(1 - var.exp/var.null) )
     }
