@@ -1517,11 +1517,11 @@ generate4A = function(dataset, threshold = 4, cap = 10){
   res = res[order(-res$value),]
   res$test = factor(as.character(res$test), levels = as.character(res$test))
   ggplot(res, aes(test, value)) + geom_point(size = 3, shape=1) +
-    ylab("Correlation") +
+    ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
     weartals_theme + 
     theme(text = element_text(size=14))
-  ggsave(paste0("plots/Figure-4A-",dataset,".png"))
+  ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
 }
 generate4A("iPOP",cap = 100)
 generate4A("30k",threshold = 5, cap = 100)
@@ -1555,14 +1555,30 @@ generate4B = function(clin,vit,dataset = "30k"){
   ff = approxfun(grid, predict(ww,grid))
   
   # Compute R for individual models
-  # They are taken from the model and not cross-validated. The accurate cross-validated
-  # values are in Figure 4A, here it's not the point
   dd$accuracy = dd[[identifier]]
   for (pat in toppat){
+    cat(paste("Building a model for",pat,"\n"))
     frm = paste0(clin," ~ ",vit," + ",vit,"^2")
-    model = lm(frm, data = corDf.tmp[corDf.tmp[[identifier]] == pat,])
-    model.sum = summary(model)
-    err = sqrt(model.sum$r.squared)
+    corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
+    corDf.ind = corDf.ind[!is.na(corDf.ind[,vit]),]
+    
+    # Var explained (CV)
+    errors = c()
+    for (i in 1:20){
+      testids = sample(nrow(corDf.ind))[1:floor(nrow(corDf.ind)*0.8)]
+      model = lm(frm, data = corDf.ind[-testids,])
+      preds = predict(model, newdata = corDf.ind[testids,])
+      var.exp = sum( (corDf.ind[testids,clin] - preds) ** 2)
+      var.null = sum( (corDf.ind[,clin] - mean(corDf.ind[,clin])) ** 2)
+      err = max(1 - var.exp / var.null,0)
+      errors = c(errors, sqrt(err))
+    }
+    err = mean(errors)
+
+    # Correlation
+    # model.sum = summary(model)
+    # err = sqrt(model.sum$r.squared)
+    
     dd[dd[[identifier]] == pat,]$accuracy = paste0(pat," (r=",sprintf("%.1f", err),")")
   }
   
@@ -1572,7 +1588,7 @@ generate4B = function(clin,vit,dataset = "30k"){
     #  geom_point(size=0) + 
     geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1, fill=NA) +
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
-  ggsave(paste0("plots/Figure-4B-",dataset,".png"))
+  ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
 }
 generate4B("MONOAB","Pulse","iPOP")
 generate4B("MONOAB","Pulse","30k")
