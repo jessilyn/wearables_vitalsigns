@@ -879,6 +879,17 @@ wear$IGM = as.numeric(wear$IGM)
 wear$LDL = as.numeric(wear$LDL)
 wear$TGL = as.numeric(wear$TGL)
 
+best.weigths = list(
+  Blood = c(0.7,0.7), # ~ 0.5
+  Inflammation = c(0.1,0.9), # ~ 0.37
+  Electrolytes = c(0.5,0.5), # ~ 0.12
+  Diabetes = c(0.1,0.7), # ~ 0.21
+  Cardiovascular.Disease = c(0.1,0.7), # ~ 0.24
+  'Liver Function' = c(0.3,0.7) # ~ 0.26
+)
+
+set.seed(0)
+results = c()
 for (nm in names(clinical.groups)){
   print(nm)
   # Remove rows with NAs
@@ -902,7 +913,7 @@ for (nm in names(clinical.groups)){
   diag(tmp) <- 0
   d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
 
-  d = scale(d,center = TRUE, scale = FALSE) # why scale it?
+  d = scale(d,center = TRUE, scale = TRUE) # center data
   indexX = c()
   indexY = c()
   
@@ -912,14 +923,26 @@ for (nm in names(clinical.groups)){
     test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
     if (nrow(test) != 1){ #maybe make this > 0?
 
-  pensx = c(0.0001, 0.001, 0.005, 0.01, 0.05, 1:7/10.0)
-  pensz = rep(0.7, length(pensx))
+  # scheme = c(1:3 / 4.0)
+  # pensx = rep(scheme, each=3)
+  # pensz = rep(scheme, times=3)
+      # pensx = best.weigths[[nm]][1]
+      # pensz = best.weigths[[nm]][2]
+
+      # pensx = c(0.1,0.4,0.7,0.1,0.5,0.1,0.1,0.1)
+      # pensz = c(0.1,0.4,0.7,0.9,0.1,0.3,0.5,0.9)
+      pensx = c(0.1,0.9,0.1,0.9)
+      pensz = c(0.1,0.9,0.9,0.1)
       
   # build the CCA model
   model.cc.cv = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
-                             train[,1:(ncol(data.clin)-1)],trace = FALSE,penaltyxs = pensx,penaltyzs = pensz)
+                             train[,1:(ncol(data.clin)-1)],
+                            trace = FALSE,
+                            standardize = FALSE,
+                            penaltyxs = pensx,
+                            penaltyzs = pensz)
   model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
-                        train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1,
+                        train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1,standardize = FALSE,
                         penaltyx = model.cc.cv$bestpenaltyx,
                         penaltyz = model.cc.cv$bestpenaltyz)
       
@@ -933,7 +956,8 @@ for (nm in names(clinical.groups)){
   #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, cca.corr, patients[i]))
     }
   }
-  cca.corr <- cor(indexX, indexY)
+  
+  cca.corr <- abs(cor(indexX, indexY))
   print(ggplot(data.frame(indexX = indexX, indexY = indexY),aes(indexX,indexY)) +
     weartals_theme +
     geom_point() +
@@ -941,19 +965,25 @@ for (nm in names(clinical.groups)){
     stat_summary(fun.data=mean_cl_normal) +
     geom_smooth(method='lm',formula=y~x))
   print(cca.corr)
+  results = c(results, cca.corr)
 }
+df.res = data.frame(name = names(clinical.groups), cor = results)
+
 # library(dplyr)
 # data <- (cca.corr.coefs %>%
 #                        group_by(nm) %>% 
 #                        summarise_at(vars("cca.corr"), funs(mean,sd)))
-ggplot(data, aes(x=nm, y=mean)) +
+df.res = df.res[order(-df.res$cor),]
+df.res$name = factor(as.character(df.res$name), levels = as.character(df.res$name))
+
+p=ggplot(df.res, aes(x=name, y=cor)) +
   theme(legend.title = element_blank()) +
-  geom_point() +
-  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(angle = 60, hjust = 1)) +
-  #ylim(0,0.5) +
+  geom_point(size=3, shape =1) +
+  weartals_theme + 
+  ylim(0,0.5) +
   labs(x = "Physiology Subsets", y ="Correlation Coefficient")
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
+ggsave(paste0("plots/Figure2E.png"),p,width=5,height=4)
 
 ##############
 #  Figure 3A #
