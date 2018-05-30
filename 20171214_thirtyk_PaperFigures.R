@@ -520,81 +520,81 @@ for (k in 1:length(patients)){
   }
 }
 
-# ## calculate correlation coefficients and pct var explained by the models (lambda manual)
-# rsq.lasso.lambda.manual = c()
-# rssm.lasso.lambda.manual = c()
-# rss0.lasso.lambda.manual = c()
-# lasso.pct.var.explained.lambda.manual = c()
-# lasso.num.Records.lambda.manual <- c()
-# rsq.rf.lambda.manual = c()
-# rssm.rf.lambda.manual = c()
-# rss0.rf.lambda.manual = c()
-# rf.pct.var.explained.lambda.manual = c()
-# rf.num.Records.lambda.manual <- c()
-# 
-# for (j in 1:length(top.names)){
-#   #lasso (lambda.manual)
-#   if(!all(is.na(lasso.val.pred.lambda.manual[[j]]))){
-#     rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
-#     rssm.lasso.lambda.manual = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.manual[[j]])^2))
-#     rss0.lasso.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-#     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
-#     lasso.num.Records.lambda.manual <- c(num.Records, length(lasso.val.pred.lambda.manual[[j]]))    
-#   } else {
-#     rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, NA)
-#     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
-#     lasso.num.Records.lambda.manual <- c(num.Records, NA)   
-#   }
-#   #rf (lambda.manual)
-#   if(!all(is.na(rf.val.pred.lambda.manual[[j]]))){
-#     rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, cor(rf.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
-#     rssm.rf.lambda.manual = sum(na.omit((val.true[[j]] - rf.val.pred.lambda.manual[[j]])^2))
-#     rss0.rf.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-#     rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, (1 - ( rssm.rf.lambda.manual / rss0.rf.lambda.manual )))
-#     rf.num.Records.lambda.manual <- c(num.Records, length(rf.val.pred.lambda.manual[[j]]))    
-#   } else {
-#     rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, NA)
-#     rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, NA)
-#     rf.num.Records.lambda.manual <- c(num.Records, NA)   
-#   }
-# }
-# names(rsq.lasso.lambda.manual) = top.names
-# names(lasso.pct.var.explained.lambda.manual) = top.names
-# lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
-# 
-# names(rsq.rf.lambda.manual) = top.names
-# names(rf.pct.var.explained.lambda.manual) = top.names
-# rf.sqrt.pct.var.lambda.manual <- sqrt(rf.pct.var.explained.lambda.manual)
-# 
-# fig.2c.df.lambda.manual <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var.lambda.manual), as.data.frame(rf.sqrt.pct.var.lambda.manual), row.names=NULL)
-# 
-# colnames(fig.2c.df.lambda.manual)<-c("test", "vitals", "lasso", "rf")
-# fig.2c.df.lambda.manual$test = factor(fig.2c.df.lambda.manual$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
-# 
-# fig.2c.corr.coefs.lambda.manual <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso.lambda.manual), as.data.frame(rsq.rf.lambda.manual), row.names=NULL)
-# colnames(fig.2c.corr.coefs.lambda.manual)<-c("test", "vitals", "lasso", "rf")
-# fig.2c.corr.coefs.lambda.manual$test = factor(fig.2c.corr.coefs.lambda.manual$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
-# # fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
-# # ^This line was throwing an error; revised version below:
-# fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")] <- sapply(fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
-# 
-# fig.2c.plot.lambda.manual <- melt(fig.2c.corr.coefs.lambda.manual,id.vars="test")
-# fig.2c.plot.lambda.manual[,3][is.nan(fig.2c.plot.lambda.manual[,3])] <- 0 #replace % var explained of NaN w/ 0
-# fig.2c.lambda.manual <- fig.2c.plot.lambda.manual[order(-fig.2c.plot.lambda.manual[,3]),] # reorder by LM Vitals
-# 
-# num.Records <- as.data.frame(num.Records)
-# num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs), 
-#                          TestObs = as.numeric(TestObs))
-# 
-# # Plot the % var explained
-# ggplot(fig.2c.lambda.manual, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-#   weartals_theme +
-#   ylim(0,1) +
-#   scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-#                        labels=c("LM vitals", "LASSO", "RF")) +
-#   scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-#                        labels=c("LM vitals", "LASSO", "RF")) +
-#   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+## calculate correlation coefficients and pct var explained by the models (lambda manual)
+rsq.lasso.lambda.manual = c()
+rssm.lasso.lambda.manual = c()
+rss0.lasso.lambda.manual = c()
+lasso.pct.var.explained.lambda.manual = c()
+lasso.num.Records.lambda.manual <- c()
+rsq.rf.lambda.manual = c()
+rssm.rf.lambda.manual = c()
+rss0.rf.lambda.manual = c()
+rf.pct.var.explained.lambda.manual = c()
+rf.num.Records.lambda.manual <- c()
+
+for (j in 1:length(top.names)){
+  #lasso (lambda.manual)
+  if(!all(is.na(lasso.val.pred.lambda.manual[[j]]))){
+    rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
+    rssm.lasso.lambda.manual = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.manual[[j]])^2))
+    rss0.lasso.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
+    lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
+    lasso.num.Records.lambda.manual <- c(num.Records, length(lasso.val.pred.lambda.manual[[j]]))
+  } else {
+    rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, NA)
+    lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
+    lasso.num.Records.lambda.manual <- c(num.Records, NA)
+  }
+  #rf (lambda.manual)
+  if(!all(is.na(rf.val.pred.lambda.manual[[j]]))){
+    rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, cor(rf.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
+    rssm.rf.lambda.manual = sum(na.omit((val.true[[j]] - rf.val.pred.lambda.manual[[j]])^2))
+    rss0.rf.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
+    rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, (1 - ( rssm.rf.lambda.manual / rss0.rf.lambda.manual )))
+    rf.num.Records.lambda.manual <- c(num.Records, length(rf.val.pred.lambda.manual[[j]]))
+  } else {
+    rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, NA)
+    rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, NA)
+    rf.num.Records.lambda.manual <- c(num.Records, NA)
+  }
+}
+names(rsq.lasso.lambda.manual) = top.names
+names(lasso.pct.var.explained.lambda.manual) = top.names
+lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
+
+names(rsq.rf.lambda.manual) = top.names
+names(rf.pct.var.explained.lambda.manual) = top.names
+rf.sqrt.pct.var.lambda.manual <- sqrt(rf.pct.var.explained.lambda.manual)
+
+fig.2c.df.lambda.manual <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var.lambda.manual), as.data.frame(rf.sqrt.pct.var.lambda.manual), row.names=NULL)
+
+colnames(fig.2c.df.lambda.manual)<-c("test", "vitals", "lasso", "rf")
+fig.2c.df.lambda.manual$test = factor(fig.2c.df.lambda.manual$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
+
+fig.2c.corr.coefs.lambda.manual <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso.lambda.manual), as.data.frame(rsq.rf.lambda.manual), row.names=NULL)
+colnames(fig.2c.corr.coefs.lambda.manual)<-c("test", "vitals", "lasso", "rf")
+fig.2c.corr.coefs.lambda.manual$test = factor(fig.2c.corr.coefs.lambda.manual$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
+# fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
+# ^This line was throwing an error; revised version below:
+fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")] <- sapply(fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
+
+fig.2c.plot.lambda.manual <- melt(fig.2c.corr.coefs.lambda.manual,id.vars="test")
+fig.2c.plot.lambda.manual[,3][is.nan(fig.2c.plot.lambda.manual[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c.lambda.manual <- fig.2c.plot.lambda.manual[order(-fig.2c.plot.lambda.manual[,3]),] # reorder by LM Vitals
+
+num.Records <- as.data.frame(num.Records)
+num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
+                         TestObs = as.numeric(TestObs))
+
+# Plot the % var explained
+ggplot(fig.2c.lambda.manual, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+  weartals_theme +
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
 
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
 rsq.lasso.lambda.min = c()
