@@ -1567,14 +1567,14 @@ generate4B = function(clin,vit,dataset = "30k"){
     corDf.tmp = corDf[!is.na(corDf[[clin]]),]
   }
   
-  # Here we select people with the largest number of observations
-  # toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
-  
-  # Alternatively, we can select a few ANNON_ID
+  # Here we can select a few ANNON_ID
   if (dataset == "iPOP")
     toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
   else
-    toppat = c("N-3691","PD-2191","D-4185","PD-9342","PD-176")
+    toppat = c("N-3691","D-4185")
+  
+  # Alternatively, we select people with the largest number of observations
+  toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
   
   dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vit,clin)]
   
@@ -1620,8 +1620,8 @@ generate4B = function(clin,vit,dataset = "30k"){
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
   ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
 }
-generate4B("MONOAB","Pulse","iPOP")
-generate4B("MONOAB","Pulse","30k")
+generate4B("CHOL","Pulse","iPOP")
+generate4B("CHOL","Pulse","30k")
 
 generate4C = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
@@ -1657,8 +1657,8 @@ generate4C = function(clin,vit,dataset = "30k"){
     ggsave(paste0("plots/Figure-4C-",i,"-",dataset,".png"))
   }
 }
-generate4C("MONOAB","Pulse","30k")
-generate4C("MONOAB","Pulse","iPOP")
+#generate4C("MONOAB","Pulse","30k")
+#generate4C("MONOAB","Pulse","iPOP")
 
 library("grid")
 
@@ -1741,14 +1741,14 @@ generate5A = function(clin,dataset = "30k",cap=200){
     for (i in 1:10){
       ind.data = dd[dd[[identifier]] == pat,]
       nsmpl = nrow(ind.data)
-      test.idx = sample(nsmpl)[1:floor(0.8 * nsmpl)]
-      model = lm(frm, data = ind.data[test.idx,])
-      preds = predict(model,ind.data[-test.idx,])
+      train.idx = sample(nsmpl)[1:floor(0.8 * nsmpl)]
+      model = lm(frm, data = ind.data[train.idx,])
+      preds = predict(model,ind.data[-train.idx,])
       
-      allpreds = rbind(allpreds, cbind(ind.data[-test.idx,clin], preds))
+      allpreds = rbind(allpreds, cbind(ind.data[-train.idx,clin], preds))
     }
     
-    err = cor(allpreds[,1],allpreds[,2])
+    err = sqrt(1 - var(allpreds[,1] - allpreds[,2])/var(allpreds[,1] - mean(allpreds[,1])))
     res = rbind(res, c(sum(dd[[identifier]] == pat),err))
   }
   dres = data.frame(visits = res[,1], r = res[,2])
@@ -1758,7 +1758,7 @@ generate5A = function(clin,dataset = "30k",cap=200){
     geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1)
   ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
 }
-generate5A("MONOAB","30k",cap=100)
+generate5A("CHOL","30k",cap=100)
 
 ###############
 #  Figure 5B #
@@ -1778,26 +1778,38 @@ generate5B = function(clin,vit,dataset = "30k",window=50){
 
   # Here we select people with the largest number of observations
   toppat = table(corDf.tmp[[identifier]])
-  toppat = names(sort(-toppat))[1]
+  toppat = names(sort(-toppat))[1:3]
 
   dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat, c(identifier,"Clin_Result_Date",vit,clin)]
   
   dates = c()
   slopes = c()
-  for (i in (window+1):nrow(dd)){
-    model = lm(formula(paste(clin,"~",vit)), data = dd[(i-window):i, ])
-    slopes = c(slopes, model$coefficients[1])
-    dates = c(dates, dd$Clin_Result_Date[i])
+  rsquared = c()
+  ids = c()
+  for (pat in toppat){
+    dd.pat = dd[dd[[identifier]] == pat,]
+    for (i in (window+1):nrow(dd.pat)){
+      model = lm(formula(paste(clin,"~",vit)), data = dd.pat[(i-window):i, ])
+      slopes = c(slopes, model$coefficients[1])
+      rsquared = c(rsquared, sqrt(summary(model)$r.squared))
+      dates = c(dates, dd.pat$Clin_Result_Date[i])
+      ids = c(ids, pat)
+    }
   }
   
-  dres = data.frame(date = as.POSIXct(dates), slope = slopes)
-  ggplot(dres, aes(date, slope)) + 
+  dres = data.frame(date = as.POSIXct(dates), slope = slopes, identifier = ids, rsquared = rsquared)
+  ggplot(dres, aes(date, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
-    #  geom_smooth(method="loess", size=1) +
     geom_point(size=2) 
-  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,".png"),width = 9,height = 6,units = "in")
+  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"),width = 9,height = 6,units = "in")
+  
+  ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    ylab(expression(sqrt("Variance explained"))) +
+    geom_line() 
+  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),width = 9,height = 6,units = "in")
 }
-generate5B("MONOAB","Pulse","30k",window = 50)
+generate5B("CHOL","Pulse","30k",window = 50)
 
 ###############
 #   Figure 5 #
