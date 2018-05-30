@@ -243,7 +243,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
-#top.names<-c("MONOAB", "HGB", "HCT", "MCHC") # for testing model on small subset
+top.names<-c("MONOAB", "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
 
 ####
 # CODE FOR SIMPLE LM
@@ -734,6 +734,9 @@ write.table(num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_num_Re
 # write.table(rf.num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_RF_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 # write.table(lasso.num.Records, "../SECURE_data/20180507/20180507_Dayprior_LASSO_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 # ^Objects not found/created.
+
+#### CURRENT 2C Figure in Paper is located in: 20180522_Fig2C_NoDemog.R "
+## Not sourced into this code yet because contains with and without demographics, and isnt cleaned up yet.
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
