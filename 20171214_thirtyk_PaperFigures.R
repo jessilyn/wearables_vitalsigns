@@ -19,6 +19,8 @@ library("ggthemes")
 library(reshape2)
 library(randomForest)
 library("glmnet")
+library(lme4)
+
 
 if(!dir.exists("plots")) dir.create("plots")
 
@@ -52,7 +54,7 @@ timespans <-c("AllData",
               "3DayPrior",
               "DayPrior" )
 
-wear <- read.csv(paste0("/Users/jessilyn/Desktop/framework_paper/Figure2/20171103_Output_Tables_from_All_Lassos/Basis_Timespan_Subset_Tables_for_Lassos/", 
+wear <- read.csv(paste0(dir, 
                 "Basis2016_Clean_Norm_", timespans[7], "_20180504.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
@@ -332,6 +334,15 @@ rf.val.pred.lambda.min <- rep(list(NA),length(top.names))  # list of vectors to 
 lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
 rf.val.pred.lambda.1se <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 num.Records <- c()
+lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
+                                           "left.out.person"=character(),"feature"=character(),
+                                           "coef.value"=character())
+lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"feature"=character(),
+                                        "coef.value"=character())
+lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"feature"=character(),
+                                        "coef.value"=character())
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
@@ -372,15 +383,34 @@ for (k in 1:length(patients)){
     lasso.nonZero.variables.lambda.1se = factors.lambda.1se[abs(factors.lambda.1se)!=0]
     
     #print all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda manual):"))
-    print(lasso.nonZero.variables.lambda.manual)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda min):"))
-    print(lasso.nonZero.variables.lambda.min)
-    print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda 1se):"))
-    print(lasso.nonZero.variables.lambda.1se)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda manual):"))
+    # print(lasso.nonZero.variables.lambda.manual)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda min):"))
+    # print(lasso.nonZero.variables.lambda.min)
+    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda 1se):"))
+    # print(lasso.nonZero.variables.lambda.1se)
     
-    # ^This is just a concept demo; we can now store these in tables/text files from here as needed.
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.manual)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.manual)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.manual)),
+                      "feature"=names(lasso.nonZero.variables.lambda.manual),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.manual))
+    lasso.features.lambda.manual <- rbind(lasso.features.lambda.manual,tmp)
     
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.min)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.min)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.min)),
+                      "feature"=names(lasso.nonZero.variables.lambda.min),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.min))
+    lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
+    
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.1se)),
+                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.1se)),
+                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.1se)),
+                      "feature"=names(lasso.nonZero.variables.lambda.1se),
+                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.1se))
+    lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
+
     #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
     lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
@@ -831,10 +861,12 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
 
 library("PMA")
 library("Hmisc")
+
+#TODO: UALAB coding causes problems! I removedit from diabetes
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
-clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","UALB","CR","ALCRU")
-#clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
 clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
 clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
@@ -842,24 +874,49 @@ clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","
 cca.corr.coefs <- c()
 patients <- unique(wear$iPOP_ID)
 
-#wear$LDL = as.numeric(wear$LDL)
+wear$AG = as.numeric(wear$AG)
+wear$AST = as.numeric(wear$AST)
+wear$TBIL = as.numeric(wear$TBIL)
+wear$HSCRP = as.numeric(wear$HSCRP)
+wear$IGM = as.numeric(wear$IGM)
+wear$LDL = as.numeric(wear$LDL)
+wear$TGL = as.numeric(wear$TGL)
 
+best.weigths = list(
+  Blood = c(0.7,0.7), # ~ 0.5
+  Inflammation = c(0.1,0.9), # ~ 0.37
+  Electrolytes = c(0.5,0.5), # ~ 0.12
+  Diabetes = c(0.1,0.7), # ~ 0.21
+  Cardiovascular.Disease = c(0.1,0.7), # ~ 0.24
+  'Liver Function' = c(0.3,0.7) # ~ 0.26
+)
+
+set.seed(0)
+results = c()
 for (nm in names(clinical.groups)){
   print(nm)
   # Remove rows with NAs
   data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
-  data.wear = wear[,which(colnames(wear) %in% wear.variables)]
+  data.wear = wear[,which(colnames(wear) %in% c(wear.variables))]
+  data.wear$AgeIn2016 = wear$AgeIn2016
+  
+  data.wear$male = wear$Gender == "M"
+  data.wear$ethnA = wear$Ethn == "A"
+  data.wear$ethnB = wear$Ethn == "B"
+  data.wear$ethnC = wear$Ethn == "C"
+  
   d <- cbind(data.clin, data.wear)
   d <- na.omit(d)
   iPOP.idx <- d[,1]
   d<-d[-1]
+
   # remove correlated columns
   tmp <- cor(d)
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
   d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
 
-  d = scale(d,scale = FALSE) # why scale it?
+  d = scale(d,center = TRUE, scale = TRUE) # center data
   indexX = c()
   indexY = c()
   
@@ -869,10 +926,29 @@ for (nm in names(clinical.groups)){
     test <- d[iPOP.idx %in% patients[i],,drop=FALSE]
     if (nrow(test) != 1){ #maybe make this > 0?
 
-  # build the CCA model
-  model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
-                train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1)
+  # scheme = c(1:3 / 4.0)
+  # pensx = rep(scheme, each=3)
+  # pensz = rep(scheme, times=3)
+      # pensx = best.weigths[[nm]][1]
+      # pensz = best.weigths[[nm]][2]
 
+      # pensx = c(0.1,0.4,0.7,0.1,0.5,0.1,0.1,0.1)
+      # pensz = c(0.1,0.4,0.7,0.9,0.1,0.3,0.5,0.9)
+      pensx = c(0.1,0.9,0.1,0.9)
+      pensz = c(0.1,0.9,0.9,0.1)
+      
+  # build the CCA model
+  model.cc.cv = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
+                             train[,1:(ncol(data.clin)-1)],
+                            trace = FALSE,
+                            standardize = FALSE,
+                            penaltyxs = pensx,
+                            penaltyzs = pensz)
+  model.cc = CCA(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
+                        train[,1:(ncol(data.clin)-1)],trace = FALSE,K=1,standardize = FALSE,
+                        penaltyx = model.cc.cv$bestpenaltyx,
+                        penaltyz = model.cc.cv$bestpenaltyz)
+      
   #plug in test data using coefficients from CCA model and compare right and left sides
   indexX = c(indexX, as.matrix(test[,(ncol(data.clin)):(ncol(test))]) %*% model.cc$u)
   indexY = c(indexY, as.matrix(test[,1:(ncol(data.clin)-1)]) %*% model.cc$v)
@@ -883,7 +959,8 @@ for (nm in names(clinical.groups)){
   #cca.corr.coefs <- rbind(cca.corr.coefs, c(nm, cca.corr, patients[i]))
     }
   }
-  cca.corr <- cor(indexX, indexY)
+  
+  cca.corr <- abs(cor(indexX, indexY))
   print(ggplot(data.frame(indexX = indexX, indexY = indexY),aes(indexX,indexY)) +
     weartals_theme +
     geom_point() +
@@ -891,19 +968,25 @@ for (nm in names(clinical.groups)){
     stat_summary(fun.data=mean_cl_normal) +
     geom_smooth(method='lm',formula=y~x))
   print(cca.corr)
+  results = c(results, cca.corr)
 }
+df.res = data.frame(name = names(clinical.groups), cor = results)
+
 # library(dplyr)
 # data <- (cca.corr.coefs %>%
 #                        group_by(nm) %>% 
 #                        summarise_at(vars("cca.corr"), funs(mean,sd)))
-ggplot(data, aes(x=nm, y=mean)) +
+df.res = df.res[order(-df.res$cor),]
+df.res$name = factor(as.character(df.res$name), levels = as.character(df.res$name))
+
+p=ggplot(df.res, aes(x=name, y=cor)) +
   theme(legend.title = element_blank()) +
-  geom_point() +
-  theme(axis.title=element_text(face="bold",size="12"),axis.text=element_text(size=12,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(angle = 60, hjust = 1)) +
-  #ylim(0,0.5) +
+  geom_point(size=3, shape =1) +
+  weartals_theme + 
+  ylim(0,0.5) +
   labs(x = "Physiology Subsets", y ="Correlation Coefficient")
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
+ggsave(paste0("plots/Figure2E.png"),p,width=5,height=4)
 
 ##############
 #  Figure 3A #
@@ -1408,22 +1491,322 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
         axis.text.y = element_text(hjust = 1))
   #ylim(0,0.5)
   
-###############
-# Figure 4A-B #
-###############
-source("individual-models-ipop.R") # this script automatically generates plots in "plots" directory
+############
+# Figure 4 #
+############
+## Figure 4A: Check how individual means perform
+# The following script cross-validates by taking one observation from each
+# patient with at least 4 observations. The model simply 
+
+generate4A = function(dataset, threshold = 4, cap = 10){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf4A = iPOPcorDf
+    test.names = allClin
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf4A = corDf
+    test.names = intersect(allClin,colnames(corDf4A))
+  }
+  
+  res.meanpred = c()
+  for (test.name in test.names){
+    corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
+    ids = sort(table(corDf.tmp[[identifier]]))
+    atleastafew = names(ids[ids >= threshold]) # select patients with at least 10 tests
+    atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
+    corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
+    testids = c()
+
+    # compute correlation if we have at least 10 patients 
+    if (length(atleastafew) > 10){
+      # Select the last observation from each patient who qualified (at least n0 obs)
+      for (id in atleastafew){
+        lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
+        testids = c(testids, lastvisit )
+      }
+    
+      # Build individual models and check correlation predicted vs true
+      # model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
+      model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
+      preds = predict(model, newdata = corDf.tmp[testids,])
+
+      # Correlation
+      # res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
+      
+      # Sqrd root of variance explained
+      var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
+      var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
+      if (test.name=="GLOB")
+        plot(corDf.tmp[testids,test.name], preds)
+      res.meanpred = c(res.meanpred, sqrt(1 - var.exp/var.null) )
+    }
+    else {
+      res.meanpred = c(res.meanpred, 0)
+    }
+  }
+  res = data.frame(test = as.character(test.names), value = res.meanpred)
+  res = res[order(-res$value),]
+  res$test = factor(as.character(res$test), levels = as.character(res$test))
+  ggplot(res, aes(test, value)) + geom_point(size = 3, shape=1) +
+    ylab(expression(sqrt("Variance explained"))) +
+    xlab("Lab test") +
+    weartals_theme + 
+    theme(text = element_text(size=14))
+  ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
+}
+generate4A("iPOP",cap = 100)
+generate4A("30k",threshold = 5, cap = 100)
+
+## Figure 4B: Individual models Lab ~ Vital
+generate4B = function(clin,vit,dataset = "30k"){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  
+  # Here we select people with the largest number of observations
+  # toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
+  
+  # Alternatively, we can select a few ANNON_ID
+  if (dataset == "iPOP")
+    toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
+  else
+    toppat = c("N-3691","PD-2191","D-4185","PD-9342","PD-176")
+  
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vit,clin)]
+  
+  # Use loess to estimate the population model
+  frm = paste0(clin," ~ ",vit)
+  ww = loess(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
+  ff = approxfun(grid, predict(ww,grid))
+  
+  # Compute R for individual models
+  dd$accuracy = dd[[identifier]]
+  for (pat in toppat){
+    cat(paste("Building a model for",pat,"\n"))
+    frm = paste0(clin," ~ ",vit," + ",vit,"^2")
+    corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
+    corDf.ind = corDf.ind[!is.na(corDf.ind[,vit]),]
+    
+    # Var explained (CV)
+    errors = c()
+    for (i in 1:20){
+      testids = sample(nrow(corDf.ind))[1:floor(nrow(corDf.ind)*0.8)]
+      model = lm(frm, data = corDf.ind[-testids,])
+      preds = predict(model, newdata = corDf.ind[testids,])
+      var.exp = sum( (corDf.ind[testids,clin] - preds) ** 2)
+      var.null = sum( (corDf.ind[,clin] - mean(corDf.ind[,clin])) ** 2)
+      err = max(1 - var.exp / var.null,0)
+      errors = c(errors, sqrt(err))
+    }
+    err = mean(errors)
+
+    # Correlation
+    # model.sum = summary(model)
+    # err = sqrt(model.sum$r.squared)
+    
+    dd[dd[[identifier]] == pat,]$accuracy = paste0(pat," (r=",sprintf("%.1f", err),")")
+  }
+  
+  # Plot individual models with accuracies
+  ggplot(dd, aes_string(vit, clin, group = "accuracy", colour = "accuracy")) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    #  geom_point(size=0) + 
+    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1, fill=NA) +
+    stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
+  ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
+}
+generate4B("MONOAB","Pulse","iPOP")
+generate4B("MONOAB","Pulse","30k")
+
+generate4C = function(clin,vit,dataset = "30k"){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+    tocmp = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
+    lims = c(0.2, 0.8) # THESE LIMITS ARE FOR MONOAB
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+    tocmp = c("D-4185", "PD-176")
+    lims = c(130,145) # THESE LIMITS ARE FOR MONOAB
+  }
+
+    dd = corDf.tmp[,c(clin,vit,identifier)]
+  print(dd)
+
+  # Use loess to estimate the population model
+  frm = paste0(clin," ~ ",vit)
+  ww = loess(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
+  ff = approxfun(grid, predict(ww,grid))
+
+  for (i in 1:2){
+    ggplot(dd[dd[[identifier]] == tocmp[i],], aes_string(vit, clin)) + 
+      weartals_theme + theme(text = element_text(size=25)) +
+      geom_point(size=2) + 
+      geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1) +
+      xlim(c(40,110)) + # THESE LIMITS ARE FOR PULSE
+      ylim(lims) + 
+      stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
+    ggsave(paste0("plots/Figure-4C-",i,"-",dataset,".png"))
+  }
+}
+generate4C("MONOAB","Pulse","30k")
+generate4C("MONOAB","Pulse","iPOP")
+
+library("grid")
+
+generate4D = function(dataset){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf
+  }
+  
+  png(paste0("plots/Figure-4D-",dataset,".png"),height=300,width=1500,units="px")
+  grid.newpage()
+  pushViewport(viewport(layout = grid.layout(2, 5)))
+  
+  ## Distribution of slopes in individual models
+  # !! Only patients with at least min_visits = 10
+  min_visits = 10
+  top.vars = c("NEUT","LYM","BASO","MONO","EOS")
+  vits = c("Temp","Pulse")
+  
+  for (i in 1:length(top.vars)){
+    for (j in 1:2){
+      vit = vits[j]
+      clin = top.vars[i]
+      #2*(i - 1) + j + 1
+      #matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      patients.tmp = sort(table(corDf.tmp[!is.na(corDf.tmp[[clin]]),][[identifier]]))
+      corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% names(patients.tmp[patients.tmp > min_visits]),]
+      if (nrow(corDf.tmp) > 2){
+        frm = paste0(clin," ~ ",vit," + (",vit,"|",identifier,")")
+        print(frm)
+        mm = lmer(frm, data = corDf.tmp)
+        cf = coef(mm)
+        qq = qplot(cf[[identifier]][vit], geom="histogram")  + weartals_theme + xlab(paste0(clin," ~ ",vit)) + ylab("count")
+        print(qq, vp = viewport(layout.pos.row = j, layout.pos.col = i))
+      }
+    }
+  }
+  dev.off()
+}
+generate4D("iPOP")
+generate4D("30k")
 
 ###############
-# Figure 4C #
+#  Figure 5A #
 ###############
-source("individual-models-30k.R") # this script automatically generates plots in "plots" directory
+# Visits vs R^2
+generate5A = function(clin,dataset = "30k",cap=200){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Temp"]]),]
+  
+  # Here we select people with the largest number of observations
+  toppat = table(corDf.tmp[[identifier]])
+  toppat = toppat[toppat > 10]
+  toppat = names(toppat)
+  toppat = toppat[1:min(cap,length(toppat))]
+  
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin)]
+  
+  # Compute R for individual models
+  res = c()
+  for (pat in toppat){
+    frm = paste0(clin," ~ Pulse + Pulse^2 + Temp + Temp^2")
+    
+    # Crossval
+    allpreds = c()
+    for (i in 1:10){
+      ind.data = dd[dd[[identifier]] == pat,]
+      nsmpl = nrow(ind.data)
+      test.idx = sample(nsmpl)[1:floor(0.8 * nsmpl)]
+      model = lm(frm, data = ind.data[test.idx,])
+      preds = predict(model,ind.data[-test.idx,])
+      
+      allpreds = rbind(allpreds, cbind(ind.data[-test.idx,clin], preds))
+    }
+    
+    err = cor(allpreds[,1],allpreds[,2])
+    res = rbind(res, c(sum(dd[[identifier]] == pat),err))
+  }
+  dres = data.frame(visits = res[,1], r = res[,2])
+  ggplot(dres, aes(visits, r)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_point(size=2) + 
+    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1)
+  ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
+}
+generate5A("MONOAB","30k",cap=100)
 
 ###############
-#   Figure 4D #
+#  Figure 5B #
+###############
+# Temporal evolution of the estimate of the mean
+generate5B = function(clin,vit,dataset = "30k",window=50){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[[vit]]),]
+
+  # Here we select people with the largest number of observations
+  toppat = table(corDf.tmp[[identifier]])
+  toppat = names(sort(-toppat))[1]
+
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat, c(identifier,"Clin_Result_Date",vit,clin)]
+  
+  dates = c()
+  slopes = c()
+  for (i in (window+1):nrow(dd)){
+    model = lm(formula(paste(clin,"~",vit)), data = dd[(i-window):i, ])
+    slopes = c(slopes, model$coefficients[1])
+    dates = c(dates, dd$Clin_Result_Date[i])
+  }
+  
+  dres = data.frame(date = as.POSIXct(dates), slope = slopes)
+  ggplot(dres, aes(date, slope)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    #  geom_smooth(method="loess", size=1) +
+    geom_point(size=2) 
+  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,".png"),width = 9,height = 6,units = "in")
+}
+generate5B("MONOAB","Pulse","30k",window = 50)
+
+###############
+#   Figure 5 #
 ###############
 # run after reading in and cleaning data and running Figure 2D section to get top.names
 
-library(lme4)
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
 #corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")

@@ -18,27 +18,26 @@ print("Building 4A plots")
 # Mixed-effect model
 
 # TODO: Are these the right tables?
-labs.wear.full = merge(iPOPcorDf,wear,by = c("iPOP_ID","Clin_Result_Date"))
-
 m1.lme4 = lmer(GLU ~ 1 + rhr_mean + st_mean + (rhr_mean|iPOP_ID),
-               data = labs.wear.full)
+               data = wear)
 MuMIn::r.squaredGLMM(m1.lme4) # random effect explaines a lot
 
-## Check how individual means perform
-test.name = "NEUT"
-model = lm(paste(test.name,"~ iPOP_ID"), data=labs.wear.full,na.action = na.omit)
+## True vs predicted plot
+test.name = "GLU"
 png(paste("plots/",test.name,"-individual.png",sep=""))
-plot(model$fitted.values, labs.wear.full[[test.name]][!is.na(labs.wear.full[[test.name]])],
+plot(model$fitted.values, wear[[test.name]][!is.na(wear[[test.name]])],
      xlab=paste("Predicted",test.name),ylab=paste("True",test.name))
 dev.off()
-cor(model$fitted.values, labs.wear.full[[test.name]][!is.na(labs.wear.full[[test.name]])])
+cor(model$fitted.values, wear[[test.name]][!is.na(wear[[test.name]])])
+
+
 
 ################################
 ## Figure 4B: Individual fits ##
 ################################
 print("Building 4B plots")
 # Only ppl with some matching wearables
-labs.wear = labs.wear.full[!is.na(labs.wear.full$lowAct_gsr_kurtosis),] # with full obs
+labs.wear = wear[!is.na(wear$lowAct_gsr_kurtosis),] # with full obs
 top.names = names(sort(-table(labs.wear$iPOP_ID)))[1:3] # 3ppl with largest numbers of obs
 labs.wear.top = labs.wear[labs.wear$iPOP_ID %in% top.names,]
 
