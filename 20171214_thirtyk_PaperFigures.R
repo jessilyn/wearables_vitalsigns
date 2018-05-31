@@ -769,15 +769,19 @@ num.Records <- as.data.frame(num.Records)
 num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs), 
                          TestObs = as.numeric(TestObs))
 
+# The code below is outdated, see 20180522_Fig2C_NoDemog.R
 # Plot the % var explained
-ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+# ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+#   weartals_theme +
+#   ylim(0,1) +
+#   scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+#                        labels=c("LM vitals", "LASSO", "RF")) +
+#   scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+#                        labels=c("LM vitals", "LASSO", "RF")) +
+#   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+
+#### CURRENT 2C Figure in Paper is located in: 20180522_Fig2C_NoDemog.R "
+## Not sourced into this code yet because contains with and without demographics, and isnt cleaned up yet.
 
 # store the results
 write.table(num.Records, "../SECURE_data/20180530/20180530_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
@@ -796,13 +800,29 @@ write.table(rf.features.lambda.manual, "../SECURE_data/20180530/20180530_Dayprio
 write.table(rf.features.lambda.1se, "../SECURE_data/20180530/20180530_Dayprior_noDemog_RF_FeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(rf.features.lambda.min, "../SECURE_data/20180530/20180530_Dayprior_noDemog_RF_FeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
+###
+# Plot the top Lasso and RF top features
 
-# write.table(rf.num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_RF_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-# write.table(lasso.num.Records, "../SECURE_data/20180507/20180507_Dayprior_LASSO_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-# ^Objects not found/created.
+lasso.features.lambda.manual <- read.csv("../SECURE_data/20180530/20180530_Dayprior_LassoFeaturesLambdaManual.csv",
+                                         header=FALSE,sep=',',stringsAsFactors=FALSE)
+colnames(lasso.features.lambda.manual) <- c("test", "cv.run", "left.out.person", "lasso.feature",
+                                            "lasso.coef.value")
+lasso.feature.summaries <- as.data.frame(summarise(group_by(lasso.features.lambda.manual, test, lasso.feature),
+          mean=mean(lasso.coef.value), sd=sd(lasso.coef.value)))
 
-#### CURRENT 2C Figure in Paper is located in: 20180522_Fig2C_NoDemog.R "
-## Not sourced into this code yet because contains with and without demographics, and isnt cleaned up yet.
+# pick top 10 features from each test
+top.features <- as.data.frame(lasso.feature.summaries %>% 
+  group_by_(~ test) %>% 
+  top_n(n = 10, wt = abs(mean)))
+
+# figure below is probably better served with a table given the dramatically different scales for the different tests
+ggplot(top.features, aes(x=lasso.feature, y=mean, color = test)) + 
+  geom_point(size = 3, aes(color=test)) +
+  weartals_theme +
+  scale_color_discrete(breaks=unique(top.features$test),
+                       labels=unique(top.features$test)) +
+  labs(x = "Model Features",y = expression(paste("Coefficient")))+
+  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 
 ####################################
 #   Figure 2C Timecourse / 5 (??)  #
