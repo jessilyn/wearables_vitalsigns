@@ -332,14 +332,23 @@ lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors t
 rf.val.pred.lambda.1se <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 num.Records <- c()
 lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
-                                           "left.out.person"=character(),"feature"=character(),
-                                           "coef.value"=character())
+                                           "left.out.person"=character(),"lasso.feature"=character(),
+                                           "lasso.coef.value"=character())
 lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"feature"=character(),
-                                        "coef.value"=character())
+                                        "left.out.person"=character(),"lasso.feature"=character(),
+                                        "lasso.coef.value"=character())
 lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"feature"=character(),
-                                        "coef.value"=character())
+                                        "left.out.person"=character(),"lasso.feature"=character(),
+                                        "lasso.coef.value"=character())
+rf.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
+                                           "left.out.person"=character(),"rf.feature"=character(),
+                                           "rf.coef.value"=character())
+rf.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"rf.feature"=character(),
+                                        "rf.coef.value"=character())
+rf.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
+                                        "left.out.person"=character(),"rf.feature"=character(),
+                                        "rf.coef.value"=character())
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
@@ -379,35 +388,29 @@ for (k in 1:length(patients)){
     factors.lambda.1se <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.1se)]
     lasso.nonZero.variables.lambda.1se = factors.lambda.1se[abs(factors.lambda.1se)!=0]
     
-    #print all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
-    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda manual):"))
-    # print(lasso.nonZero.variables.lambda.manual)
-    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda min):"))
-    # print(lasso.nonZero.variables.lambda.min)
-    # print(paste("Extracted non-zero coefficients for",top.names[l],"model (lambda 1se):"))
-    # print(lasso.nonZero.variables.lambda.1se)
+    ## pull out features from lasso models ##
     
     tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.manual)),
                       "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.manual)),
                       "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.manual)),
-                      "feature"=names(lasso.nonZero.variables.lambda.manual),
-                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.manual))
+                      "lasso.feature"=names(lasso.nonZero.variables.lambda.manual),
+                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.manual))
     lasso.features.lambda.manual <- rbind(lasso.features.lambda.manual,tmp)
     
     tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.min)),
                       "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.min)),
                       "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.min)),
-                      "feature"=names(lasso.nonZero.variables.lambda.min),
-                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.min))
+                      "lasso.feature"=names(lasso.nonZero.variables.lambda.min),
+                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.min))
     lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
     
     tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.1se)),
                       "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.1se)),
                       "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.1se)),
-                      "feature"=names(lasso.nonZero.variables.lambda.1se),
-                      "coef.value"=as.numeric(lasso.nonZero.variables.lambda.1se))
+                      "lasso.feature"=names(lasso.nonZero.variables.lambda.1se),
+                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.1se))
     lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
-
+    
     #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
     lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
@@ -514,6 +517,34 @@ for (k in 1:length(patients)){
     } else {
       # rf.val.pred.lambda.1se[[l]] = NA # fill with NA if invalid model was supplied
     }
+    
+    ## pull out features from rf models ##
+    # Ryan: why are these 3 below different? they shouldn't be dependent on the lasso outcomes...
+    rf.lambda.manual.features <- as.matrix(importance(rf.model.lambda.manual)[order(importance(rf.model.lambda.manual), decreasing=TRUE),])
+    rf.lambda.min.features <- as.matrix(importance(rf.model.lambda.min)[order(importance(rf.model.lambda.min), decreasing=TRUE),])
+    rf.lambda.1se.features <- as.matrix(importance(rf.model.lambda.1se)[order(importance(rf.model.lambda.1se), decreasing=TRUE),])
+    
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.manual.features)),
+                      "cv.run"=rep(k,length(rf.lambda.manual.features)),
+                      "left.out.person"=rep(patients[k],length(rf.lambda.manual.features)),
+                      "rf.feature"=unlist(dimnames(rf.lambda.manual.features)),
+                      "rf.coef.value"=as.data.frame(rf.lambda.manual.features)$V1)
+    rf.features.lambda.manual <- rbind(rf.features.lambda.manual,tmp)
+    
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.min.features)),
+                      "cv.run"=rep(k,length(rf.lambda.min.features)),
+                      "left.out.person"=rep(patients[k],length(rf.lambda.min.features)),
+                      "rf.feature"=unlist(dimnames(rf.lambda.min.features)),
+                      "rf.coef.value"=as.data.frame(rf.lambda.min.features)$V1)
+    rf.features.lambda.min <- rbind(rf.features.lambda.min,tmp)
+    
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.1se.features)),
+                      "cv.run"=rep(k,length(rf.lambda.1se.features)),
+                      "left.out.person"=rep(patients[k],length(rf.lambda.1se.features)),
+                      "rf.feature"=unlist(dimnames(rf.lambda.1se.features)),
+                      "rf.coef.value"=as.data.frame(rf.lambda.1se.features)$V1)
+    rf.features.lambda.1se <- rbind(rf.features.lambda.1se,tmp)
+    
     
     # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
     # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
@@ -758,9 +789,9 @@ write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180530/20180530_pct_var_Dayp
 write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180530/20180530_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
 write.table(num.Records, "../SECURE_data/20180530/20180530_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(num.Records.check, "../SECURE_data/20180530/20180530_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.manual, "../SECURE_data/20180530/20180530_Dayprior_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.1se, "../SECURE_data/20180530/20180530_Dayprior_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.min, "../SECURE_data/20180530/20180530_Dayprior_nLassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.manual, "../SECURE_data/20180530/20180530_Weekprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.1se, "../SECURE_data/20180530/20180530_Weekprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.min, "../SECURE_data/20180530/20180530_Weekprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 
 # write.table(rf.num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_RF_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
