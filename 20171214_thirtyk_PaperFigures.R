@@ -758,6 +758,11 @@ write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180530/20180530_pct_var_Dayp
 write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180530/20180530_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
 write.table(num.Records, "../SECURE_data/20180530/20180530_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(num.Records.check, "../SECURE_data/20180530/20180530_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.manual, "../SECURE_data/20180530/20180530_Dayprior_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.1se, "../SECURE_data/20180530/20180530_Dayprior_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.min, "../SECURE_data/20180530/20180530_Dayprior_nLassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+
+
 # write.table(rf.num.Records.check, "../SECURE_data/20180507/20180507_Dayprior_RF_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 # write.table(lasso.num.Records, "../SECURE_data/20180507/20180507_Dayprior_LASSO_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 # ^Objects not found/created.
