@@ -242,7 +242,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
-top.names<-c("MONOAB", "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
+#top.names<-c("MONOAB", "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
 
 ####
 # CODE FOR SIMPLE LM
@@ -784,21 +784,21 @@ num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
 ## Not sourced into this code yet because contains with and without demographics, and isnt cleaned up yet.
 
 # store the results
-write.table(num.Records, "../SECURE_data/20180530/20180530_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(fig.2c.df.lambda.manual, "../SECURE_data/20180530/20180530_pct_var_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.manual, "../SECURE_data/20180530/20180530_corr_coefs_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.df.lambda.min, "../SECURE_data/20180530/20180530_pct_var_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.min, "../SECURE_data/20180530/20180530_corr_coefs_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180530/20180530_pct_var_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180530/20180530_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(num.Records, "../SECURE_data/20180530/20180530_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(num.Records.check, "../SECURE_data/20180530/20180530_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.manual, "../SECURE_data/20180530/20180530_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.1se, "../SECURE_data/20180530/20180530_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.min, "../SECURE_data/20180530/20180530_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.manual, "../SECURE_data/20180530/20180530_Dayprior_noDemog_RF_FeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.1se, "../SECURE_data/20180530/20180530_Dayprior_noDemog_RF_FeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.min, "../SECURE_data/20180530/20180530_Dayprior_noDemog_RF_FeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records, "../SECURE_data/20180531/20180531_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(fig.2c.df.lambda.manual, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.corr.coefs.lambda.manual, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.df.lambda.min, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.corr.coefs.lambda.min, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180531/20180531_pct_var_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.table(num.Records, "../SECURE_data/20180531/20180531_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records.check, "../SECURE_data/20180531/20180531_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.1se, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features.lambda.1se, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 ###
 # Plot the top Lasso and RF top features
