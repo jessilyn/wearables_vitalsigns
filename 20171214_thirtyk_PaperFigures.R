@@ -821,7 +821,7 @@ ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) +
                           name="Model") 
 
 ###
-# Calculate difference between 
+# Calculate difference between top models with and without demographics
 
 ###
 # Plot the top Lasso and RF top features
