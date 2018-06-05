@@ -1577,6 +1577,48 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
 
+getLMresults= function(corDf4A, test.name, threshold, identifier, cap, extra_coefs){
+  corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
+  ids = sort(table(corDf.tmp[[identifier]]))
+  atleastafew = names(ids[ids >= threshold]) # select patients with at least 10 tests
+  atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
+  corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
+  testids = c()
+  
+  # compute correlation if we have at least 10 patients 
+  if (length(atleastafew) > 10){
+    # Select the last observation from each patient who qualified (at least n0 obs)
+    for (id in atleastafew){
+      lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
+      testids = c(testids, lastvisit )
+    }
+    
+    # Build individual models and check correlation predicted vs true
+    # model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
+    
+    frm = paste(test.name,"~",identifier,extra_coefs)
+    print(frm)
+    model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
+    preds = predict(model, newdata = corDf.tmp[testids,])
+    
+    # Correlation
+    # res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
+    
+    # Sqrd root of variance explained
+    var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
+    var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
+    if (test.name=="GLOB")
+      plot(corDf.tmp[testids,test.name], preds)
+    res = sqrt(1 - var.exp/var.null)
+  }
+  else {
+    res = 0
+  }
+  res
+}
+
 generate4A = function(dataset, threshold = 4, cap = 10){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
@@ -1589,54 +1631,35 @@ generate4A = function(dataset, threshold = 4, cap = 10){
     test.names = intersect(allClin,colnames(corDf4A))
   }
   
-  res.meanpred = c()
+  res.values = c()
+  res.models = c()
+  res.tests = c()
+  
   for (test.name in test.names){
-    corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
-    ids = sort(table(corDf.tmp[[identifier]]))
-    atleastafew = names(ids[ids >= threshold]) # select patients with at least 10 tests
-    atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
-    corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
-    testids = c()
-
-    # compute correlation if we have at least 10 patients 
-    if (length(atleastafew) > 10){
-      # Select the last observation from each patient who qualified (at least n0 obs)
-      for (id in atleastafew){
-        lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
-        testids = c(testids, lastvisit )
-      }
+    models = list()
+    models[["personal mean"]] = ""
+    models[["vitals + personal mean"]] = " + Temp + Pulse"
     
-      # Build individual models and check correlation predicted vs true
-      # model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
-      model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
-      preds = predict(model, newdata = corDf.tmp[testids,])
 
-      # Correlation
-      # res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
-      
-      # Sqrd root of variance explained
-      var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
-      var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
-      if (test.name=="GLOB")
-        plot(corDf.tmp[testids,test.name], preds)
-      res.meanpred = c(res.meanpred, sqrt(1 - var.exp/var.null) )
-    }
-    else {
-      res.meanpred = c(res.meanpred, 0)
+    for (mdl in names(models)){
+      res.tests  = c(res.tests, test.name)
+      res.values = c(res.values, getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]]))
+      res.models = c(res.models, mdl)
     }
   }
-  res = data.frame(test = as.character(test.names), value = res.meanpred)
+  res = data.frame(test = res.tests, model = res.models, value = res.values)
+  print(res)
   res = res[order(-res$value),]
-  res$test = factor(as.character(res$test), levels = as.character(res$test))
-  ggplot(res, aes(test, value)) + geom_point(size = 3, shape=1) +
+  res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
+  ggplot(res, aes(test, value, group = model, color = model)) + geom_point(size = 3, shape=1, aes(fill = model)) +
     ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
     weartals_theme + 
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
 }
-generate4A("iPOP",cap = 100)
-generate4A("30k",threshold = 5, cap = 100)
+#generate4A("iPOP",cap = 100)
+generate4A("30k",threshold = 5, cap = 50)
 
 ## Figure 4B: Individual models Lab ~ Vital
 generate4B = function(clin,vit,dataset = "30k"){
