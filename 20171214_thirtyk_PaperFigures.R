@@ -804,10 +804,10 @@ withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180
                       header=TRUE,sep=',',stringsAsFactors=FALSE)
 noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+noDemog[is.na(noDemog)] <- 0; withDemog[is.na(withDemog)] <- 0
 withDemog$demog <-"withDemog"
 noDemog$demog <- "noDemog"
 df <- melt(rbind(withDemog, noDemog))
-df[is.na(df)] <- 0
 test_levels <- df[order(-df$value),][,1] # reorder by best best first
 df$test <- factor(df$test, levels = test_levels)
 ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) + 
@@ -822,6 +822,9 @@ ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) +
 
 ###
 # Calculate difference between top models with and without demographics
+model.diff <-max()
+demog.diff <- withDemog[,2:4] - noDemog[,2:4]
+demog.diff[order(demog.diff$vitals, decreasing=TRUE),]
 
 ###
 # Plot the top Lasso and RF top features
