@@ -164,8 +164,8 @@ corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers)
 
 ### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
 # wear2<-wear
-# wear[,-c(1:6)] <- sapply(wear[,-c(1:6)], as.numeric)
-# wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
+ wear[,-c(1:6)] <- sapply(wear[,-c(1:6)], as.numeric)
+ wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
 
 ## merge iPOP and demographics
 iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
@@ -176,41 +176,42 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-###############################
-# Fig 1B, left, middle, right #
-###############################
+###############################################
+#  Figure 1B  - see 20180427_Fig1D_analysis.R #
+###############################################
+
+##########
+# Fig 1C #
+##########
 hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=20,
      xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
-     xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
      xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
+hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
+     xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 mean(iPOPdaysMonitored$Total_NumOfClinMeasures)
 mean(iPOPdaysMonitored$Days_monitored_by_clinic)
 
 ###############
-# Fig 1C, top #
+# Fig 1D  top #
 ###############
-
 hist(iPOPvitals$Pulse, col="darkred", breaks=50,
      xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
-
 hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
 
-################################################
-#  Figure 1C Bottom - see Ryans_Figure1_Code.R #
-################################################
+#####################
+#  Figure 1D Bottom #
+#####################
 dfFigOneC <- fread(paste0("/Users/jessilyn/Desktop/framework_paper/Figure1/Fig1C/Ryans_input_files/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20170928.csv"),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
 hist(dfFigOneC$Heart_Rate, col="darkred", breaks=100,
      xlab = "wHR",
      main = NULL, font.lab=2,lwd=2,font=2)
-
 hist(dfFigOneC$Skin_Temperature_F, col="darkgrey", breaks=100,
      xlab = "wTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
@@ -220,23 +221,17 @@ length(na.omit(iPOPvitals$Temp)) + length(na.omit(iPOPvitals$Pulse)) # total num
 describe(iPOPlabs[names(iPOPlabs) %in% allClin]) # summary of clinical labs data
 length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
-###############################################
-#  Figure 1D  - see 20180427_Fig1D_analysis.R #
-###############################################
-
 #############################
 #    Suppl. Table 1A and B  #
 #############################
-
 # make table for vitals (Suppl. Table 1A)
 #describe(iPOPvitals)
-
 # make table for labs
 #describe(iPOPlabs)
 
 
 ###############
-#  Figure 2C  #
+#  Figure 2D  #
 ###############
 
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
@@ -378,6 +373,7 @@ for (k in 1:length(patients)){
                         standardize.response=FALSE,
                         family="gaussian",
                         nfolds=n,
+                        # add in foldid here
                         nlambda=100)
     
     #store all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
@@ -850,87 +846,6 @@ ggplot(top.features, aes(x=lasso.feature, y=mean, color = test)) +
   labs(x = "Model Features",y = expression(paste("Coefficient")))+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 
-####################################
-#   Figure 2C Timecourse / 5 (??)  #
-####################################
-#Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
-weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
-# read in each of the corr_coeffs from the different time windows
-# had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
-# save as pdf 4x12.5"
-# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
-#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-fig.2c.df <-read.csv("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-fig.2c.plot <- melt(fig.2c.df)
-fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c$test <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
-fig.2c$test = factor(fig.2c$test, levels = order(-fig.2c.plot[,3]))
-
-# Plot the % var explained
-ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
-
-
-### THE PART BELOW IS UNDER CONSTRUCTION
-# Look at differences between DayPrior and AllData
-data.allData <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180503_pct_var_Dayprior.csv",
-                          header=TRUE,sep=',',stringsAsFactors=FALSE)
-data.dayPrior <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-#data.dayPrior$model<- gsub("vitals", "vitals.ipop", data$model)
-#data$r_squared <- pmax(data$r_squared, 0)
-#data.nodemog$r_squared <- pmax(data$r_squared, 0)
-#df <- merge(data.dayPrior, data.allData, by = c("model", "test"))
-#colnames(df)[3:4] <- c("DayPrior", "AllData")
-df <- data.dayPrior[,3:4] - data.allData[,3:4]
-df2 <- melt(df)
-df2<- df2[order(-df2$value),]
-df2<-cbind(data.dayPrior[,1], df2)
-colnames(df2)<-c("test", "model", "pct.var")
-ggplot(df2, aes(test,pct.var, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("rf", "lasso"),
-                       labels=c("RF", "LASSO")) +
-  scale_color_discrete(breaks=c("rf", "lasso"),
-                       labels=c("RF", "LASSO")) +
-  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by using Day Prior vs All Watch Data"))))
-
-### THE PART BELOW IS UNDER CONSTRUCTION
-# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
-# can we create one more layer of mixed effects models in the iPOP analysis here?
-
-# Look at differences between with and without demog
-data.nodemog <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_TwoWeekPrior.csv",
-                          header=TRUE,sep=',',stringsAsFactors=FALSE)
-data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_TwoWeekPrior_demog.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-data$model<- gsub("vitals", "vitals.ipop", data$model)
-#data$r_squared <- pmax(data$r_squared, 0)
-#data.nodemog$r_squared <- pmax(data$r_squared, 0)
-df <- merge(data, data.nodemog, by = c("model", "test"))
-colnames(df)[3:4] <- c("r_w_demog", "r_no_demog")
-df$delta <- df[,3] - df[,4]
-df<- df[order(-df$delta),]
-
-ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
-
-
-
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
 ################################################
@@ -944,7 +859,7 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
 library("PMA")
 library("Hmisc")
 
-#TODO: UALAB coding causes problems! I removedit from diabetes
+#TODO: UALAB coding causes problems! I removed it from diabetes
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
@@ -1096,9 +1011,21 @@ length(na.omit(vitals$Temp)) + length(na.omit(vitals$Pulse)) # total number of c
 #304 people have more than 50 observations per person
 length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 
-########################
-#  Figure 3A 3D and 3E #
-########################
+##############
+#  Figure 3B #
+##############
+
+hist(corDf$Pulse, col="darkred", breaks=100,
+     xlab = "cHR",
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+hist(corDf$Temp, col="darkgrey", breaks=100,
+     xlab = "cTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+##############
+#  Figure 3C #
+##############
 #30 K Univariate Correlation Fit Plots by Lukasz/Jessie
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
 allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
@@ -1220,18 +1147,6 @@ p <- grid.arrange(grobs=plots1,ncol=5)
 p2 <- grid.arrange(grobs=plots2,ncol=5)
 as.matrix(r.squared)
 
-
-##############
-#  Figure 3B #
-##############
-
-hist(corDf$Pulse, col="darkred", breaks=100,
-     xlab = "cHR",
-     main = NULL, font.lab=2,lwd=2,font=2)
-
-hist(corDf$Temp, col="darkgrey", breaks=100,
-     xlab = "cTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
 
 #####################
 #  Figure 3F and 3G #
@@ -1867,6 +1782,86 @@ generate5A = function(clin,dataset = "30k",cap=200){
   ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
 }
 generate5A("CHOL","30k",cap=100)
+
+#####################################
+#   Figure 5A (Timecourse from 2D)  #
+#####################################
+
+#Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
+weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+# read in each of the corr_coeffs from the different time windows
+# had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
+# save as pdf 4x12.5"
+# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
+#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+fig.2c.df <-read.csv("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
+                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+fig.2c.plot <- melt(fig.2c.df)
+fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c$test <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c$test = factor(fig.2c$test, levels = order(-fig.2c.plot[,3]))
+
+# Plot the % var explained
+ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+  weartals_theme +
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
+
+
+### THE PART BELOW IS UNDER CONSTRUCTION
+# Look at differences between DayPrior and AllData
+data.allData <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180503_pct_var_Dayprior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data.dayPrior <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
+                           header=TRUE,sep=',',stringsAsFactors=FALSE)
+#data.dayPrior$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+#df <- merge(data.dayPrior, data.allData, by = c("model", "test"))
+#colnames(df)[3:4] <- c("DayPrior", "AllData")
+df <- data.dayPrior[,3:4] - data.allData[,3:4]
+df2 <- melt(df)
+df2<- df2[order(-df2$value),]
+df2<-cbind(data.dayPrior[,1], df2)
+colnames(df2)<-c("test", "model", "pct.var")
+ggplot(df2, aes(test,pct.var, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  scale_color_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by using Day Prior vs All Watch Data"))))
+
+### THE PART BELOW IS UNDER CONSTRUCTION
+# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
+# can we create one more layer of mixed effects models in the iPOP analysis here?
+
+# Look at differences between with and without demog
+data.nodemog <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_TwoWeekPrior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_TwoWeekPrior_demog.csv",
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+data$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+df <- merge(data, data.nodemog, by = c("model", "test"))
+colnames(df)[3:4] <- c("r_w_demog", "r_no_demog")
+df$delta <- df[,3] - df[,4]
+df<- df[order(-df$delta),]
+
+ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
 
 ###############
 #  Figure 5B #
