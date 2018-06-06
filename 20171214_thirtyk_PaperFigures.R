@@ -13,14 +13,18 @@ library(MuMIn)
 library(Rmisc)
 library(gridExtra)
 library(grid)
-library(dplyr)
+library(dplyr) #plyr
 library(MASS)
 library("ggthemes")
 library(reshape2)
 library(randomForest)
 library("glmnet")
 library(lme4)
+require(fasttime) #fastPOSIXct
+require(lubridate)
+require(zoo) #rollapply
 
+source("ggplot-theme.R") 
 
 if(!dir.exists("plots")) dir.create("plots")
 
@@ -33,6 +37,10 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
   y[x > (qnt[2] + H)] <- NA
   y
 }
+
+fastDate <- function(x, tz=NULL)
+  #as.Date(fastPOSIXct(x, tz=tz))
+  as.Date(x, tz=tz)
 
 # Path to the directory with data
 dir = "../SECURE_data/"
@@ -177,9 +185,145 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-###############################################
-#  Figure 1B  - see 20180427_Fig1D_analysis.R #
-###############################################
+###############
+#  Figure 1B  #
+############### 
+# expanded analysis in 20180605_Fig1D_analysis.R in the whitecoat github directory
+df <- fread(paste0(dir, "/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
+                   header=TRUE,sep=",",stringsAsFactors = FALSE,
+                   select=c("Timestamp_Local","Heart_Rate","Skin_Temperature_F",
+                            "Steps","iPOP_ID")) # 38009228 observations
+df<-df[!is.na(df$iPOP_ID),] # only keep wearables data that has an associated iPOP ID; 
+df[,"Heart_Rate"] <- apply(df[,"Heart_Rate"], 2, remove_outliers) # clean data based on HR (TODO: later also clean on Skin Temp, Steps)
+df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
+# restrict to daytime values only (between 6am-10pm)
+#df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
+# df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local)
+# daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+# df <- daytime.df
+
+vitals <- iPOPvitals
+vitals$RECORDED_TIME<-as.Date(vitals$RECORDED_TIME, "%d-%b-%Y")
+colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
+windows=c(60) # define time windows with no steps for resting threshold (10,60,120, etc)
+
+dayPrior = FALSE
+
+for (window in windows){
+  restingDf <- c() 
+  restingDf.all <- list() # keep all resting data for boxplots later
+  maxsteps <- 1 #define max steps for resting threshold
+  indiv.means <- c()
+  indiv.sd <- c()
+  for(i in unique(df$iPOP_ID)){
+    print(i)
+    subDf <- df[which(df$iPOP_ID %in% i),] #pull data per individual
+    restingST<-c()
+    restingST <- rollapplyr(subDf$Steps, width=window, by=1, sum, partial=TRUE)
+    restingST[1:window-1]<-"NA" # remove 1st x observations because we dont know what happened prior to putting the watch on
+    restingST <- as.numeric(restingST)  # Expected warning: "In as.numeric(restingST) : NAs introduced by coercion"
+    restingDf <- subDf[restingST<maxsteps & !is.na(restingST)] # in the previous time window of X min plus the current minute,there are < maxsteps steps 
+    indiv.means[i] <- mean(restingDf$Heart_Rate, na.rm=TRUE) # mean RHR for all days/times for individual i
+    indiv.sd[i] <- sd(restingDf$Heart_Rate, na.rm=TRUE) # RHR var for all days/times for individual i
+    restingDf.all[[i]] <- restingDf # store all resting data for boxplots
+  }
+  
+  restingDf.all <- rbindlist(restingDf.all)
+  restingDf.all$Date <- as.Date(restingDf.all$Timestamp_Local)
+  restingDf.all <- restingDf.all[,c("iPOP_ID","Date","Heart_Rate","Skin_Temperature_F","Steps","Timestamp_Local")]
+  names(restingDf.all) <- c("iPOP_ID","Date","restingHR","restingSkinTemp","restingSteps","DateTime")
+  means.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), na.omit(mean)) 
+  sd.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), sd) 
+  
+  #Optional: use day-prior rather than day-of wearable data for comparison:
+  if(dayPrior){
+    restingDf.all$Date <- restingDf.all$Date + days(1)
+  }
+
+  restingDf.vitals <- merge(restingDf.all,vitals,by=c("iPOP_ID","Date"))
+  restingDf.vitals$DateTime<-as.POSIXct(restingDf.vitals$DateTime)
+  restingDf.vitals <- restingDf.vitals[order(restingDf.vitals$DateTime),] 
+  cols <- c("restingHR","restingSkinTemp","Pulse","Temp") #subset columns to convert
+  restingDf.vitals[,(cols) := lapply(.SD, function(x) as.numeric(as.character(x))), .SDcols = cols]
+  df.name <- paste0("restingDf.vitals.", window)
+  assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
+}
+
+for(window in windows){
+  restingDf.vitals <- eval(as.name(paste0("restingDf.vitals.",window)))
+
+  # resting values to go in the text of the manuscript
+  mean(restingDf.vitals$restingHR)
+  sd(restingDf.vitals$restingHR)
+  mean(na.omit(restingDf.vitals$restingSkinTemp))
+  sd(na.omit(restingDf.vitals$restingSkinTemp))
+
+  # wRHR from *specific day* of clinic visit only; aggregate wRHR into daily values corresponding to the clinic date
+  # compare all resting watch data with all vitals data - this was fixed to aggregate wRHR into daily values corresponding to the clinic date
+  options(datatable.optimize=1) #need this here; otherwsie won't handle character class
+  rhr.daily.means <- restingDf.vitals[, lapply(.SD, mean, na.rm=TRUE), by=c("iPOP_ID","Date")]
+  options(datatable.optimize=0)
+  numObs <- dim(rhr.daily.means)[1]
+  numPeople <- length(unique(rhr.daily.means$iPOP_ID))
+  restingDf.compare <- cbind(rhr.daily.means$restingHR, rhr.daily.means$Pulse, rhr.daily.means$restingSkinTemp, rhr.daily.means$Temp)
+  colnames(restingDf.compare) <- c("Resting wHR", "cHR", "Resting wSkinTemp", "cTemp")
+  rhr.daily.means.id <- cbind(rhr.daily.means$iPOP_ID, rhr.daily.means$restingHR, rhr.daily.means$Pulse, rhr.daily.means$restingSkinTemp, rhr.daily.means$Temp)
+  rhr.daily.means.id <- as.data.frame(rhr.daily.means.id)
+  rhr.daily.means.id[,1 ]<- as.factor(as.character(rhr.daily.means.id[,1 ])); 
+  rhr.daily.means.id[,2 ]<- as.numeric(as.character(rhr.daily.means.id[,2 ])); 
+  rhr.daily.means.id[,3 ]<- as.numeric(as.character(rhr.daily.means.id[,3 ])); 
+  rhr.daily.means.id[,4 ]<- as.numeric(as.character(rhr.daily.means.id[,4 ]));
+  rhr.daily.means.id[,5 ]<- as.numeric(as.character(rhr.daily.means.id[,5 ])); 
+  colnames(rhr.daily.means.id) <- c("iPOP_ID", "restingHR", "Pulse", "restingSkinTemp", "Temp")
+  
+  means<-aggregate(rhr.daily.means.id, list(rhr.daily.means.id$iPOP_ID), mean) # check this compare to indiv means
+  sd<-aggregate(rhr.daily.means.id, list(rhr.daily.means.id$iPOP_ID), sd)
+  delta.daily.mean.RHR.pulse<-means$Pulse - means$restingHR
+  delta.daily.sd.RHR.pulse<-sd$Pulse - sd$restingHR 
+  hist(delta.daily.mean.RHR.pulse, col="darkred", main = paste0("Delta Mean cHR - Mean wRHR)"))
+  hist(delta.daily.sd.RHR.pulse, col="darkred", main = paste0("Delta StdDev cHR - StdDev wRHR)"))
+  
+  # Scatter plot HR
+  ggplot(rhr.daily.means.id,
+         aes(x=restingHR,y=Pulse,col=as.factor(substr(iPOP_ID,9,12)))) +
+    geom_point() +
+    labs(title=paste0("Clinical Pulse vs. Wearable RHR Mean (",window,"min resting)"),x="Resting Heart Rate",y="Pulse") +
+    annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
+             lwd=2, color="blue", alpha=.25) +
+    guides(col=guide_legend("ID")) +
+    xlim(40, 100) +
+    ylim(40, 100)+
+    theme(plot.title=element_text(face="bold",colour="black",size=14),
+          axis.title.x=element_text(face="bold",colour="black",size=14),
+          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=14),
+          axis.text.y=element_text(face="bold",colour="black",size=12),
+          axis.ticks.length = unit(.2,"cm"),
+          legend.title=element_text(face="bold", colour="black", size=14),
+          legend.text=element_text(face="bold", colour="black", size=12),
+          panel.background=element_rect(fill="grey94"))
+  
+  ## scatter plot skin temp
+  ggplot(rhr.daily.means.id,
+         aes(x=restingSkinTemp,y=Temp,col=as.factor(substr(iPOP_ID,9,12)))) +
+    geom_point() +
+    labs(title=paste0("Clinical Temp vs. Wearable Temp (",window,"min resting)"),
+         x="Resting Skin Temp",y="Core Temperature") +
+    annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
+             lwd=2, color="blue", alpha=.25) +
+    guides(col=guide_legend("ID")) +
+    xlim(90, 100) +
+    ylim(90, 100)+
+    theme(plot.title=element_text(face="bold",colour="black",size=14),
+          axis.title.x=element_text(face="bold",colour="black",size=14),
+          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=14),
+          axis.text.y=element_text(face="bold",colour="black",size=12),
+          axis.ticks.length = unit(.2,"cm"),
+          legend.title=element_text(face="bold", colour="black", size=14),
+          legend.text=element_text(face="bold", colour="black", size=12),
+          panel.background=element_rect(fill="grey94"))
+}
 
 ##########
 # Fig 1C #
@@ -208,12 +352,12 @@ length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements 
 #####################
 #  Figure 1D Bottom #
 #####################
-dfFigOneC <- fread(paste0("/Users/jessilyn/Desktop/framework_paper/Figure1/Fig1C/Ryans_input_files/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20170928.csv"),
+dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
-hist(dfFigOneC$Heart_Rate, col="darkred", breaks=100,
+hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
      xlab = "wHR",
      main = NULL, font.lab=2,lwd=2,font=2)
-hist(dfFigOneC$Skin_Temperature_F, col="darkgrey", breaks=100,
+hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
      xlab = "wTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 
