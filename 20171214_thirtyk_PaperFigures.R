@@ -13,14 +13,18 @@ library(MuMIn)
 library(Rmisc)
 library(gridExtra)
 library(grid)
-library(dplyr)
+library(dplyr) #plyr
 library(MASS)
 library("ggthemes")
 library(reshape2)
 library(randomForest)
 library("glmnet")
 library(lme4)
+require(fasttime) #fastPOSIXct
+require(lubridate)
+require(zoo) #rollapply
 
+source("ggplot-theme.R") 
 
 if(!dir.exists("plots")) dir.create("plots")
 
@@ -33,6 +37,10 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
   y[x > (qnt[2] + H)] <- NA
   y
 }
+
+fastDate <- function(x, tz=NULL)
+  #as.Date(fastPOSIXct(x, tz=tz))
+  as.Date(x, tz=tz)
 
 # Path to the directory with data
 dir = "../SECURE_data/"
@@ -113,6 +121,7 @@ for (i in 1:length(iPOPvitals$BP)){
 iPOPvitals$Clin_Result_Date <- format(
   as.Date(iPOPvitals$Clin_Result_Date, "%d-%b-%Y"), "%Y-%m-%d")
 
+
 #Make correlation variables numeric
 iPOPvitals[,c("Pulse","Temp","BP","BMI","systolic", "diastolic")] <- apply(
   iPOPvitals[,c("Pulse","Temp","BP","BMI","systolic", "diastolic")], 2,
@@ -164,7 +173,7 @@ corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers)
 
 ### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
 # wear2<-wear
-# wear[,-c(1:6)] <- sapply(wear[,-c(1:6)], as.numeric)
+# wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, function(x) as.numeric(as.character(x)))
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
 
 ## merge iPOP and demographics
@@ -176,42 +185,178 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 
-###############################
-# Fig 1B, left, middle, right #
-###############################
+###############
+#  Figure 1B  #
+############### 
+# expanded analysis in 20180605_Fig1D_analysis.R in the whitecoat github directory
+df <- fread(paste0(dir, "/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
+                   header=TRUE,sep=",",stringsAsFactors = FALSE,
+                   select=c("Timestamp_Local","Heart_Rate","Skin_Temperature_F",
+                            "Steps","iPOP_ID")) # 38009228 observations
+df<-df[!is.na(df$iPOP_ID),] # only keep wearables data that has an associated iPOP ID; 
+df[,"Heart_Rate"] <- apply(df[,"Heart_Rate"], 2, remove_outliers) # clean data based on HR (TODO: later also clean on Skin Temp, Steps)
+df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
+# restrict to daytime values only (between 6am-10pm)
+#df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
+df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
+daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+
+vitals <- iPOPvitals
+vitals$RECORDED_TIME<-as.Date(vitals$RECORDED_TIME, "%d-%b-%Y")
+colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
+windows=c(60) # define time windows with no steps for resting threshold (10,60,120, etc)
+
+dayPrior = FALSE
+
+for (window in windows){
+  restingDf <- c() 
+  restingDf.all <- list() # keep all resting data for boxplots later
+  maxsteps <- 1 #define max steps for resting threshold
+  indiv.means <- c()
+  indiv.sd <- c()
+  for(i in unique(daytime.df$iPOP_ID)){
+    print(i)
+    subDf <- daytime.df[which(daytime.df$iPOP_ID %in% i),] #pull data per individual
+    restingST<-c()
+    restingST <- rollapplyr(subDf$Steps, width=window, by=1, sum, partial=TRUE)
+    restingST[1:window-1]<-"NA" # remove 1st x observations because we dont know what happened prior to putting the watch on
+    restingST <- as.numeric(restingST)  # Expected warning: "In as.numeric(restingST) : NAs introduced by coercion"
+    restingDf <- subDf[restingST<maxsteps & !is.na(restingST)] # in the previous time window of X min plus the current minute,there are < maxsteps steps 
+    indiv.means[i] <- mean(restingDf$Heart_Rate, na.rm=TRUE) # mean RHR for all days/times for individual i
+    indiv.sd[i] <- sd(restingDf$Heart_Rate, na.rm=TRUE) # RHR var for all days/times for individual i
+    restingDf.all[[i]] <- restingDf # store all resting data for boxplots
+  }
+  
+  restingDf.all <- rbindlist(restingDf.all)
+  restingDf.all$Date <- as.Date(restingDf.all$Timestamp_Local)
+  restingDf.all <- restingDf.all[,c("iPOP_ID","Date","Heart_Rate","Skin_Temperature_F","Steps","Timestamp_Local")]
+  names(restingDf.all) <- c("iPOP_ID","Date","restingHR","restingSkinTemp","restingSteps","DateTime")
+  means.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), na.omit(mean)) 
+  sd.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), sd) 
+  
+  #Optional: use day-prior rather than day-of wearable data for comparison:
+  if(dayPrior){
+    restingDf.all$Date <- restingDf.all$Date + days(1)
+  }
+
+  restingDf.vitals <- merge(restingDf.all,vitals,by=c("iPOP_ID","Date"))
+  restingDf.vitals$DateTime<-as.POSIXct(restingDf.vitals$DateTime)
+  restingDf.vitals <- restingDf.vitals[order(restingDf.vitals$DateTime),] 
+  cols <- c("restingHR","restingSkinTemp","Pulse","Temp") #subset columns to convert
+  restingDf.vitals[,(cols) := lapply(.SD, function(x) as.numeric(as.character(x))), .SDcols = cols]
+  df.name <- paste0("restingDf.vitals.", window)
+  assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
+}
+
+for(window in windows){
+  restingDf.vitals <- eval(as.name(paste0("restingDf.vitals.",window)))
+
+  # resting values to go in the text of the manuscript
+  mean(restingDf.vitals$restingHR)
+  sd(restingDf.vitals$restingHR)
+  mean(na.omit(restingDf.vitals$restingSkinTemp))
+  sd(na.omit(restingDf.vitals$restingSkinTemp))
+
+  # wRHR from *specific day* of clinic visit only; aggregate wRHR into daily values corresponding to the clinic date
+  # compare all resting watch data with all vitals data - this was fixed to aggregate wRHR into daily values corresponding to the clinic date
+  options(datatable.optimize=1) #need this here; otherwsie won't handle character class
+  rhr.daily.means <- restingDf.vitals[, lapply(.SD, mean, na.rm=TRUE), by=c("iPOP_ID","Date")]
+  options(datatable.optimize=0)
+  numObs <- dim(rhr.daily.means)[1]
+  numPeople <- length(unique(rhr.daily.means$iPOP_ID))
+  restingDf.compare <- cbind(rhr.daily.means$restingHR, rhr.daily.means$Pulse, rhr.daily.means$restingSkinTemp, rhr.daily.means$Temp)
+  colnames(restingDf.compare) <- c("Resting wHR", "cHR", "Resting wSkinTemp", "cTemp")
+  rhr.daily.means.id <- cbind(rhr.daily.means$iPOP_ID, rhr.daily.means$restingHR, rhr.daily.means$Pulse, rhr.daily.means$restingSkinTemp, rhr.daily.means$Temp)
+  rhr.daily.means.id <- as.data.frame(rhr.daily.means.id)
+  rhr.daily.means.id[,1 ]<- as.factor(as.character(rhr.daily.means.id[,1 ])); 
+  rhr.daily.means.id[,2 ]<- as.numeric(as.character(rhr.daily.means.id[,2 ])); 
+  rhr.daily.means.id[,3 ]<- as.numeric(as.character(rhr.daily.means.id[,3 ])); 
+  rhr.daily.means.id[,4 ]<- as.numeric(as.character(rhr.daily.means.id[,4 ]));
+  rhr.daily.means.id[,5 ]<- as.numeric(as.character(rhr.daily.means.id[,5 ])); 
+  colnames(rhr.daily.means.id) <- c("iPOP_ID", "restingHR", "Pulse", "restingSkinTemp", "Temp")
+  
+  means<-aggregate(rhr.daily.means.id, list(rhr.daily.means.id$iPOP_ID), mean) # check this compare to indiv means
+  sd<-aggregate(rhr.daily.means.id, list(rhr.daily.means.id$iPOP_ID), sd)
+  delta.daily.mean.RHR.pulse<-means$Pulse - means$restingHR
+  delta.daily.sd.RHR.pulse<-sd$Pulse - sd$restingHR 
+  hist(delta.daily.mean.RHR.pulse, col="darkred", main = paste0("Delta Mean cHR - Mean wRHR)"))
+  hist(delta.daily.sd.RHR.pulse, col="darkred", main = paste0("Delta StdDev cHR - StdDev wRHR)"))
+  
+  # Scatter plot HR
+  ggplot(rhr.daily.means.id,
+         aes(x=restingHR,y=Pulse,col=as.factor(substr(iPOP_ID,9,12)))) +
+    geom_point() +
+    labs(title=paste0("Clinical Pulse vs. Wearable RHR Mean (",window,"min resting)"),x="Resting Heart Rate",y="Pulse") +
+    annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
+             lwd=2, color="blue", alpha=.25) +
+    guides(col=guide_legend("ID")) +
+    xlim(40, 100) +
+    ylim(40, 100)+
+    theme(plot.title=element_text(face="bold",colour="black",size=14),
+          axis.title.x=element_text(face="bold",colour="black",size=14),
+          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=14),
+          axis.text.y=element_text(face="bold",colour="black",size=12),
+          axis.ticks.length = unit(.2,"cm"),
+          legend.title=element_text(face="bold", colour="black", size=14),
+          legend.text=element_text(face="bold", colour="black", size=12),
+          panel.background=element_rect(fill="grey94"))
+  
+  ## scatter plot skin temp
+  ggplot(rhr.daily.means.id,
+         aes(x=restingSkinTemp,y=Temp,col=as.factor(substr(iPOP_ID,9,12)))) +
+    geom_point() +
+    labs(title=paste0("Clinical Temp vs. Wearable Temp (",window,"min resting)"),
+         x="Resting Skin Temp",y="Core Temperature") +
+    annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
+             lwd=2, color="blue", alpha=.25) +
+    guides(col=guide_legend("ID")) +
+    xlim(90, 100) +
+    ylim(90, 100)+
+    theme(plot.title=element_text(face="bold",colour="black",size=14),
+          axis.title.x=element_text(face="bold",colour="black",size=14),
+          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=14),
+          axis.text.y=element_text(face="bold",colour="black",size=12),
+          axis.ticks.length = unit(.2,"cm"),
+          legend.title=element_text(face="bold", colour="black", size=14),
+          legend.text=element_text(face="bold", colour="black", size=12),
+          panel.background=element_rect(fill="grey94"))
+}
+
+##########
+# Fig 1C #
+##########
 hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=20,
      xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
-     xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
      xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
+hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
+     xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 mean(iPOPdaysMonitored$Total_NumOfClinMeasures)
 mean(iPOPdaysMonitored$Days_monitored_by_clinic)
 
 ###############
-# Fig 1C, top #
+# Fig 1D  top #
 ###############
-
 hist(iPOPvitals$Pulse, col="darkred", breaks=50,
      xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
-
 hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
 
-################################################
-#  Figure 1C Bottom - see Ryans_Figure1_Code.R #
-################################################
-dfFigOneC <- fread(paste0("/Users/jessilyn/Desktop/framework_paper/Figure1/Fig1C/Ryans_input_files/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20170928.csv"),
+#####################
+#  Figure 1D Bottom #
+#####################
+dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
-hist(dfFigOneC$Heart_Rate, col="darkred", breaks=100,
+hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
      xlab = "wHR",
      main = NULL, font.lab=2,lwd=2,font=2)
-
-hist(dfFigOneC$Skin_Temperature_F, col="darkgrey", breaks=100,
+hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
      xlab = "wTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 
@@ -220,29 +365,22 @@ length(na.omit(iPOPvitals$Temp)) + length(na.omit(iPOPvitals$Pulse)) # total num
 describe(iPOPlabs[names(iPOPlabs) %in% allClin]) # summary of clinical labs data
 length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
-###############################################
-#  Figure 1D  - see 20180427_Fig1D_analysis.R #
-###############################################
-
 #############################
 #    Suppl. Table 1A and B  #
 #############################
-
 # make table for vitals (Suppl. Table 1A)
 #describe(iPOPvitals)
-
 # make table for labs
 #describe(iPOPlabs)
 
 
 ###############
-#  Figure 2C  #
+#  Figure 2D  #
 ###############
 
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
-#top.names<-c("MONOAB", "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
 
 ####
 # CODE FOR SIMPLE LM
@@ -253,8 +391,25 @@ sum.vectors.in.list <- function(x) {
 
 rsq.all = c()
 pct.var.all = c()
-vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
 iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+iPOPcorDf.demo$Gender <- as.factor(iPOPcorDf.demo$Gender)
+iPOPcorDf.demo$Ethn <- as.factor(iPOPcorDf.demo$Ethn)
+
+#change gender and ethnicity to dummy variables
+gender <- data.frame(model.matrix( ~ Gender - 1, data=iPOPcorDf.demo))
+ethn <- data.frame(model.matrix( ~ Ethn - 1, data=iPOPcorDf.demo))
+
+#remove the least populated gender and ethnicity (NCOL-1)
+cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+
+#store names as vitals.variables
+vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
+
+#cbind new gender and ethnicity variables to "wear"
+iPOPcorDf.demo <- cbind(iPOPcorDf.demo,gender,ethn)
+
 patients = unique(iPOPcorDf$iPOP_ID)
 
 val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
@@ -267,14 +422,17 @@ for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
   cat("Patient",patients[k],"\n") # LOO
-  dat.train<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% train, ] # subset input data by training set
+  dat.train.unsorted<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% train, ] # subset input data by training set
+  dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
   dat.test<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% test, ] # subset input data by testing set
   
   for (l in 1:length(top.names)){
     cat("Test",top.names[l],"\n")
     # create training set
-    x.train<-dat.train[,colnames(dat.train) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+    x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
     x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    x.train.ids<-x.train$iPOP_ID
+    x.train<-x.train[,-1]
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     # create test set
@@ -312,6 +470,18 @@ sqrt.pct.var <- sqrt(pct.var.explained)
 
 ####
 # CODE FOR LASSO, RF
+####
+
+# choose for during troubleshooting
+use.Troubleshoot.mode = TRUE
+#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+use.iPOP <- FALSE
+#choose whether Demographics in models (supply TRUE or FALSE)
+use.Demog <- FALSE
+
+if (use.Troubleshoot.mode){
+top.names<-c("MONOAB") #, "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
+}
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
@@ -320,16 +490,29 @@ wear[,8:length(names(wear))] <- apply(
 wear$Gender <- as.factor(wear$Gender)
 wear$Ethn <- as.factor(wear$Ethn)
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-demo.variables <- c("AgeIn2016", "Gender", "Ethn")
+
+#change gender and ethnicity to dummy variables
+gender <- data.frame(model.matrix( ~ Gender - 1, data=wear))
+ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear))
+
+#remove the least populated gender and ethnicity (NCOL-1)
+cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+
+#store names as demo.variables
+demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+
+#cbind new gender and ethnicity variables to "wear"
+wear <- cbind(wear,gender,ethn)
 
 val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
 null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
 lasso.val.pred.lambda.manual <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-rf.val.pred.lambda.manual <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 lasso.val.pred.lambda.min <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-rf.val.pred.lambda.min <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
 lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-rf.val.pred.lambda.1se <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
+rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
+
 num.Records <- c()
 lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
                                            "left.out.person"=character(),"lasso.feature"=character(),
@@ -340,25 +523,36 @@ lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
 lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
                                         "left.out.person"=character(),"lasso.feature"=character(),
                                         "lasso.coef.value"=character())
-rf.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
-                                           "left.out.person"=character(),"rf.feature"=character(),
-                                           "rf.coef.value"=character())
-rf.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"rf.feature"=character(),
-                                        "rf.coef.value"=character())
-rf.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"rf.feature"=character(),
-                                        "rf.coef.value"=character())
+rf.features <- data.frame("test"=character(),"cv.run"=character(),
+                          "left.out.person"=character(),"rf.feature"=character(),
+                          "rf.coef.value"=character())
+
+if(use.Demog){
+    demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+  } else if(!use.Demog) {
+      demo.variables <- c()
+}
+
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
   cat("Patient",patients[k],"\n") # LOO
-  dat.train<- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
+  #set up iPOP dummy variable if use.iPOP=TRUE
+  if(use.iPOP){
+    cache <- data.frame(model.matrix( ~ iPOP_ID - 1, data=wear))
+    cache <- cache[,-which(names(cache)==paste0("iPOP_ID",gsub("-",".",test)))]
+    wear <- cbind(wear,cache)
+    demo.variables <- c(demo.variables,names(cache)) #append iPOPs to demo
+  } 
+  dat.train.unsorted <- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
+  dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
   dat.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
   for (l in 1:length(top.names)){
     cat("Test",top.names[l],"\n")
-    x.train<-dat.train[,colnames(dat.train) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-    x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID", top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
+    x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    x.train.ids<-x.train$iPOP_ID
+    x.train<-x.train[,-1] 
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     
@@ -371,13 +565,23 @@ for (k in 1:length(patients)){
     
     rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
     
+    #decide on number for nfolds from number of obs per subject
+    frq <- as.vector(table(x.train.ids))
+    
+    #optional argument for leave-one-out CV method
+    n <- length(frq)
+    
+    #optional argument to specify folds for CV
+    folds <- rep(1:length(frq),frq[1:length(frq)])
+    
     ## run lasso for variable selection
-    n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
+    # n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
     x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
     glm.res = cv.glmnet(x=x_train,y=outcome,
                         standardize.response=FALSE,
                         family="gaussian",
                         nfolds=n,
+                        foldid=folds,
                         nlambda=100)
     
     #store all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
@@ -416,46 +620,6 @@ for (k in 1:length(patients)){
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
     lasso.variables.to.use.lambda.1se = names(factors.lambda.1se[abs(factors.lambda.1se)>1e-10])
     
-    # check if Gender* / Ethn* selected into LASSO models
-    ethn.sel.lambda.manual = grep("^Ethn",lasso.variables.to.use.lambda.manual)
-    gend.sel.lambda.manual = grep("^Gender",lasso.variables.to.use.lambda.manual)
-    ethn.sel.lambda.min = grep("^Ethn",lasso.variables.to.use.lambda.min)
-    gend.sel.lambda.min = grep("^Gender",lasso.variables.to.use.lambda.min)
-    ethn.sel.lambda.1se = grep("^Ethn",lasso.variables.to.use.lambda.1se)
-    gend.sel.lambda.1se = grep("^Gender",lasso.variables.to.use.lambda.1se)
-    
-    # remove Gender* and add Gender if present
-    # remove Ethn* and add Ethn if present
-    torm = c(ethn.sel.lambda.manual, gend.sel.lambda.manual)
-    if (length(torm) > 0){
-      lasso.variables.to.use.lambda.manual = lasso.variables.to.use.lambda.manual[-torm]
-      if (length(ethn.sel.lambda.manual) > 0){
-        lasso.variables.to.use.lambda.manual = c("Ethn",lasso.variables.to.use.lambda.manual) }
-      if (length(gend.sel.lambda.manual) > 0){
-        lasso.variables.to.use.lambda.manual = c("Gender",lasso.variables.to.use.lambda.manual) # variables.to.use contains all variables selected by LASSO    
-      }        
-    }
-    
-    torm = c(ethn.sel.lambda.min, gend.sel.lambda.min)
-    if (length(torm) > 0){
-      lasso.variables.to.use.lambda.min = lasso.variables.to.use.lambda.min[-torm]
-      if (length(ethn.sel.lambda.min) > 0){
-        lasso.variables.to.use.lambda.min = c("Ethn",lasso.variables.to.use.lambda.min) }
-      if (length(gend.sel.lambda.min) > 0){
-        lasso.variables.to.use.lambda.min = c("Gender",lasso.variables.to.use.lambda.min) # variables.to.use contains all variables selected by LASSO    
-      }        
-    }
-    
-    torm = c(ethn.sel.lambda.1se, gend.sel.lambda.1se)
-    if (length(torm) > 0){
-      lasso.variables.to.use.lambda.1se = lasso.variables.to.use.lambda.1se[-torm]
-      if (length(ethn.sel.lambda.1se) > 0){
-        lasso.variables.to.use.lambda.1se = c("Ethn",lasso.variables.to.use.lambda.1se) }
-      if (length(gend.sel.lambda.1se) > 0){
-        lasso.variables.to.use.lambda.1se = c("Gender",lasso.variables.to.use.lambda.1se) # variables.to.use contains all variables selected by LASSO    
-      }        
-    }
-    
     # build null, lasso, and rf models
     set.seed(1)
     null.fml = paste(top.names[l]," ~ 1")
@@ -473,15 +637,6 @@ for (k in 1:length(patients)){
       # lasso.val.pred.lambda.manual[[l]] = NA # fill with NA if invalid model was supplied
     }
     
-    rf.fml.lambda.manual = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
-    #check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.manual!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      rf.model.lambda.manual = randomForest(as.formula(rf.fml.lambda.manual), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
-      rf.val.pred.lambda.manual[[l]] = c(rf.val.pred.lambda.manual[[l]], predict(rf.model.lambda.manual, newdata = x.test)) # predict on left out person
-    } else {
-      # rf.val.pred.lambda.manual[[l]] = NA # fill with NA if invalid model was supplied
-    }
-    
     lasso.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
     #check that the formula is valid (i.e. not empty)
     if(lasso.fml.lambda.min!=paste0("cbind( ",top.names[l]," ) ~ ")){
@@ -489,15 +644,6 @@ for (k in 1:length(patients)){
       lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
     } else {
       # lasso.val.pred.lambda.min[[l]] = NA # fill with NA if invalid model was supplied
-    }
-    
-    rf.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
-    #check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.min!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      rf.model.lambda.min = randomForest(as.formula(rf.fml.lambda.min), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
-      rf.val.pred.lambda.min[[l]] = c(rf.val.pred.lambda.min[[l]], predict(rf.model.lambda.min, newdata = x.test)) # predict on left out person
-    } else {
-      # rf.val.pred.lambda.min[[l]] = NA # fill with NA if invalid model was supplied
     }
     
     lasso.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.1se,collapse=" + "))
@@ -509,43 +655,24 @@ for (k in 1:length(patients)){
       # lasso.val.pred.lambda.1se[[l]] = NA # fill with NA if invalid model was supplied
     }
     
-    rf.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
+    rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
     #check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.1se!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      rf.model.lambda.1se = randomForest(as.formula(rf.fml.lambda.1se), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
-      rf.val.pred.lambda.1se[[l]] = c(rf.val.pred.lambda.1se[[l]], predict(rf.model.lambda.1se, newdata = x.test)) # predict on left out person
+    if(rf.fml!=paste0("cbind( ",top.names[l]," ) ~ ")){
+      rf.model = randomForest(as.formula(rf.fml), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
+      rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
     } else {
-      # rf.val.pred.lambda.1se[[l]] = NA # fill with NA if invalid model was supplied
+      # rf.val.pred.lambda.manual[[l]] = NA # fill with NA if invalid model was supplied
     }
     
     ## pull out features from rf models ##
-    # Ryan: why are these 3 below different? they shouldn't be dependent on the lasso outcomes...
-    rf.lambda.manual.features <- as.matrix(importance(rf.model.lambda.manual)[order(importance(rf.model.lambda.manual), decreasing=TRUE),])
-    rf.lambda.min.features <- as.matrix(importance(rf.model.lambda.min)[order(importance(rf.model.lambda.min), decreasing=TRUE),])
-    rf.lambda.1se.features <- as.matrix(importance(rf.model.lambda.1se)[order(importance(rf.model.lambda.1se), decreasing=TRUE),])
+    rf.features <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
     
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.manual.features)),
-                      "cv.run"=rep(k,length(rf.lambda.manual.features)),
-                      "left.out.person"=rep(patients[k],length(rf.lambda.manual.features)),
-                      "rf.feature"=unlist(dimnames(rf.lambda.manual.features)),
-                      "rf.coef.value"=as.data.frame(rf.lambda.manual.features)$V1)
-    rf.features.lambda.manual <- rbind(rf.features.lambda.manual,tmp)
-    
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.min.features)),
-                      "cv.run"=rep(k,length(rf.lambda.min.features)),
-                      "left.out.person"=rep(patients[k],length(rf.lambda.min.features)),
-                      "rf.feature"=unlist(dimnames(rf.lambda.min.features)),
-                      "rf.coef.value"=as.data.frame(rf.lambda.min.features)$V1)
-    rf.features.lambda.min <- rbind(rf.features.lambda.min,tmp)
-    
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.lambda.1se.features)),
-                      "cv.run"=rep(k,length(rf.lambda.1se.features)),
-                      "left.out.person"=rep(patients[k],length(rf.lambda.1se.features)),
-                      "rf.feature"=unlist(dimnames(rf.lambda.1se.features)),
-                      "rf.coef.value"=as.data.frame(rf.lambda.1se.features)$V1)
-    rf.features.lambda.1se <- rbind(rf.features.lambda.1se,tmp)
-    
-    
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.features)),
+                      "cv.run"=rep(k,length(rf.features)),
+                      "left.out.person"=rep(patients[k],length(rf.features)),
+                      "rf.feature"=unlist(dimnames(rf.features)),
+                      "rf.coef.value"=as.data.frame(rf.features)$V1)
+    rf.features <- tmp
     # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
     # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
@@ -557,11 +684,26 @@ rssm.lasso.lambda.manual = c()
 rss0.lasso.lambda.manual = c()
 lasso.pct.var.explained.lambda.manual = c()
 lasso.num.Records.lambda.manual <- c()
-rsq.rf.lambda.manual = c()
-rssm.rf.lambda.manual = c()
-rss0.rf.lambda.manual = c()
-rf.pct.var.explained.lambda.manual = c()
-rf.num.Records.lambda.manual <- c()
+
+rsq.lasso.lambda.min = c()
+rssm.lasso.lambda.min = c()
+rss0.lasso.lambda.min = c()
+lasso.pct.var.explained.lambda.min = c()
+lasso.num.Records.lambda.min <- c()
+
+rsq.lasso.lambda.1se = c()
+rssm.lasso.lambda.1se = c()
+rss0.lasso.lambda.1se = c()
+lasso.pct.var.explained.lambda.1se = c()
+lasso.num.Records.lambda.1se <- c()
+
+rsq.rf = c()
+rssm.rf = c()
+rss0.rf = c()
+rf.pct.var.explained = c()
+rf.num.Records <- c()
+
+#note: rf only runs once below
 
 for (j in 1:length(top.names)){
   #lasso (lambda.manual)
@@ -576,70 +718,6 @@ for (j in 1:length(top.names)){
     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
     lasso.num.Records.lambda.manual <- c(num.Records, NA)
   }
-  #rf (lambda.manual)
-  if(!all(is.na(rf.val.pred.lambda.manual[[j]]))){
-    rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, cor(rf.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
-    rssm.rf.lambda.manual = sum(na.omit((val.true[[j]] - rf.val.pred.lambda.manual[[j]])^2))
-    rss0.rf.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, (1 - ( rssm.rf.lambda.manual / rss0.rf.lambda.manual )))
-    rf.num.Records.lambda.manual <- c(num.Records, length(rf.val.pred.lambda.manual[[j]]))
-  } else {
-    rsq.rf.lambda.manual = c(rsq.rf.lambda.manual, NA)
-    rf.pct.var.explained.lambda.manual = c(rf.pct.var.explained.lambda.manual, NA)
-    rf.num.Records.lambda.manual <- c(num.Records, NA)
-  }
-}
-names(rsq.lasso.lambda.manual) = top.names
-names(lasso.pct.var.explained.lambda.manual) = top.names
-lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
-
-names(rsq.rf.lambda.manual) = top.names
-names(rf.pct.var.explained.lambda.manual) = top.names
-rf.sqrt.pct.var.lambda.manual <- sqrt(rf.pct.var.explained.lambda.manual)
-
-fig.2c.df.lambda.manual <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var.lambda.manual), as.data.frame(rf.sqrt.pct.var.lambda.manual), row.names=NULL)
-
-colnames(fig.2c.df.lambda.manual)<-c("test", "vitals", "lasso", "rf")
-fig.2c.df.lambda.manual$test = factor(fig.2c.df.lambda.manual$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
-
-fig.2c.corr.coefs.lambda.manual <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso.lambda.manual), as.data.frame(rsq.rf.lambda.manual), row.names=NULL)
-colnames(fig.2c.corr.coefs.lambda.manual)<-c("test", "vitals", "lasso", "rf")
-fig.2c.corr.coefs.lambda.manual$test = factor(fig.2c.corr.coefs.lambda.manual$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
-# fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
-# ^This line was throwing an error; revised version below:
-fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")] <- sapply(fig.2c.corr.coefs.lambda.manual[,c("vitals","lasso","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
-
-fig.2c.plot.lambda.manual <- melt(fig.2c.corr.coefs.lambda.manual,id.vars="test")
-fig.2c.plot.lambda.manual[,3][is.nan(fig.2c.plot.lambda.manual[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c.lambda.manual <- fig.2c.plot.lambda.manual[order(-fig.2c.plot.lambda.manual[,3]),] # reorder by LM Vitals
-
-num.Records <- as.data.frame(num.Records)
-num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
-                         TestObs = as.numeric(TestObs))
-
-# Plot the % var explained
-ggplot(fig.2c.lambda.manual, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
-
-## calculate correlation coefficients and pct var explained by the models (lambda min)
-rsq.lasso.lambda.min = c()
-rssm.lasso.lambda.min = c()
-rss0.lasso.lambda.min = c()
-lasso.pct.var.explained.lambda.min = c()
-lasso.num.Records.lambda.min <- c()
-rsq.rf.lambda.min = c()
-rssm.rf.lambda.min = c()
-rss0.rf.lambda.min = c()
-rf.pct.var.explained.lambda.min = c()
-rf.num.Records.lambda.min <- c()
-
-for (j in 1:length(top.names)){
   #lasso (lambda.min)
   if(!all(is.na(lasso.val.pred.lambda.min[[j]]))){
     rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, cor(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs"))
@@ -652,70 +730,6 @@ for (j in 1:length(top.names)){
     lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, NA)
     lasso.num.Records.lambda.min <- c(num.Records, NA)   
   }
-  #rf (lambda.min)
-  if(!all(is.na(rf.val.pred.lambda.min[[j]]))){
-    rsq.rf.lambda.min = c(rsq.rf.lambda.min, cor(rf.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs"))
-    rssm.rf.lambda.min = sum(na.omit((val.true[[j]] - rf.val.pred.lambda.min[[j]])^2))
-    rss0.rf.lambda.min = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    rf.pct.var.explained.lambda.min = c(rf.pct.var.explained.lambda.min, (1 - ( rssm.rf.lambda.min / rss0.rf.lambda.min )))
-    rf.num.Records.lambda.min <- c(num.Records, length(rf.val.pred.lambda.min[[j]]))    
-  } else {
-    rsq.rf.lambda.min = c(rsq.rf.lambda.min, NA)
-    rf.pct.var.explained.lambda.min = c(rf.pct.var.explained.lambda.min, NA)
-    rf.num.Records.lambda.min <- c(num.Records, NA)   
-  }
-}
-names(rsq.lasso.lambda.min) = top.names
-names(lasso.pct.var.explained.lambda.min) = top.names
-lasso.sqrt.pct.var.lambda.min <- sqrt(lasso.pct.var.explained.lambda.min)
-
-names(rsq.rf.lambda.min) = top.names
-names(rf.pct.var.explained.lambda.min) = top.names
-rf.sqrt.pct.var.lambda.min <- sqrt(rf.pct.var.explained.lambda.min)
-
-fig.2c.df.lambda.min <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var.lambda.min), as.data.frame(rf.sqrt.pct.var.lambda.min), row.names=NULL)
-
-colnames(fig.2c.df.lambda.min)<-c("test", "vitals", "lasso", "rf")
-fig.2c.df.lambda.min$test = factor(fig.2c.df.lambda.min$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
-
-fig.2c.corr.coefs.lambda.min <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso.lambda.min), as.data.frame(rsq.rf.lambda.min), row.names=NULL)
-colnames(fig.2c.corr.coefs.lambda.min)<-c("test", "vitals", "lasso", "rf")
-fig.2c.corr.coefs.lambda.min$test = factor(fig.2c.corr.coefs.lambda.min$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
-# fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
-# ^This line was throwing an error; revised version below:
-fig.2c.corr.coefs.lambda.min[,c("vitals","lasso","rf")] <- sapply(fig.2c.corr.coefs.lambda.min[,c("vitals","lasso","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
-
-fig.2c.plot.lambda.min <- melt(fig.2c.corr.coefs.lambda.min,id.vars="test")
-fig.2c.plot.lambda.min[,3][is.nan(fig.2c.plot.lambda.min[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c.lambda.min <- fig.2c.plot.lambda.min[order(-fig.2c.plot.lambda.min[,3]),] # reorder by LM Vitals
-
-num.Records <- as.data.frame(num.Records)
-num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs), 
-                         TestObs = as.numeric(TestObs))
-
-# Plot the % var explained
-ggplot(fig.2c.lambda.min, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
-
-## calculate correlation coefficients and pct var explained by the models (lambda 1se)
-rsq.lasso.lambda.1se = c()
-rssm.lasso.lambda.1se = c()
-rss0.lasso.lambda.1se = c()
-lasso.pct.var.explained.lambda.1se = c()
-lasso.num.Records.lambda.1se <- c()
-rsq.rf.lambda.1se = c()
-rssm.rf.lambda.1se = c()
-rss0.rf.lambda.1se = c()
-rf.pct.var.explained.lambda.1se = c()
-rf.num.Records.lambda.1se <- c()
-
-for (j in 1:length(top.names)){
   #lasso (lambda.1se)
   if(!all(is.na(lasso.val.pred.lambda.1se[[j]]))){
     rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, cor(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs"))
@@ -728,62 +742,91 @@ for (j in 1:length(top.names)){
     lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, NA)
     lasso.num.Records.lambda.1se <- c(num.Records, NA)   
   }
-  #rf (lambda.1se)
-  if(!all(is.na(rf.val.pred.lambda.1se[[j]]))){
-    rsq.rf.lambda.1se = c(rsq.rf.lambda.1se, cor(rf.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs"))
-    rssm.rf.lambda.1se = sum(na.omit((val.true[[j]] - rf.val.pred.lambda.1se[[j]])^2))
-    rss0.rf.lambda.1se = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    rf.pct.var.explained.lambda.1se = c(rf.pct.var.explained.lambda.1se, (1 - ( rssm.rf.lambda.1se / rss0.rf.lambda.1se )))
-    rf.num.Records.lambda.1se <- c(num.Records, length(rf.val.pred.lambda.1se[[j]]))    
+  #rf
+  if(!all(is.na(rf.val.pred[[j]]))){
+    rsq.rf = c(rsq.rf, cor(rf.val.pred[[j]], val.true[[j]], use = "complete.obs"))
+    rssm.rf = sum(na.omit((val.true[[j]] - rf.val.pred[[j]])^2))
+    rss0.rf = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
+    rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
+    rf.num.Records <- c(num.Records, length(rf.val.pred[[j]]))
   } else {
-    rsq.rf.lambda.1se = c(rsq.rf.lambda.1se, NA)
-    rf.pct.var.explained.lambda.1se = c(rf.pct.var.explained.lambda.1se, NA)
-    rf.num.Records.lambda.1se <- c(num.Records, NA)   
+    rsq.rf = c(rsq.rf, NA)
+    rf.pct.var.explained = c(rf.pct.var.explained, NA)
+    rf.num.Records <- c(num.Records, NA)
   }
 }
+names(rsq.lasso.lambda.manual) = top.names
+names(lasso.pct.var.explained.lambda.manual) = top.names
+lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
+
+names(rsq.lasso.lambda.min) = top.names
+names(lasso.pct.var.explained.lambda.min) = top.names
+lasso.sqrt.pct.var.lambda.min <- sqrt(lasso.pct.var.explained.lambda.min)
+
 names(rsq.lasso.lambda.1se) = top.names
 names(lasso.pct.var.explained.lambda.1se) = top.names
 lasso.sqrt.pct.var.lambda.1se <- sqrt(lasso.pct.var.explained.lambda.1se)
 
-names(rsq.rf.lambda.1se) = top.names
-names(rf.pct.var.explained.lambda.1se) = top.names
-rf.sqrt.pct.var.lambda.1se <- sqrt(rf.pct.var.explained.lambda.1se)
+names(rsq.rf) = top.names
+names(rf.pct.var.explained) = top.names
+rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
 
-fig.2c.df.lambda.1se <- cbind(rownames(as.data.frame(sqrt.pct.var)), as.data.frame(sqrt.pct.var), as.data.frame(lasso.sqrt.pct.var.lambda.1se), as.data.frame(rf.sqrt.pct.var.lambda.1se), row.names=NULL)
+fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), 
+                            as.data.frame(sqrt.pct.var), 
+                            as.data.frame(lasso.sqrt.pct.var.lambda.manual),
+                            as.data.frame(lasso.sqrt.pct.var.lambda.min),
+                            as.data.frame(lasso.sqrt.pct.var.lambda.1se),
+                            as.data.frame(rf.sqrt.pct.var), row.names=NULL)
 
-colnames(fig.2c.df.lambda.1se)<-c("test", "vitals", "lasso", "rf")
-fig.2c.df.lambda.1se$test = factor(fig.2c.df.lambda.1se$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
+colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
+fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 
-fig.2c.corr.coefs.lambda.1se <- cbind(rownames(as.data.frame(rsq.vitals)), as.data.frame(rsq.vitals), as.data.frame(rsq.lasso.lambda.1se), as.data.frame(rsq.rf.lambda.1se), row.names=NULL)
-colnames(fig.2c.corr.coefs.lambda.1se)<-c("test", "vitals", "lasso", "rf")
-fig.2c.corr.coefs.lambda.1se$test = factor(fig.2c.corr.coefs.lambda.1se$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
+fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)), 
+                           as.data.frame(rsq.vitals), 
+                           as.data.frame(rsq.lasso.lambda.manual), 
+                           as.data.frame(rsq.lasso.lambda.min), 
+                           as.data.frame(rsq.lasso.lambda.1se), 
+                           as.data.frame(rsq.rf), 
+                           row.names=NULL)
+colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
+fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
 # fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
 # ^This line was throwing an error; revised version below:
-fig.2c.corr.coefs.lambda.1se[,c("vitals","lasso","rf")] <- sapply(fig.2c.corr.coefs.lambda.1se[,c("vitals","lasso","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
+fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")] <- sapply(fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
 
-fig.2c.plot.lambda.1se <- melt(fig.2c.corr.coefs.lambda.1se,id.vars="test")
-fig.2c.plot.lambda.1se[,3][is.nan(fig.2c.plot.lambda.1se[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c.lambda.1se <- fig.2c.plot.lambda.1se[order(-fig.2c.plot.lambda.1se[,3]),] # reorder by LM Vitals
+fig.2c.plot <- melt(fig.2c.corr.coefs,id.vars="test")
+fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
 num.Records <- as.data.frame(num.Records)
-num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs), 
+num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
                          TestObs = as.numeric(TestObs))
+
+#choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
+table(fig.2c$variable)
+lambda.choice <- "lasso.manual"
+
+# Plot the % var explained
+ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+  weartals_theme +
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+
+## calculate correlation coefficients and pct var explained by the models (lambda min)
+
 # store the results
-write.table(num.Records, "../SECURE_data/20180531/20180531_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(fig.2c.df.lambda.manual, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.manual, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.df.lambda.min, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.min, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180531/20180531_pct_var_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
+write.csv(fig.2c.df, "../SECURE_data/20180531/20180531_pct_var_Dayprior_ThreeLambdas.csv",row.names=FALSE)
+write.csv(fig.2c.corr.coefs, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_ThreeLambdas.csv",row.names=FALSE)
 write.table(num.Records, "../SECURE_data/20180531/20180531_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(num.Records.check, "../SECURE_data/20180531/20180531_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(lasso.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(lasso.features.lambda.1se, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(lasso.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.1se, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_FeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Plot the % var explained
 # ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
@@ -800,14 +843,18 @@ write.table(rf.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_n
 # Note: this currently contains local files generated by running Fig2C code with and without demographics separately and then reading in the files that were generated. 
 # Has to be done manually for now, can automate when we decide what the final 2C will look like.
 
-withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180507_pct_var_Dayprior.csv",
-                      header=TRUE,sep=',',stringsAsFactors=FALSE)
-noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
+# withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180507_pct_var_Dayprior.csv",
+#                       header=TRUE,sep=',',stringsAsFactors=FALSE)
+# noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
+#                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180531_pct_var_Dayprior_ThreeLambdas.csv",
+                      header=TRUE,sep=',',stringsAsFactors=FALSE)[ ,c('col1', 'col2')]
+noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180531_pct_var_Dayprior_ThreeLambdas.csv",
                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+noDemog[is.na(noDemog)] <- 0; withDemog[is.na(withDemog)] <- 0
 withDemog$demog <-"withDemog"
 noDemog$demog <- "noDemog"
 df <- melt(rbind(withDemog, noDemog))
-df[is.na(df)] <- 0
 test_levels <- df[order(-df$value),][,1] # reorder by best best first
 df$test <- factor(df$test, levels = test_levels)
 ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) + 
@@ -822,6 +869,9 @@ ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) +
 
 ###
 # Calculate difference between top models with and without demographics
+model.diff <-max()
+demog.diff <- withDemog[,2:4] - noDemog[,2:4]
+demog.diff[order(demog.diff$vitals, decreasing=TRUE),]
 
 ###
 # Plot the top Lasso and RF top features
@@ -847,87 +897,6 @@ ggplot(top.features, aes(x=lasso.feature, y=mean, color = test)) +
   labs(x = "Model Features",y = expression(paste("Coefficient")))+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 
-####################################
-#   Figure 2C Timecourse / 5 (??)  #
-####################################
-#Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
-weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
-# read in each of the corr_coeffs from the different time windows
-# had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
-# save as pdf 4x12.5"
-# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
-#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
-fig.2c.df <-read.csv("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-fig.2c.plot <- melt(fig.2c.df)
-fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c$test <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
-fig.2c$test = factor(fig.2c$test, levels = order(-fig.2c.plot[,3]))
-
-# Plot the % var explained
-ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
-
-
-### THE PART BELOW IS UNDER CONSTRUCTION
-# Look at differences between DayPrior and AllData
-data.allData <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180503_pct_var_Dayprior.csv",
-                          header=TRUE,sep=',',stringsAsFactors=FALSE)
-data.dayPrior <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-#data.dayPrior$model<- gsub("vitals", "vitals.ipop", data$model)
-#data$r_squared <- pmax(data$r_squared, 0)
-#data.nodemog$r_squared <- pmax(data$r_squared, 0)
-#df <- merge(data.dayPrior, data.allData, by = c("model", "test"))
-#colnames(df)[3:4] <- c("DayPrior", "AllData")
-df <- data.dayPrior[,3:4] - data.allData[,3:4]
-df2 <- melt(df)
-df2<- df2[order(-df2$value),]
-df2<-cbind(data.dayPrior[,1], df2)
-colnames(df2)<-c("test", "model", "pct.var")
-ggplot(df2, aes(test,pct.var, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("rf", "lasso"),
-                       labels=c("RF", "LASSO")) +
-  scale_color_discrete(breaks=c("rf", "lasso"),
-                       labels=c("RF", "LASSO")) +
-  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by using Day Prior vs All Watch Data"))))
-
-### THE PART BELOW IS UNDER CONSTRUCTION
-# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
-# can we create one more layer of mixed effects models in the iPOP analysis here?
-
-# Look at differences between with and without demog
-data.nodemog <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_TwoWeekPrior.csv",
-                          header=TRUE,sep=',',stringsAsFactors=FALSE)
-data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_TwoWeekPrior_demog.csv",
-                  header=TRUE,sep=',',stringsAsFactors=FALSE)
-data$model<- gsub("vitals", "vitals.ipop", data$model)
-#data$r_squared <- pmax(data$r_squared, 0)
-#data.nodemog$r_squared <- pmax(data$r_squared, 0)
-df <- merge(data, data.nodemog, by = c("model", "test"))
-colnames(df)[3:4] <- c("r_w_demog", "r_no_demog")
-df$delta <- df[,3] - df[,4]
-df<- df[order(-df$delta),]
-
-ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
-  weartals_theme + 
-  ylim(-0.5,0.5) +
-  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
-                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
-  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
-
-
-
 ################################################
 #  Figure 2E  - Canonical Correlation Analysis #
 ################################################
@@ -941,7 +910,7 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
 library("PMA")
 library("Hmisc")
 
-#TODO: UALAB coding causes problems! I removedit from diabetes
+#TODO: UALAB coding causes problems! I removed it from diabetes
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
@@ -1093,9 +1062,21 @@ length(na.omit(vitals$Temp)) + length(na.omit(vitals$Pulse)) # total number of c
 #304 people have more than 50 observations per person
 length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 
-########################
-#  Figure 3A 3D and 3E #
-########################
+##############
+#  Figure 3B #
+##############
+
+hist(corDf$Pulse, col="darkred", breaks=100,
+     xlab = "cHR",
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+hist(corDf$Temp, col="darkgrey", breaks=100,
+     xlab = "cTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+##############
+#  Figure 3C #
+##############
 #30 K Univariate Correlation Fit Plots by Lukasz/Jessie
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
 allClin <- c("A1C","AG","ALB","ALKP","ALT","AST","BASO",
@@ -1217,18 +1198,6 @@ p <- grid.arrange(grobs=plots1,ncol=5)
 p2 <- grid.arrange(grobs=plots2,ncol=5)
 as.matrix(r.squared)
 
-
-##############
-#  Figure 3B #
-##############
-
-hist(corDf$Pulse, col="darkred", breaks=100,
-     xlab = "cHR",
-     main = NULL, font.lab=2,lwd=2,font=2)
-
-hist(corDf$Temp, col="darkgrey", breaks=100,
-     xlab = "cTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
 
 #####################
 #  Figure 3F and 3G #
@@ -1960,6 +1929,86 @@ generate5A = function(clin,dataset = "30k",cap=200){
   ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
 }
 generate5A("CHOL","30k",cap=100)
+
+#####################################
+#   Figure 5A (Timecourse from 2D)  #
+#####################################
+
+#Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
+weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+# read in each of the corr_coeffs from the different time windows
+# had to manually add back in headers in the with demog files that I ran on scg: 20180327_corr_coeffs_AllData.csv , 20180327_corr_coeffs_MonthPrior.csv, 20180327_corr_coeffs_TwoWeekPrior.csv, 20180327_corr_coeffs_WeekPrior.csv,20180327_corr_coeffs_DayPrior.csv, 20180327_corr_coeffs_ThreeDayPrior.csv, 
+# save as pdf 4x12.5"
+# data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_AllData_demog.csv",
+#                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+fig.2c.df <-read.csv("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
+                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+fig.2c.plot <- melt(fig.2c.df)
+fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c$test <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c$test = factor(fig.2c$test, levels = order(-fig.2c.plot[,3]))
+
+# Plot the % var explained
+ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+  weartals_theme +
+  ylim(0,1) +
+  scale_shape_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
+                       labels=c("LM vitals", "LASSO", "RF")) +
+  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
+
+
+### THE PART BELOW IS UNDER CONSTRUCTION
+# Look at differences between DayPrior and AllData
+data.allData <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180503_pct_var_Dayprior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data.dayPrior <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_restingbugfix_demog_pctdev/20180507_AllData_pct_var.csv",
+                           header=TRUE,sep=',',stringsAsFactors=FALSE)
+#data.dayPrior$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+#df <- merge(data.dayPrior, data.allData, by = c("model", "test"))
+#colnames(df)[3:4] <- c("DayPrior", "AllData")
+df <- data.dayPrior[,3:4] - data.allData[,3:4]
+df2 <- melt(df)
+df2<- df2[order(-df2$value),]
+df2<-cbind(data.dayPrior[,1], df2)
+colnames(df2)<-c("test", "model", "pct.var")
+ggplot(df2, aes(test,pct.var, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  scale_color_discrete(breaks=c("rf", "lasso"),
+                       labels=c("RF", "LASSO")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by using Day Prior vs All Watch Data"))))
+
+### THE PART BELOW IS UNDER CONSTRUCTION
+# make the case that if we could do the RF etc on all data (dont need to be individualized models) and we could combine the individualized models we could do an awesome job at preciting the clinical labs.
+# can we create one more layer of mixed effects models in the iPOP analysis here?
+
+# Look at differences between with and without demog
+data.nodemog <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_no_demographics/20180420_corr_coeffs_TwoWeekPrior.csv",
+                          header=TRUE,sep=',',stringsAsFactors=FALSE)
+data <-read.table("/Users/jessilyn/Desktop/framework_timecourse/with_resting_bugfix_and_demographics/20180420_corr_coeffs_TwoWeekPrior_demog.csv",
+                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+data$model<- gsub("vitals", "vitals.ipop", data$model)
+#data$r_squared <- pmax(data$r_squared, 0)
+#data.nodemog$r_squared <- pmax(data$r_squared, 0)
+df <- merge(data, data.nodemog, by = c("model", "test"))
+colnames(df)[3:4] <- c("r_w_demog", "r_no_demog")
+df$delta <- df[,3] - df[,4]
+df<- df[order(-df$delta),]
+
+ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=model, color=model)) +
+  weartals_theme + 
+  ylim(-0.5,0.5) +
+  scale_shape_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  scale_color_discrete(breaks=c("all-rf", "lasso-rf", "all-lm", "lasso-lm", "vitals"),
+                       labels=c("RF all variables", "RF + LASSO", "LM all variables", "LM + LASSO", "LM vitals")) +
+  labs(x = "Lab tests",y = expression(atop("Increase in Corr Coeff", paste("by adjusting for demographics"))))
 
 ###############
 #  Figure 5B #
