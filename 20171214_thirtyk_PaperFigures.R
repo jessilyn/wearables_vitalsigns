@@ -373,10 +373,21 @@ lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
 rf.features <- data.frame("test"=character(),"cv.run"=character(),
                           "left.out.person"=character(),"rf.feature"=character(),
                           "rf.coef.value"=character())
+
+#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+use.iPOP <- TRUE
+
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
   cat("Patient",patients[k],"\n") # LOO
+  #set up iPOP dummy variable if use.iPOP=TRUE
+  if(use.iPOP){
+    cache <- data.frame(model.matrix( ~ iPOP_ID - 1, data=wear))
+    cache <- cache[,-which(names(cache)==paste0("iPOP_ID",gsub("-",".",test)))]
+    wear <- cbind(wear,cache)
+    demo.variables <- c(demo.variables,names(cache)) #append iPOPs to demo
+  }
   dat.train.unsorted <- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
   dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
   dat.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
