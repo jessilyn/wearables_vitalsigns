@@ -1543,9 +1543,10 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
 # Figure 4 #
 ############
 ## Figure 4A: Check how individual means perform
+
+# Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
-
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
@@ -1652,57 +1653,6 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7){
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
 generate4A("30k",threshold = 5, threshold_hi = 8, cap = 500)
 
-# Find patients and tests with the following conditions:
-#  * patients with > 20 observations
-#  * personal models work great (high R^2)
-#  * coefficients are far apart
-identifyNiceCase = function(clin,dataset){
-  if (dataset == "iPOP"){
-    identifier = "iPOP_ID"
-    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
-  }
-  else{
-    identifier = "ANON_ID"
-    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
-  }
-  # Alternatively, we select people with the largest number of observations
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
-
-  toppat = -sort(-table(corDf.tmp[[identifier]]))
-  toppat = toppat[toppat > 50]
-  toppat = names(toppat)
-  
-  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
-  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vitals,clin)]
-  
-  # Use lm to estimate the population model
-  frm = paste0(clin," ~ ",paste(vitals, collapse=" + "))
-  model = lm(frm,corDf.tmp)
-
-  # Compute R for individual models
-  dd$accuracy = dd[[identifier]]
-  
-  res.pat = c()
-  res.err = c()
-  for (pat in toppat){
-    cat(paste("Building a model for",pat,"\n"))
-    frm = paste0(clin," ~ ",paste(vitals, collapse=" + "))
-    corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
-
-    model = lm(frm, data = corDf.ind)
-    res.err = c(res.err, summary(model)$adj.r)
-    res.pat = c(res.pat, pat)
-  }
-  
-  data.frame(patient = res.pat, error = res.err)
-}
-res = identifyNiceCase("HCT","30k")
-res[order(-res$error),]
-
 ## Figure 4B: Individual models Lab ~ Vital
 generate4B = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
@@ -1771,7 +1721,7 @@ generate4B = function(clin,vit,dataset = "30k"){
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
   ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
 }
-generate4B("CHOL","Diastolic","iPOP")
+#generate4B("CHOL","Diastolic","iPOP")
 generate4B("HCT","Diastolic","30k")
 
 generate4C = function(clin,vit,dataset = "30k"){
@@ -1779,16 +1729,13 @@ generate4C = function(clin,vit,dataset = "30k"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
     tocmp = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
-#    lims = c(0.2, 0.8) # THESE LIMITS ARE FOR MONOAB
   }
   else{
     identifier = "ANON_ID"
     corDf.tmp = corDf[!is.na(corDf[[clin]]),]
     tocmp = c("N-5362","PD-4419")
-#    lims = c(130,145) # THESE LIMITS ARE FOR MONOAB
   }
-
-    dd = corDf.tmp[,c(clin,vit,identifier)]
+  dd = corDf.tmp[,c(clin,vit,identifier)]
 
   # Use loess to estimate the population model
   frm = paste0(clin," ~ ",vit)
@@ -1798,7 +1745,6 @@ generate4C = function(clin,vit,dataset = "30k"){
 
   cols = gg_color_hue(5)
   for (i in 1:2){
-#    ggplot(dd[dd[[identifier]] == tocmp[i],], aes_string(vit, clin)) + 
     ggplot(dd[dd[[identifier]] %in% tocmp,], aes_string(vit, clin, color = identifier)) + 
       weartals_theme + theme(text = element_text(size=25)) +
       scale_fill_manual(values = cols[c(3,5)]) +
@@ -1810,7 +1756,6 @@ generate4C = function(clin,vit,dataset = "30k"){
   }
 }
 generate4C("HCT","Diastolic","30k")
-  #generate4C("MONOAB","Pulse","iPOP")
 
 library("grid")
 
