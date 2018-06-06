@@ -1544,6 +1544,12 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
 ############
 ## Figure 4A: Check how individual means perform
 
+# Get ggplot colors
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
 # Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
@@ -1758,11 +1764,6 @@ generate4C = function(clin,vit,dataset = "30k"){
 generate4C("HCT","Diastolic","30k")
 
 library("grid")
-
-gg_color_hue <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
 
 generate4D = function(dataset){
   if (dataset == "iPOP"){
