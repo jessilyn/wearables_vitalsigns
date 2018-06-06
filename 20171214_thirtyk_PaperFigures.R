@@ -198,9 +198,8 @@ df[,"Heart_Rate"] <- apply(df[,"Heart_Rate"], 2, remove_outliers) # clean data b
 df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
 # restrict to daytime values only (between 6am-10pm)
 #df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
-# df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local)
-# daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
-# df <- daytime.df
+df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
+daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
 vitals$RECORDED_TIME<-as.Date(vitals$RECORDED_TIME, "%d-%b-%Y")
@@ -215,9 +214,9 @@ for (window in windows){
   maxsteps <- 1 #define max steps for resting threshold
   indiv.means <- c()
   indiv.sd <- c()
-  for(i in unique(df$iPOP_ID)){
+  for(i in unique(daytime.df$iPOP_ID)){
     print(i)
-    subDf <- df[which(df$iPOP_ID %in% i),] #pull data per individual
+    subDf <- daytime.df[which(daytime.df$iPOP_ID %in% i),] #pull data per individual
     restingST<-c()
     restingST <- rollapplyr(subDf$Steps, width=window, by=1, sum, partial=TRUE)
     restingST[1:window-1]<-"NA" # remove 1st x observations because we dont know what happened prior to putting the watch on
