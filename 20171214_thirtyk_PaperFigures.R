@@ -387,6 +387,8 @@ for (k in 1:length(patients)){
     cache <- cache[,-which(names(cache)==paste0("iPOP_ID",gsub("-",".",test)))]
     wear <- cbind(wear,cache)
     demo.variables <- c(demo.variables,names(cache)) #append iPOPs to demo
+  } else if(!use.iPOP) {
+    demo.variables <- demo.variables <- c("AgeIn2016", names(gender), names(ethn))
   }
   dat.train.unsorted <- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
   dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
