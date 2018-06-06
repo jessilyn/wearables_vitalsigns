@@ -1577,12 +1577,17 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
 
-getLMresults= function(corDf4A, test.name, threshold, identifier, cap, extra_coefs){
+getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7){
+  # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+
   ids = sort(table(corDf.tmp[[identifier]]))
-  atleastafew = names(ids[ids >= threshold]) # select patients with at least 10 tests
+  atleastafew = names(ids[(ids >= threshold) & (ids <= threshold_hi)]) # select patients with at least 10 tests
   atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
   corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
   testids = c()
@@ -1598,7 +1603,7 @@ getLMresults= function(corDf4A, test.name, threshold, identifier, cap, extra_coe
     # Build individual models and check correlation predicted vs true
     # model = lm(paste(test.name,"~",identifier), data=corDf.tmp[-testids,],na.action = na.omit)
     
-    frm = paste(test.name,"~",identifier,extra_coefs)
+    frm = paste(test.name,"~",model_coefs)
     print(frm)
     model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
     preds = predict(model, newdata = corDf.tmp[testids,])
@@ -1611,7 +1616,10 @@ getLMresults= function(corDf4A, test.name, threshold, identifier, cap, extra_coe
     var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
     if (test.name=="GLOB")
       plot(corDf.tmp[testids,test.name], preds)
-    res = sqrt(1 - var.exp/var.null)
+    if (var.exp/var.null > 1)
+      res = 0
+    else 
+      res = sqrt(1 - var.exp/var.null)
   }
   else {
     res = 0
@@ -1619,7 +1627,8 @@ getLMresults= function(corDf4A, test.name, threshold, identifier, cap, extra_coe
   res
 }
 
-generate4A = function(dataset, threshold = 4, cap = 10){
+# Loop over all tests and all models for the personal medels comparsion. Plot results
+generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf4A = iPOPcorDf
@@ -1637,19 +1646,29 @@ generate4A = function(dataset, threshold = 4, cap = 10){
   
   for (test.name in test.names){
     models = list()
-    models[["personal mean"]] = ""
-    models[["vitals + personal mean"]] = " + Temp + Pulse"
     
-
+    # population vitals model
+    models[["vitals"]] = "Pulse + Temp + Systolic + Diastolic + Respiration"
+    
+    # population vitals + personal intercept model
+    models[["vitals + personal mean"]] = paste0(identifier," + Pulse + Temp + Systolic + Diastolic + Respiration")
+    
+    # population vitals + personal intercept model
+    # models[["vitals + personal mean and slope"]] = paste0(identifier," + Pulse + Temp + Systolic + Diastolic + Respiration + Pulse * ANON_ID + Temp * ANON_ID + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID")
+    
+    # population vitals + personal intercept model
+    models[["personal mean"]] = paste0(identifier)
+    
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
-      res.values = c(res.values, getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]]))
+      res.values = c(res.values, getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = 5))
       res.models = c(res.models, mdl)
     }
   }
   res = data.frame(test = res.tests, model = res.models, value = res.values)
   print(res)
   res = res[order(-res$value),]
+  res = res[order(res$model),] # order by the population vitals model
   res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
   ggplot(res, aes(test, value, group = model, color = model)) + geom_point(size = 3, shape=1, aes(fill = model)) +
     ylab(expression(sqrt("Variance explained"))) +
@@ -1658,8 +1677,62 @@ generate4A = function(dataset, threshold = 4, cap = 10){
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
 }
-#generate4A("iPOP",cap = 100)
-generate4A("30k",threshold = 5, cap = 50)
+
+# TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
+#  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
+#  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
+generate4A("30k",threshold = 5, threshold_hi = 8, cap = 500)
+
+# Find patients and tests with the following conditions:
+#  * patients with > 20 observations
+#  * personal models work great (high R^2)
+#  * coefficients are far apart
+identifyNiceCase = function(clin,dataset){
+  if (dataset == "iPOP"){
+    identifier = "iPOP_ID"
+    corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
+  }
+  else{
+    identifier = "ANON_ID"
+    corDf.tmp = corDf[!is.na(corDf[[clin]]),]
+  }
+  # Alternatively, we select people with the largest number of observations
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+
+  toppat = -sort(-table(corDf.tmp[[identifier]]))
+  toppat = toppat[toppat > 50]
+  toppat = names(toppat)
+  
+  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vitals,clin)]
+  
+  # Use lm to estimate the population model
+  frm = paste0(clin," ~ ",paste(vitals, collapse=" + "))
+  model = lm(frm,corDf.tmp)
+
+  # Compute R for individual models
+  dd$accuracy = dd[[identifier]]
+  
+  res.pat = c()
+  res.err = c()
+  for (pat in toppat){
+    cat(paste("Building a model for",pat,"\n"))
+    frm = paste0(clin," ~ ",paste(vitals, collapse=" + "))
+    corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
+
+    model = lm(frm, data = corDf.ind)
+    res.err = c(res.err, summary(model)$adj.r)
+    res.pat = c(res.pat, pat)
+  }
+  
+  data.frame(patient = res.pat, error = res.err)
+}
+res = identifyNiceCase("HCT","30k")
+res[order(-res$error),]
 
 ## Figure 4B: Individual models Lab ~ Vital
 generate4B = function(clin,vit,dataset = "30k"){
@@ -1676,31 +1749,33 @@ generate4B = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP")
     toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
   else
-    toppat = c("N-3691","D-4185")
+    toppat = c("N-8819","N-5362","PD-4419","D-3086","D-6050")
   
   # Alternatively, we select people with the largest number of observations
-  toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
+  # toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
   
   dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vit,clin)]
   
   # Use loess to estimate the population model
   frm = paste0(clin," ~ ",vit)
-  ww = loess(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  ww = lm(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
   grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
-  ff = approxfun(grid, predict(ww,grid))
+  df = data.frame(vit = grid)
+  df[[vit]] = grid
+  ff = approxfun(grid, predict(ww,df ))
   
   # Compute R for individual models
   dd$accuracy = dd[[identifier]]
   for (pat in toppat){
     cat(paste("Building a model for",pat,"\n"))
-    frm = paste0(clin," ~ ",vit," + ",vit,"^2")
+    frm = paste0(clin," ~ ",vit) #," + ",vit,"^2")
     corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
     corDf.ind = corDf.ind[!is.na(corDf.ind[,vit]),]
     
     # Var explained (CV)
     errors = c()
     for (i in 1:20){
-      testids = sample(nrow(corDf.ind))[1:floor(nrow(corDf.ind)*0.8)]
+      testids = sample(nrow(corDf.ind))[1:floor(nrow(corDf.ind)*0.2)]
       model = lm(frm, data = corDf.ind[-testids,])
       preds = predict(model, newdata = corDf.ind[testids,])
       var.exp = sum( (corDf.ind[testids,clin] - preds) ** 2)
@@ -1709,6 +1784,8 @@ generate4B = function(clin,vit,dataset = "30k"){
       errors = c(errors, sqrt(err))
     }
     err = mean(errors)
+    
+    plot(corDf.ind[testids,clin], preds)
 
     # Correlation
     # model.sum = summary(model)
@@ -1721,29 +1798,28 @@ generate4B = function(clin,vit,dataset = "30k"){
   ggplot(dd, aes_string(vit, clin, group = "accuracy", colour = "accuracy")) + 
     weartals_theme + theme(text = element_text(size=25)) +
     #  geom_point(size=0) + 
-    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1, fill=NA) +
+    geom_smooth(method="lm", formula = y ~ x, size=1, fill=NA) +
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
   ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
 }
-generate4B("CHOL","Pulse","iPOP")
-generate4B("CHOL","Pulse","30k")
+generate4B("CHOL","Diastolic","iPOP")
+generate4B("HCT","Diastolic","30k")
 
 generate4C = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
     tocmp = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
-    lims = c(0.2, 0.8) # THESE LIMITS ARE FOR MONOAB
+#    lims = c(0.2, 0.8) # THESE LIMITS ARE FOR MONOAB
   }
   else{
     identifier = "ANON_ID"
     corDf.tmp = corDf[!is.na(corDf[[clin]]),]
-    tocmp = c("D-4185", "PD-176")
-    lims = c(130,145) # THESE LIMITS ARE FOR MONOAB
+    tocmp = c("N-5362","PD-4419")
+#    lims = c(130,145) # THESE LIMITS ARE FOR MONOAB
   }
 
     dd = corDf.tmp[,c(clin,vit,identifier)]
-  print(dd)
 
   # Use loess to estimate the population model
   frm = paste0(clin," ~ ",vit)
@@ -1751,21 +1827,28 @@ generate4C = function(clin,vit,dataset = "30k"){
   grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
   ff = approxfun(grid, predict(ww,grid))
 
+  cols = gg_color_hue(5)
   for (i in 1:2){
-    ggplot(dd[dd[[identifier]] == tocmp[i],], aes_string(vit, clin)) + 
+#    ggplot(dd[dd[[identifier]] == tocmp[i],], aes_string(vit, clin)) + 
+    ggplot(dd[dd[[identifier]] %in% tocmp,], aes_string(vit, clin, color = identifier)) + 
       weartals_theme + theme(text = element_text(size=25)) +
-      geom_point(size=2) + 
-      geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1) +
-      xlim(c(40,110)) + # THESE LIMITS ARE FOR PULSE
-      ylim(lims) + 
+      scale_fill_manual(values = cols[c(3,5)]) +
+      scale_color_manual(values = cols[c(3,5)]) +
+      geom_point(size=2, aes_string(color = identifier)) + 
+      geom_smooth(method="lm", formula = y ~ x, size=1) +
       stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
     ggsave(paste0("plots/Figure-4C-",i,"-",dataset,".png"))
   }
 }
-#generate4C("MONOAB","Pulse","30k")
-#generate4C("MONOAB","Pulse","iPOP")
+generate4C("HCT","Diastolic","30k")
+  #generate4C("MONOAB","Pulse","iPOP")
 
 library("grid")
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
 
 generate4D = function(dataset){
   if (dataset == "iPOP"){
@@ -1779,16 +1862,19 @@ generate4D = function(dataset){
   
   png(paste0("plots/Figure-4D-",dataset,".png"),height=300,width=1500,units="px")
   grid.newpage()
-  pushViewport(viewport(layout = grid.layout(2, 5)))
+  pushViewport(viewport(layout = grid.layout(1, 5)))
+  
+  annotate.pat = c("D-3086","D-6050","N-5362","N-8819","PD-4419")
+  cols = gg_color_hue(length(annotate.pat))
   
   ## Distribution of slopes in individual models
   # !! Only patients with at least min_visits = 10
   min_visits = 10
-  top.vars = c("NEUT","LYM","BASO","MONO","EOS")
-  vits = c("Temp","Pulse")
-  
+  top.vars = c("HCT")
+  vits = c("Temp","Pulse","Systolic","Diastolic","Respiration")
+
   for (i in 1:length(top.vars)){
-    for (j in 1:2){
+    for (j in 1:length(vits)){
       vit = vits[j]
       clin = top.vars[i]
       #2*(i - 1) + j + 1
@@ -1801,15 +1887,25 @@ generate4D = function(dataset){
         print(frm)
         mm = lmer(frm, data = corDf.tmp)
         cf = coef(mm)
-        qq = qplot(cf[[identifier]][vit], geom="histogram")  + weartals_theme + xlab(paste0(clin," ~ ",vit)) + ylab("count")
-        print(qq, vp = viewport(layout.pos.row = j, layout.pos.col = i))
+        
+        
+        qq = qplot(cf[[identifier]][vit], geom="histogram")  + weartals_theme + xlab(paste0(clin," ~ ",vit)) +
+          ylab("count")
+        
+        for (k in 1:length(annotate.pat)){
+          val = cf[[identifier]][annotate.pat[k],vit]
+          print(val)
+          
+          qq = qq + geom_vline(xintercept=val,color=cols[k],size=1.5)
+        }
+        print(qq, vp = viewport(layout.pos.row = i, layout.pos.col = j))
       }
     }
   }
   dev.off()
+  cf
 }
-generate4D("iPOP")
-generate4D("30k")
+res = generate4D("30k")
 
 ###############
 #  Figure 5A #
