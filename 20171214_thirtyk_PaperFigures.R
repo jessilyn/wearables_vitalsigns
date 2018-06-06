@@ -634,7 +634,8 @@ for (k in 1:length(patients)){
       lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
     } else {
-      # lasso.val.pred.lambda.manual[[l]] = NA # fill with NA if invalid model was supplied
+      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.manual[[l]])
+      lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     lasso.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
@@ -643,7 +644,8 @@ for (k in 1:length(patients)){
       lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
     } else {
-      # lasso.val.pred.lambda.min[[l]] = NA # fill with NA if invalid model was supplied
+      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.min[[l]])
+      lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     lasso.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.1se,collapse=" + "))
@@ -652,7 +654,8 @@ for (k in 1:length(patients)){
       lasso.model.lambda.1se = lm(as.formula(lasso.fml.lambda.1se), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
     } else {
-      # lasso.val.pred.lambda.1se[[l]] = NA # fill with NA if invalid model was supplied
+      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.1se[[l]])
+      lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
