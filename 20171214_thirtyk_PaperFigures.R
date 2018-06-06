@@ -381,7 +381,6 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
 source("ggplot-theme.R") # just to make things look nice
-#top.names<-c("MONOAB", "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
 
 ####
 # CODE FOR SIMPLE LM
@@ -471,6 +470,18 @@ sqrt.pct.var <- sqrt(pct.var.explained)
 
 ####
 # CODE FOR LASSO, RF
+####
+
+# choose for during troubleshooting
+use.Troubleshoot.mode = TRUE
+#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+use.iPOP <- FALSE
+#choose whether Demographics in models (supply TRUE or FALSE)
+use.Demog <- FALSE
+
+if (use.Troubleshoot.mode){
+top.names<-c("MONOAB") #, "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
+}
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
@@ -479,7 +490,6 @@ wear[,8:length(names(wear))] <- apply(
 wear$Gender <- as.factor(wear$Gender)
 wear$Ethn <- as.factor(wear$Ethn)
 wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-# demo.variables <- c("AgeIn2016", "Gender", "Ethn")
 
 #change gender and ethnicity to dummy variables
 gender <- data.frame(model.matrix( ~ Gender - 1, data=wear))
@@ -517,8 +527,11 @@ rf.features <- data.frame("test"=character(),"cv.run"=character(),
                           "left.out.person"=character(),"rf.feature"=character(),
                           "rf.coef.value"=character())
 
-#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
-use.iPOP <- TRUE
+if(use.Demog){
+    demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+  } else if(!use.Demog) {
+      demo.variables <- c()
+}
 
 for (k in 1:length(patients)){
   train <- patients[patients != patients[k]]
@@ -530,9 +543,7 @@ for (k in 1:length(patients)){
     cache <- cache[,-which(names(cache)==paste0("iPOP_ID",gsub("-",".",test)))]
     wear <- cbind(wear,cache)
     demo.variables <- c(demo.variables,names(cache)) #append iPOPs to demo
-  } else if(!use.iPOP) {
-    demo.variables <- demo.variables <- c("AgeIn2016", names(gender), names(ethn))
-  }
+  } 
   dat.train.unsorted <- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
   dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
   dat.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
@@ -608,46 +619,6 @@ for (k in 1:length(patients)){
     lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
     lasso.variables.to.use.lambda.1se = names(factors.lambda.1se[abs(factors.lambda.1se)>1e-10])
-    
-    # # check if Gender* / Ethn* selected into LASSO models
-    # ethn.sel.lambda.manual = grep("^Ethn",lasso.variables.to.use.lambda.manual)
-    # gend.sel.lambda.manual = grep("^Gender",lasso.variables.to.use.lambda.manual)
-    # ethn.sel.lambda.min = grep("^Ethn",lasso.variables.to.use.lambda.min)
-    # gend.sel.lambda.min = grep("^Gender",lasso.variables.to.use.lambda.min)
-    # ethn.sel.lambda.1se = grep("^Ethn",lasso.variables.to.use.lambda.1se)
-    # gend.sel.lambda.1se = grep("^Gender",lasso.variables.to.use.lambda.1se)
-    # 
-    # # remove Gender* and add Gender if present
-    # # remove Ethn* and add Ethn if present
-    # torm = c(ethn.sel.lambda.manual, gend.sel.lambda.manual)
-    # if (length(torm) > 0){
-    #   lasso.variables.to.use.lambda.manual = lasso.variables.to.use.lambda.manual[-torm]
-    #   if (length(ethn.sel.lambda.manual) > 0){
-    #     lasso.variables.to.use.lambda.manual = c("Ethn",lasso.variables.to.use.lambda.manual) }
-    #   if (length(gend.sel.lambda.manual) > 0){
-    #     lasso.variables.to.use.lambda.manual = c("Gender",lasso.variables.to.use.lambda.manual) # variables.to.use contains all variables selected by LASSO    
-    #   }        
-    # }
-    # 
-    # torm = c(ethn.sel.lambda.min, gend.sel.lambda.min)
-    # if (length(torm) > 0){
-    #   lasso.variables.to.use.lambda.min = lasso.variables.to.use.lambda.min[-torm]
-    #   if (length(ethn.sel.lambda.min) > 0){
-    #     lasso.variables.to.use.lambda.min = c("Ethn",lasso.variables.to.use.lambda.min) }
-    #   if (length(gend.sel.lambda.min) > 0){
-    #     lasso.variables.to.use.lambda.min = c("Gender",lasso.variables.to.use.lambda.min) # variables.to.use contains all variables selected by LASSO    
-    #   }        
-    # }
-    # 
-    # torm = c(ethn.sel.lambda.1se, gend.sel.lambda.1se)
-    # if (length(torm) > 0){
-    #   lasso.variables.to.use.lambda.1se = lasso.variables.to.use.lambda.1se[-torm]
-    #   if (length(ethn.sel.lambda.1se) > 0){
-    #     lasso.variables.to.use.lambda.1se = c("Ethn",lasso.variables.to.use.lambda.1se) }
-    #   if (length(gend.sel.lambda.1se) > 0){
-    #     lasso.variables.to.use.lambda.1se = c("Gender",lasso.variables.to.use.lambda.1se) # variables.to.use contains all variables selected by LASSO    
-    #   }        
-    # }
     
     # build null, lasso, and rf models
     set.seed(1)
@@ -848,17 +819,8 @@ ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test,
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
 
 # store the results
-# write.table(num.Records, "../SECURE_data/20180531/20180531_num_Records_DayPrior.csv",row.names=FALSE,col.names=FALSE, sep=",")
-#^duplicated below
 write.csv(fig.2c.df, "../SECURE_data/20180531/20180531_pct_var_Dayprior_ThreeLambdas.csv",row.names=FALSE)
 write.csv(fig.2c.corr.coefs, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_ThreeLambdas.csv",row.names=FALSE)
-# write.table(fig.2c.df.lambda.manual, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-# write.table(fig.2c.corr.coefs.lambda.manual, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaManual.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-# write.table(fig.2c.df.lambda.min, "../SECURE_data/20180531/20180531_pct_var_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-# write.table(fig.2c.corr.coefs.lambda.min, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_LambdaMin.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-# write.table(fig.2c.df.lambda.1se, "../SECURE_data/20180531/20180531_pct_var_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-# write.table(fig.2c.corr.coefs.lambda.1se, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_Lambda1se.csv",row.names=FALSE,col.names=c("test", "vitals", "lasso", "rf"), sep=",")
-#^Simplified this; don't think we'll need it now.
 write.table(num.Records, "../SECURE_data/20180531/20180531_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(num.Records.check, "../SECURE_data/20180531/20180531_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(lasso.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
@@ -881,9 +843,13 @@ write.table(rf.features, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_F
 # Note: this currently contains local files generated by running Fig2C code with and without demographics separately and then reading in the files that were generated. 
 # Has to be done manually for now, can automate when we decide what the final 2C will look like.
 
-withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180507_pct_var_Dayprior.csv",
-                      header=TRUE,sep=',',stringsAsFactors=FALSE)
-noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
+# withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180507_pct_var_Dayprior.csv",
+#                       header=TRUE,sep=',',stringsAsFactors=FALSE)
+# noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
+#                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180531_pct_var_Dayprior_ThreeLambdas.csv",
+                      header=TRUE,sep=',',stringsAsFactors=FALSE)[ ,c('col1', 'col2')]
+noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180531_pct_var_Dayprior_ThreeLambdas.csv",
                     header=TRUE,sep=',',stringsAsFactors=FALSE)
 noDemog[is.na(noDemog)] <- 0; withDemog[is.na(withDemog)] <- 0
 withDemog$demog <-"withDemog"
