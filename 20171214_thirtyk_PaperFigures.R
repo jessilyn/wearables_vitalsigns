@@ -382,6 +382,13 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 
 source("ggplot-theme.R") # just to make things look nice
 
+# choose for during troubleshooting
+use.Troubleshoot.mode = FALSE
+
+if (use.Troubleshoot.mode){
+  top.names<-c("MONOAB", "HGB", "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
+}
+
 ####
 # CODE FOR SIMPLE LM
 #
@@ -472,16 +479,12 @@ sqrt.pct.var <- sqrt(pct.var.explained)
 # CODE FOR LASSO, RF
 ####
 
-# choose for during troubleshooting
-use.Troubleshoot.mode = TRUE
 #choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+
 use.iPOP <- FALSE
 #choose whether Demographics in models (supply TRUE or FALSE)
 use.Demog <- FALSE
 
-if (use.Troubleshoot.mode){
-top.names<-c("MONOAB", "HGB", "HCT") # "RBC", "PLT") # for testing model on small subset
-}
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
@@ -781,9 +784,9 @@ fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)),
                             as.data.frame(lasso.sqrt.pct.var.lambda.1se),
                             as.data.frame(rf.sqrt.pct.var), row.names=NULL)
 
-colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
-fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 
+colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
+#fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)), 
                            as.data.frame(rsq.vitals), 
                            as.data.frame(rsq.lasso.lambda.manual), 
@@ -792,23 +795,25 @@ fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)),
                            as.data.frame(rsq.rf), 
                            row.names=NULL)
 colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
-fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
+
+#fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
 # fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
 # ^This line was throwing an error; revised version below:
 fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")] <- sapply(fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
+#fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(fig.2c.corr.coefs$test[order(-fig.2c.corr.coefs$lasso.min)]))
+
+#choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
+lambda.choice <- "lasso.min"
 
 fig.2c.plot <- melt(fig.2c.corr.coefs,id.vars="test")
-fig.2c.plot[,3][is.nan(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+fig.2c.plot$test = factor(fig.2c.plot$test, levels = as.factor(fig.2c.plot$test[order(-fig.2c.plot$value)]))
+fig.2c <- fig.2c.plot
+#fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
 num.Records <- as.data.frame(num.Records)
 num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
                          TestObs = as.numeric(TestObs))
-
-#choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
-table(fig.2c$variable)
-lambda.choice <- "lasso.manual"
-
 # Plot the % var explained
 ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
@@ -822,14 +827,14 @@ ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test,
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
 
 # store the results
-write.csv(fig.2c.df, "../SECURE_data/20180531/20180531_pct_var_Dayprior_ThreeLambdas.csv",row.names=FALSE)
-write.csv(fig.2c.corr.coefs, "../SECURE_data/20180531/20180531_corr_coefs_Dayprior_ThreeLambdas.csv",row.names=FALSE)
-write.table(num.Records, "../SECURE_data/20180531/20180531_Dayprior_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(num.Records.check, "../SECURE_data/20180531/20180531_Dayprior_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.manual, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.1se, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.min, "../SECURE_data/20180531/20180531_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features, "../SECURE_data/20180531/20180531_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.csv(fig.2c.df, "../SECURE_data/20180606/20180606_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.csv(fig.2c.corr.coefs, "../SECURE_data/20180606/20180606_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.table(num.Records, "../SECURE_data/20180606/20180606_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records.check, "../SECURE_data/20180606/20180606_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.manual, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.1se, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.min, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features, "../SECURE_data/20180606/20180606_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Plot the % var explained
 # ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
