@@ -480,7 +480,7 @@ use.iPOP <- FALSE
 use.Demog <- FALSE
 
 if (use.Troubleshoot.mode){
-top.names<-c("MONOAB") #, "HGB", "HCT", "RBC", "PLT") # for testing model on small subset
+top.names<-c("MONOAB", "HGB", "HCT") # "RBC", "PLT") # for testing model on small subset
 }
 
 #clean wear data frame
