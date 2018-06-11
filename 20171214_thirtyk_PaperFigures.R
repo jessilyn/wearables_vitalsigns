@@ -63,7 +63,7 @@ timespans <-c("AllData",
               "DayPrior" )
 
 wear <- read.csv(paste0(dir, 
-                "Basis2016_Clean_Norm_", timespans[7], "_20180504.csv"),
+                "Basis2016_Clean_Norm_", timespans[2], "_20180504.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
@@ -383,10 +383,13 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 source("ggplot-theme.R") # just to make things look nice
 
 # choose for during troubleshooting
-use.Troubleshoot.mode = FALSE
+use.Troubleshoot.mode = TRUE
+#choose whether Demographics in models (supply TRUE or FALSE)
+use.Demog <- TRUE
 
 if (use.Troubleshoot.mode){
-  top.names<-c("MONOAB", "HGB", "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
+  #   top.names<-c("MONOAB", "HGB"), "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
+  top.names<-c("TGL", "BASOAB", "EOSAB") # for testing model on small subset
 }
 
 ####
@@ -410,12 +413,16 @@ ethn <- data.frame(model.matrix( ~ Ethn - 1, data=iPOPcorDf.demo))
 cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
 gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
 ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
-
-#store names as vitals.variables
-vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
-
 #cbind new gender and ethnicity variables to "wear"
 iPOPcorDf.demo <- cbind(iPOPcorDf.demo,gender,ethn)
+
+#store names as vitals.variables
+#vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
+if(use.Demog){
+  vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
+} else if(!use.Demog) {
+  vitals.variables <- c("Pulse", "Temp") #
+}
 
 patients = unique(iPOPcorDf$iPOP_ID)
 
@@ -474,17 +481,15 @@ for (j in 1:length(top.names)){
 names(rsq.vitals) = top.names
 names(pct.var.explained) = top.names
 sqrt.pct.var <- sqrt(pct.var.explained)
-
+as.matrix(sort(sqrt(pct.var.explained)))
 ####
 # CODE FOR LASSO, RF
 ####
 
 #choose whether iPOP_ID variable is used (supply TRUE or FALSE)
-
 use.iPOP <- FALSE
 #choose whether Demographics in models (supply TRUE or FALSE)
-use.Demog <- FALSE
-
+use.Demog <- TRUE
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
@@ -812,8 +817,8 @@ fig.2c <- fig.2c.plot
 #fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
 num.Records <- as.data.frame(num.Records)
-num.Records <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
-                         TestObs = as.numeric(TestObs))
+# num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
+#                          TestObs = as.numeric(TestObs))
 # Plot the % var explained
 ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
@@ -827,14 +832,14 @@ ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test,
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
 
 # store the results
-write.csv(fig.2c.df, "../SECURE_data/20180606/20180606_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
-write.csv(fig.2c.corr.coefs, "../SECURE_data/20180606/20180606_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
-write.table(num.Records, "../SECURE_data/20180606/20180606_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(num.Records.check, "../SECURE_data/20180606/20180606_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.manual, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.1se, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.min, "../SECURE_data/20180606/20180606_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features, "../SECURE_data/20180606/20180606_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.csv(fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.csv(fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.table(num.Records, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(num.Records.check, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.manual, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.1se, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(lasso.features.lambda.min, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Plot the % var explained
 # ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
@@ -853,27 +858,45 @@ write.table(rf.features, "../SECURE_data/20180606/20180606_Dayprior_noDemog_RF_F
 
 # withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180507_pct_var_Dayprior.csv",
 #                       header=TRUE,sep=',',stringsAsFactors=FALSE)
-# noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv",
+# noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv", # 20180531_pct_var_Dayprior_ThreeLambdas.csv"
 #                     header=TRUE,sep=',',stringsAsFactors=FALSE)
-withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180507/20180531_pct_var_Dayprior_ThreeLambdas.csv",
-                      header=TRUE,sep=',',stringsAsFactors=FALSE)[ ,c('col1', 'col2')]
-noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180531_pct_var_Dayprior_ThreeLambdas.csv",
-                    header=TRUE,sep=',',stringsAsFactors=FALSE)
+withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180606/noID_withDemog/20180606_corr_coefs_Dayprior_ThreeLambdas_updatedLM.csv",
+                      header=TRUE,sep=',',stringsAsFactors=FALSE)[,c("test","vitals","lasso.min","rf" )]
+noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180606/noID_noDemog/20180606_corr_coefs_Dayprior_noDemog_ThreeLambdas_updatedLM.csv",
+                    header=TRUE,sep=',',stringsAsFactors=FALSE)[,c("test","vitals","lasso.min","rf" )]
 noDemog[is.na(noDemog)] <- 0; withDemog[is.na(withDemog)] <- 0
 withDemog$demog <-"withDemog"
 noDemog$demog <- "noDemog"
-df <- melt(rbind(withDemog, noDemog))
-test_levels <- df[order(-df$value),][,1] # reorder by best best first
+withDemog$shapes <- rep("25", length(withDemog$demog))
+noDemog$shapes <- rep("24", length(withDemog$demog))
+df <- melt(rbind(withDemog, noDemog), id.vars=c("test", "demog", "shapes"))
 df$test <- factor(df$test, levels = test_levels)
-ggplot(df, aes(x=test, y=value, color = variable, shape=demog)) + 
-  geom_point(size = 3, aes(color=variable, shape=demog)) +
+df$value <- as.numeric(df$value)
+df$test = factor(df$test, levels = as.factor(df$test[order(-df$value)]))
+
+# figure with upside down & rightside up triangles
+ggplot(df) + 
+  geom_point(aes(x=test, y=value, color=variable, shape=as.integer(as.character(shapes))), size = 3) +
   weartals_theme +
-  scale_shape_discrete(breaks=c("noDemog", "withDemog"),
-                          labels=c("Without Demographics", "With Demographics"),
-                          name=NULL) +
-  scale_color_discrete(breaks=c("vitals", "lasso", "rf"),
-                          labels=c("LM vitals (cVS)", "LASSO (wVS)", "RF (wVS)"),
-                          name="Model") 
+  scale_color_discrete(breaks=c("vitals", "lasso.min", "rf"),
+                       labels=c("LM vitals (cVS)", "LASSO (wVS)", "RF (wVS)"),
+                       name="Model") +
+  scale_shape_identity()
+                       #  breaks=as.integer(c("24", "25")),
+                       #  labels=c("Without Demographics", "With Demographics"),
+                       #  guide="legend"
+                       # )
+
+# figure with filled triangles and circles
+ggplot(df) + 
+  geom_point(aes(x=test, y=value, color=variable, shape=as.character(shapes)), size = 4) +
+  weartals_theme +
+  scale_color_discrete(breaks=c("vitals", "lasso.min", "rf"),
+                       labels=c("LM vitals (cVS)", "LASSO (wVS)", "RF (wVS)"),
+                       name="Model") +
+  scale_shape_discrete(breaks=c("24", "25"),
+                       labels=c("Without Demographics", "With Demographics"),
+                       name=NULL) 
 
 ###
 # Calculate difference between top models with and without demographics
