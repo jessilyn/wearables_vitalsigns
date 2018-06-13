@@ -561,12 +561,22 @@ for (k in 1:length(patients)){
     x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
     x.train.ids<-x.train$iPOP_ID
     x.train<-x.train[,-1] 
+    if(!NROW(x.train)){ #if x.train is empty
+      print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
+    } else {
+      print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
+    }
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     
     # create test set
     x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
     x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+    if(!NROW(x.test)){ #if x.test is empty
+      print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
+    } else {
+      print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
+    }
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
     
     num.Records <- rbind(num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
@@ -592,35 +602,35 @@ for (k in 1:length(patients)){
                         foldid=folds,
                         nlambda=100)
     
-    #store all non-zero lasso variable coefs (lambda specific: manual, min, and 1se)
+    #store all lasso variable coefs (lambda specific: manual, min, and 1se)
     factors.lambda.manual = glm.res$glmnet.fit$beta[,25] # TODO: this is an arbitrary rule for now
-    lasso.nonZero.variables.lambda.manual = factors.lambda.manual[abs(factors.lambda.manual)!=0]
+    lasso.variables.lambda.manual = factors.lambda.manual#[abs(factors.lambda.manual)!=0]
     factors.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
-    lasso.nonZero.variables.lambda.min = factors.lambda.min[abs(factors.lambda.min)!=0]
+    lasso.variables.lambda.min = factors.lambda.min#[abs(factors.lambda.min)!=0]
     factors.lambda.1se <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.1se)]
-    lasso.nonZero.variables.lambda.1se = factors.lambda.1se[abs(factors.lambda.1se)!=0]
+    lasso.variables.lambda.1se = factors.lambda.1se#[abs(factors.lambda.1se)!=0]
     
     ## pull out features from lasso models ##
     
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.manual)),
-                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.manual)),
-                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.manual)),
-                      "lasso.feature"=names(lasso.nonZero.variables.lambda.manual),
-                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.manual))
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.manual)),
+                      "cv.run"=rep(k,length(lasso.variables.lambda.manual)),
+                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.manual)),
+                      "lasso.feature"=names(lasso.variables.lambda.manual),
+                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.manual))
     lasso.features.lambda.manual <- rbind(lasso.features.lambda.manual,tmp)
     
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.min)),
-                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.min)),
-                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.min)),
-                      "lasso.feature"=names(lasso.nonZero.variables.lambda.min),
-                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.min))
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.min)),
+                      "cv.run"=rep(k,length(lasso.variables.lambda.min)),
+                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.min)),
+                      "lasso.feature"=names(lasso.variables.lambda.min),
+                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.min))
     lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
     
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.nonZero.variables.lambda.1se)),
-                      "cv.run"=rep(k,length(lasso.nonZero.variables.lambda.1se)),
-                      "left.out.person"=rep(patients[k],length(lasso.nonZero.variables.lambda.1se)),
-                      "lasso.feature"=names(lasso.nonZero.variables.lambda.1se),
-                      "lasso.coef.value"=as.numeric(lasso.nonZero.variables.lambda.1se))
+    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.1se)),
+                      "cv.run"=rep(k,length(lasso.variables.lambda.1se)),
+                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.1se)),
+                      "lasso.feature"=names(lasso.variables.lambda.1se),
+                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.1se))
     lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
     
     #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
@@ -769,18 +779,22 @@ for (j in 1:length(top.names)){
 names(rsq.lasso.lambda.manual) = top.names
 names(lasso.pct.var.explained.lambda.manual) = top.names
 lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
+#^ Error about NaNs may occur from trying to sqrt a negative number
 
 names(rsq.lasso.lambda.min) = top.names
 names(lasso.pct.var.explained.lambda.min) = top.names
 lasso.sqrt.pct.var.lambda.min <- sqrt(lasso.pct.var.explained.lambda.min)
+#^ Error about NaNs may occur from trying to sqrt a negative number
 
 names(rsq.lasso.lambda.1se) = top.names
 names(lasso.pct.var.explained.lambda.1se) = top.names
 lasso.sqrt.pct.var.lambda.1se <- sqrt(lasso.pct.var.explained.lambda.1se)
+#^ Error about NaNs may occur from trying to sqrt a negative number
 
 names(rsq.rf) = top.names
 names(rf.pct.var.explained) = top.names
 rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
+#^ Error about NaNs may occur from trying to sqrt a negative number
 
 fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), 
                             as.data.frame(sqrt.pct.var), 
@@ -813,6 +827,7 @@ lambda.choice <- "lasso.min"
 fig.2c.plot <- melt(fig.2c.corr.coefs,id.vars="test")
 fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
 fig.2c.plot$test = factor(fig.2c.plot$test, levels = as.factor(fig.2c.plot$test[order(-fig.2c.plot$value)]))
+#^ Ran out of time, but I can simplify this later, which will probably rid the error.
 fig.2c <- fig.2c.plot
 #fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 
@@ -830,6 +845,16 @@ ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test,
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
 
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
+
+# remove coefficients associated with participants that had zero x.test data
+num.Records <- data.frame(num.Records)
+cache <- num.Records[num.Records$TestObs=="0",]
+row.indices <- which(lasso.features.lambda.manual$test==cache$test & lasso.features.lambda.manual$left.out.person==cache$IPOP_ID)
+lasso.features.lambda.manual <- lasso.features.lambda.manual[-row.indices,]
+row.indices <- which(lasso.features.lambda.min$test==cache$test & lasso.features.lambda.min$left.out.person==cache$IPOP_ID)
+lasso.features.lambda.min <- lasso.features.lambda.min[-row.indices,]
+row.indices <- which(lasso.features.lambda.1se$test==cache$test & lasso.features.lambda.1se$left.out.person==cache$IPOP_ID)
+lasso.features.lambda.1se <- lasso.features.lambda.1se[-row.indices,]
 
 # store the results
 write.csv(fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
