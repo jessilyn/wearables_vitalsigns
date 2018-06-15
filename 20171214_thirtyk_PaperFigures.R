@@ -63,7 +63,7 @@ timespans <-c("AllData",
               "DayPrior" )
 
 wear <- read.csv(paste0(dir, 
-                "Basis2016_Clean_Norm_", timespans[2], "_20180504.csv"),
+                "Basis2016_Clean_Norm_", timespans[7], "_20180504.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 # iPOP vitals (called vitals in Lukasz script)
@@ -389,7 +389,7 @@ use.Demog <- TRUE
 
 if (use.Troubleshoot.mode){
   #   top.names<-c("MONOAB", "HGB"), "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
-  top.names<-c("TGL", "BASOAB", "EOSAB") # for testing model on small subset
+  top.names<-c("ALT")# "TGL", "BASOAB", "EOSAB") # for testing model on small subset
 }
 
 ####
@@ -822,6 +822,8 @@ fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")] <- s
 #fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(fig.2c.corr.coefs$test[order(-fig.2c.corr.coefs$lasso.min)]))
 
 #choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
+
+##UNCOMMENT IF RUNNING LOCALLY
 lambda.choice <- "lasso.min"
 
 fig.2c.plot <- melt(fig.2c.corr.coefs,id.vars="test")
@@ -830,11 +832,14 @@ fig.2c.plot$test = factor(fig.2c.plot$test, levels = as.factor(fig.2c.plot$test[
 #^ Ran out of time, but I can simplify this later, which will probably rid the error.
 fig.2c <- fig.2c.plot
 #fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+## DONE UNCOMMENT
 
 num.Records <- as.data.frame(num.Records)
 # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
 #                          TestObs = as.numeric(TestObs))
 # Plot the % var explained
+
+##UNCOMMENT IF RUNNING LOCALLY
 ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
   ylim(0,1) +
@@ -843,6 +848,7 @@ ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test,
   scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
                        labels=c("LM vitals", "LASSO", "RF")) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+## DONE UNCOMMENT
 
 ## calculate correlation coefficients and pct var explained by the models (lambda min)
 
@@ -885,9 +891,9 @@ write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_F
 #                       header=TRUE,sep=',',stringsAsFactors=FALSE)
 # noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv", # 20180531_pct_var_Dayprior_ThreeLambdas.csv"
 #                     header=TRUE,sep=',',stringsAsFactors=FALSE)
-withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180606/noID_withDemog/20180606_corr_coefs_Dayprior_ThreeLambdas_updatedLM.csv",
+withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180614/20180614_pct_var_DayPrior_ThreeLambdas.csv",
                       header=TRUE,sep=',',stringsAsFactors=FALSE)[,c("test","vitals","lasso.min","rf" )]
-noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180606/noID_noDemog/20180606_corr_coefs_Dayprior_noDemog_ThreeLambdas_updatedLM.csv",
+noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180614/20180614_pct_var_DayPrior_noDemog_ThreeLambdas.csv",
                     header=TRUE,sep=',',stringsAsFactors=FALSE)[,c("test","vitals","lasso.min","rf" )]
 noDemog[is.na(noDemog)] <- 0; withDemog[is.na(withDemog)] <- 0
 withDemog$demog <-"withDemog"
