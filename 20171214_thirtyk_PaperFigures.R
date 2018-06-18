@@ -390,8 +390,8 @@ use.Demog <- TRUE
 if (use.Troubleshoot.mode){
   #   top.names<-c("MONOAB", "HGB"), "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
   # top.names<-c("ALT")# "TGL", "BASOAB", "EOSAB") # for testing model on small subset
-  # top.names <- c("TGL", "BASOAB", "EOSAB")
-  top.names <- c("PLT")
+   top.names <- c("HGB", "TGL")#, "BASOAB", "EOSAB")
+  #top.names <- c("PLT")
 }
 
 ####
@@ -563,22 +563,22 @@ for (k in 1:length(patients)){
     x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
     x.train.ids<-x.train$iPOP_ID
     x.train<-x.train[,-1] 
-    if(!NROW(x.train)){ #if x.train is empty
-      print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
-    } else {
-      print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
-    }
+    # if(!NROW(x.train)){ #if x.train is empty
+    #   print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
+    # } else {
+    #   print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
+    # }
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     
     # create test set
     x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
     x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
-    if(!NROW(x.test)){ #if x.test is empty
-      print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
-    } else {
-      print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
-    }
+    # if(!NROW(x.test)){ #if x.test is empty
+    #   print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
+    # } else {
+    #   print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
+    # }
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
     
     num.Records <- rbind(num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
@@ -704,6 +704,7 @@ for (k in 1:length(patients)){
 ## calculate correlation coefficients and pct var explained by the models (lambda manual)
 rsq.lasso.lambda.manual = c()
 num.cor.pairs.lasso.lambda.manual = c()
+p.val.rsq.lasso.manual = c()
 rssm.lasso.lambda.manual = c()
 rss0.lasso.lambda.manual = c()
 lasso.pct.var.explained.lambda.manual = c()
@@ -711,6 +712,7 @@ lasso.num.Records.lambda.manual <- c()
 
 rsq.lasso.lambda.min = c()
 num.cor.pairs.lasso.lambda.min = c()
+p.val.rsq.lasso.min = c()
 rssm.lasso.lambda.min = c()
 rss0.lasso.lambda.min = c()
 lasso.pct.var.explained.lambda.min = c()
@@ -718,6 +720,7 @@ lasso.num.Records.lambda.min <- c()
 
 rsq.lasso.lambda.1se = c()
 num.cor.pairs.lasso.lambda.1se = c()
+p.val.rsq.lasso.1se = c()
 rssm.lasso.lambda.1se = c()
 rss0.lasso.lambda.1se = c()
 lasso.pct.var.explained.lambda.1se = c()
@@ -725,6 +728,7 @@ lasso.num.Records.lambda.1se <- c()
 
 rsq.rf = c()
 num.cor.pairs.rf = c()
+p.val.rsq.rf = c()
 rssm.rf = c()
 rss0.rf = c()
 rf.pct.var.explained = c()
@@ -736,14 +740,17 @@ for (j in 1:length(top.names)){
   #lasso (lambda.manual)
   if(!all(is.na(lasso.val.pred.lambda.manual[[j]]))){
     rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
+    p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, cor.test(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.manual <- length(which(!is.na(lasso.val.pred.lambda.manual[[j]])))
+    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, length(which(!is.na(lasso.val.pred.lambda.manual[[j]]))))
     #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.manual = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.manual[[j]])^2))
     rss0.lasso.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
     lasso.num.Records.lambda.manual <- c(num.Records, length(lasso.val.pred.lambda.manual[[j]]))
   } else {
+    p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, NA)
+    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, 0)
     rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, NA)
     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
     lasso.num.Records.lambda.manual <- c(num.Records, NA)
@@ -751,14 +758,17 @@ for (j in 1:length(top.names)){
   #lasso (lambda.min)
   if(!all(is.na(lasso.val.pred.lambda.min[[j]]))){
     rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, cor(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs"))
+    p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, cor.test(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.min <- length(which(!is.na(lasso.val.pred.lambda.min[[j]])))
+    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
     #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.min = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.min[[j]])^2))
     rss0.lasso.lambda.min = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, (1 - ( rssm.lasso.lambda.min / rss0.lasso.lambda.min )))
     lasso.num.Records.lambda.min <- c(num.Records, length(lasso.val.pred.lambda.min[[j]]))    
   } else {
+    p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, NA)
+    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, 0)
     rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, NA)
     lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, NA)
     lasso.num.Records.lambda.min <- c(num.Records, NA)   
@@ -766,14 +776,17 @@ for (j in 1:length(top.names)){
   #lasso (lambda.1se)
   if(!all(is.na(lasso.val.pred.lambda.1se[[j]]))){
     rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, cor(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs"))
+    p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, cor.test(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.1se <- length(which(!is.na(lasso.val.pred.lambda.min[[j]])))
+    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
     #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.1se = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.1se[[j]])^2))
     rss0.lasso.lambda.1se = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, (1 - ( rssm.lasso.lambda.1se / rss0.lasso.lambda.1se )))
     lasso.num.Records.lambda.1se <- c(num.Records, length(lasso.val.pred.lambda.1se[[j]]))    
   } else {
+    p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, NA)
+    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, 0)
     rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, NA)
     lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, NA)
     lasso.num.Records.lambda.1se <- c(num.Records, NA)   
@@ -781,14 +794,17 @@ for (j in 1:length(top.names)){
   #rf
   if(!all(is.na(rf.val.pred[[j]]))){
     rsq.rf = c(rsq.rf, cor(rf.val.pred[[j]], val.true[[j]], use = "complete.obs"))
+    p.val.rsq.rf <- c(p.val.rsq.rf, cor.test(rf.val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.rf <- length(which(!is.na(rf.val.pred[[j]])))
+    num.cor.pairs.rf <- c(num.cor.pairs.rf, length(which(!is.na(rf.val.pred[[j]]))))
     #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.rf = sum(na.omit((val.true[[j]] - rf.val.pred[[j]])^2))
     rss0.rf = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
     rf.num.Records <- c(num.Records, length(rf.val.pred[[j]]))
   } else {
+    p.val.rsq.rf <- c(p.val.rsq.rf, NA)
+    num.cor.pairs.rf <- c(num.cor.pairs.rf, 0)
     rsq.rf = c(rsq.rf, NA)
     rf.pct.var.explained = c(rf.pct.var.explained, NA)
     rf.num.Records <- c(num.Records, NA)
@@ -819,10 +835,21 @@ fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)),
                             as.data.frame(lasso.sqrt.pct.var.lambda.manual),
                             as.data.frame(lasso.sqrt.pct.var.lambda.min),
                             as.data.frame(lasso.sqrt.pct.var.lambda.1se),
-                            as.data.frame(rf.sqrt.pct.var), row.names=NULL)
+                            as.data.frame(rf.sqrt.pct.var), 
+                            as.data.frame(num.cor.pairs.lasso.lambda.manual),
+                            as.data.frame(num.cor.pairs.lasso.lambda.min),
+                            as.data.frame(num.cor.pairs.lasso.lambda.1se),
+                            as.data.frame(num.cor.pairs.rf),
+                   as.data.frame(p.val.rsq.lasso.manual),
+                   as.data.frame(p.val.rsq.lasso.min),
+                   as.data.frame(p.val.rsq.lasso.1se),
+                   as.data.frame(p.val.rsq.rf),
+                            row.names=NULL)
 
 
-colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
+colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf", 
+                       "num.obs.lasso.manual","num.obs.lasso.min","num.obs.lasso.1se","num.obs.rf",
+                       "p.val.lasso.manual","p.val.lasso.min","p.val.lasso.1se","p.val.rf")
 #fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
 fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)), 
                            as.data.frame(rsq.vitals), 
