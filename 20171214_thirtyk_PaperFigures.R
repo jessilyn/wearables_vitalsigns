@@ -738,12 +738,12 @@ rf.num.Records <- c()
 
 for (j in 1:length(top.names)){
   #lasso (lambda.manual)
-  if(!all(is.na(lasso.val.pred.lambda.manual[[j]]))){
+  if(length(which(!is.na(lasso.val.pred.lambda.manual[[j]])))>=3){
+    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, length(which(!is.na(lasso.val.pred.lambda.manual[[j]]))))
+    #insert step here to check if sample size for correlation test meets minimum threshold
     rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
     p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, cor.test(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, length(which(!is.na(lasso.val.pred.lambda.manual[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.manual = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.manual[[j]])^2))
     rss0.lasso.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
@@ -756,12 +756,12 @@ for (j in 1:length(top.names)){
     lasso.num.Records.lambda.manual <- c(num.Records, NA)
   }
   #lasso (lambda.min)
-  if(!all(is.na(lasso.val.pred.lambda.min[[j]]))){
+  if(length(which(!is.na(lasso.val.pred.lambda.min[[j]])))>=3){
+    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
+    #insert step here to check if sample size for correlation test meets minimum threshold
     rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, cor(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs"))
     p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, cor.test(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.min = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.min[[j]])^2))
     rss0.lasso.lambda.min = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, (1 - ( rssm.lasso.lambda.min / rss0.lasso.lambda.min )))
@@ -774,12 +774,12 @@ for (j in 1:length(top.names)){
     lasso.num.Records.lambda.min <- c(num.Records, NA)   
   }
   #lasso (lambda.1se)
-  if(!all(is.na(lasso.val.pred.lambda.1se[[j]]))){
+  if(length(which(!is.na(lasso.val.pred.lambda.1se[[j]])))>=3){
+    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
+    #insert step here to check if sample size for correlation test meets minimum threshold
     rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, cor(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs"))
     p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, cor.test(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.lasso.lambda.1se = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.1se[[j]])^2))
     rss0.lasso.lambda.1se = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, (1 - ( rssm.lasso.lambda.1se / rss0.lasso.lambda.1se )))
@@ -792,12 +792,12 @@ for (j in 1:length(top.names)){
     lasso.num.Records.lambda.1se <- c(num.Records, NA)   
   }
   #rf
-  if(!all(is.na(rf.val.pred[[j]]))){
+  if(length(which(!is.na(rf.val.pred[[j]])))>=3){
+    num.cor.pairs.rf <- c(num.cor.pairs.rf, length(which(!is.na(rf.val.pred[[j]]))))
+    #insert step here to check if sample size for correlation test meets minimum threshold
     rsq.rf = c(rsq.rf, cor(rf.val.pred[[j]], val.true[[j]], use = "complete.obs"))
     p.val.rsq.rf <- c(p.val.rsq.rf, cor.test(rf.val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
     #insert step here to check if correlation was significant?
-    num.cor.pairs.rf <- c(num.cor.pairs.rf, length(which(!is.na(rf.val.pred[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
     rssm.rf = sum(na.omit((val.true[[j]] - rf.val.pred[[j]])^2))
     rss0.rf = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
     rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
