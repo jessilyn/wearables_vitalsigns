@@ -385,12 +385,14 @@ source("ggplot-theme.R") # just to make things look nice
 # choose for during troubleshooting
 use.Troubleshoot.mode = TRUE
 #choose whether Demographics in models (supply TRUE or FALSE)
-use.Demog <- TRUE
+use.Demog <- FALSE
+#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+use.iPOP <- FALSE
 
 if (use.Troubleshoot.mode){
-  #   top.names<-c("MONOAB", "HGB"), "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
+  #   top.names<-c("MONOAB", "HGB", "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
   # top.names<-c("ALT")# "TGL", "BASOAB", "EOSAB") # for testing model on small subset
-   top.names <- c("HGB", "TGL")#, "BASOAB", "EOSAB")
+   top.names <- c("HGB")#, "TGL")#, "BASOAB", "EOSAB")
   #top.names <- c("PLT")
 }
 
@@ -469,12 +471,14 @@ for (k in 1:length(patients)){
 num.test.obs <- lapply(num.true, sum.vectors.in.list)
 
 rsq.vitals = c()
+p.val.rsq.vitals = c()
 rssm.vitals = c()
 rss0.vitals = c()
 pct.var.explained = c()
 num.Records.check <- c()
 for (j in 1:length(top.names)){
   rsq.vitals = c(rsq.vitals, cor(val.pred[[j]], val.true[[j]], use = "complete.obs"))
+  p.val.rsq.vitals = c(p.val.rsq.lasso.manual, cor.test(val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
   rssm.vitals = sum(na.omit((val.true[[j]] - val.pred[[j]])^2))
   rss0.vitals = sum(na.omit((val.true[[j]] - val.null.pred[[j]])^2))
   pct.var.explained = c(pct.var.explained, (1 - ( rssm.vitals / rss0.vitals )))
@@ -487,11 +491,6 @@ as.matrix(sort(sqrt(pct.var.explained)))
 ####
 # CODE FOR LASSO, RF
 ####
-
-#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
-use.iPOP <- FALSE
-#choose whether Demographics in models (supply TRUE or FALSE)
-use.Demog <- TRUE
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
