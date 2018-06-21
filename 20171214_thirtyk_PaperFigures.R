@@ -653,8 +653,10 @@ for (k in 1:length(patients)){
       lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
     } else {
-      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.manual[[l]])
-      lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      lasso.model.lambda.manual = null.model # if lasso sets all coeffs = 0, then use the null model
+      lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
+      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.manual[[l]])
+      # lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     lasso.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
@@ -663,8 +665,10 @@ for (k in 1:length(patients)){
       lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
     } else {
-      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.min[[l]])
-      lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      lasso.model.lambda.min = null.model # if lasso sets all coeffs = 0, then use the null model
+      lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
+      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.min[[l]])
+      # lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     lasso.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.1se,collapse=" + "))
@@ -673,8 +677,10 @@ for (k in 1:length(patients)){
       lasso.model.lambda.1se = lm(as.formula(lasso.fml.lambda.1se), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
       lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
     } else {
-      cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.1se[[l]])
-      lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      lasso.model.lambda.1se = null.model # if lasso sets all coeffs = 0, then use the null model
+      lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
+      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.1se[[l]])
+      # lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
     }
     
     rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
@@ -683,7 +689,8 @@ for (k in 1:length(patients)){
       rf.model = randomForest(as.formula(rf.fml), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
       rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
     } else {
-      # rf.val.pred.lambda.manual[[l]] = NA # fill with NA if invalid model was supplied
+      rf.model = null.model # if lasso sets all coeffs = 0, then use the null model
+      rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
     }
     
     ## pull out features from rf models ##
