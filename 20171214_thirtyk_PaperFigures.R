@@ -478,7 +478,7 @@ pct.var.explained = c()
 num.Records.check <- c()
 for (j in 1:length(top.names)){
   rsq.vitals = c(rsq.vitals, cor(val.pred[[j]], val.true[[j]], use = "complete.obs"))
-  p.val.rsq.vitals = c(p.val.rsq.lasso.manual, cor.test(val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
+  p.val.rsq.vitals = c(p.val.rsq.vitals, cor.test(val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
   rssm.vitals = sum(na.omit((val.true[[j]] - val.pred[[j]])^2))
   rss0.vitals = sum(na.omit((val.true[[j]] - val.null.pred[[j]])^2))
   pct.var.explained = c(pct.var.explained, (1 - ( rssm.vitals / rss0.vitals )))
