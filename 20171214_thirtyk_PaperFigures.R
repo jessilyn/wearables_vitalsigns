@@ -2059,7 +2059,7 @@ res = generate4D("30k")
 #  Figure 5A #
 ###############
 # Visits vs R^2
-generate5A = function(clin,dataset = "30k",cap=200){
+generate5A = function(clin,dataset = "30k",min_visits=10,cap=200){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
@@ -2074,11 +2074,11 @@ generate5A = function(clin,dataset = "30k",cap=200){
   
   # Here we select people with the largest number of observations
   toppat = table(corDf.tmp[[identifier]])
-  toppat = toppat[toppat > 10]
+  toppat = toppat[toppat > min_visits]
   toppat = names(toppat)
   toppat = toppat[1:min(cap,length(toppat))]
   
-  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin)]
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin,"Clin_Result_Date")]
   
   # Compute R for individual models
   res = c()
@@ -2098,16 +2098,18 @@ generate5A = function(clin,dataset = "30k",cap=200){
     }
     
     err = sqrt(1 - var(allpreds[,1] - allpreds[,2])/var(allpreds[,1] - mean(allpreds[,1])))
-    res = rbind(res, c(sum(dd[[identifier]] == pat),err))
+    vis = sum(dd[[identifier]] == pat)
+    span = max(as.Date(ind.data$Clin_Result_Date)) - min(as.Date(ind.data$Clin_Result_Date))
+    res = rbind(res, c(vis, span, err))
   }
-  dres = data.frame(visits = res[,1], r = res[,2])
-  ggplot(dres, aes(visits, r)) + 
+  dres = data.frame(span = res[,2]/365, r = res[,3])
+  ggplot(dres, aes(span, r)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     geom_point(size=2) + 
-    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1)
+    geom_smooth(method="lm", formula = y ~ x, size=1)
   ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
 }
-generate5A("CHOL","30k",cap=100)
+generate5A("CHOL","30k",cap=100,min_visits = 10)
 
 #####################################
 #   Figure 5A (Timecourse from 2D)  #
