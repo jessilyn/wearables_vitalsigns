@@ -696,14 +696,14 @@ for (k in 1:length(patients)){
     }
 
     ## pull out features from rf models ##
-    rf.features <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
+    rf.features.list <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
     
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.features)),
-                      "cv.run"=rep(k,length(rf.features)),
-                      "left.out.person"=rep(patients[k],length(rf.features)),
-                      "rf.feature"=unlist(dimnames(rf.features)),
-                      "rf.coef.value"=as.data.frame(rf.features)$V1)
-    rf.features <- tmp
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.features.list)),
+                      "cv.run"=rep(k,length(rf.features.list)),
+                      "left.out.person"=rep(patients[k],length(rf.features.list)),
+                      "rf.feature"=unlist(dimnames(rf.features.list)),
+                      "rf.coef.value"=as.numeric(rf.features.list))
+    rf.features <- rbind(rf.features,tmp)
     # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
     # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
