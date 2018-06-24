@@ -950,6 +950,16 @@ write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_F
 # noDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180522/20180522_Dayprior_pct_var_noDemog.csv", # 20180531_pct_var_Dayprior_ThreeLambdas.csv"
 #                     header=TRUE,sep=',',stringsAsFactors=FALSE)
 
+## categories to color the x-axis
+#TODO: UALAB coding causes problems! I removed it from diabetes
+clinical.groups = list()
+clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
+clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
+clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
+clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
+clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
+
 ## RF only
 withDemog <- read.csv("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180621/20180621_pct_var_DayPrior_ThreeLambdas.csv",
                       header=TRUE,sep=',',stringsAsFactors=FALSE)[,c("test","rf" )]
@@ -964,7 +974,18 @@ noDemog$shapes <- rep("24", length(withDemog$demog))
 df <- melt(rbind(withDemog, noDemog), id.vars=c("test", "demog", "shapes"))
 df$value <- as.numeric(df$value)
 df <- df[df$value>0,] # only show those models that actually do well.
+
+#colors for the x-axis labels by clinical.groups
+library(RColorBrewer)
+#myColors <- brewer.pal(6,"Set1")
+myColors <- c("peachpuff2", "lightskyblue3", "firebrick", "mediumpurple4", "sandybrown", "palegreen4", "salmon")
+df$col <- rep("NA", length(df$test))
+for (i in 1:length(clinical.groups)){
+  df$col[df$test %in% clinical.groups[[i]]] <- as.character(myColors[i])
+}
+df$col[df$col == "NA"] <- "black"
 df$test = factor(df$test, levels = as.factor(df$test[order(-df$value)]))
+
 ggplot(df) + 
   geom_point(aes(x=test, y=value, color=variable, shape=as.character(shapes)), size = 4) +
   weartals_theme +
@@ -973,7 +994,8 @@ ggplot(df) +
                        name="Model") +
   scale_shape_discrete(breaks=c("24", "25"),
                        labels=c("Without Demographics", "With Demographics"),
-                       name=NULL) 
+                       name=NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, colour = df$col))
 
 
 
