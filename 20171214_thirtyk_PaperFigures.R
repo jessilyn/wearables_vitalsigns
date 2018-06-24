@@ -602,6 +602,8 @@ for (k in 1:length(patients)){
                         nfolds=n,
                         foldid=folds,
                         nlambda=100)
+ 
+#    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?    
     
     #store all lasso variable coefs (lambda specific: manual, min, and 1se)
     factors.lambda.manual = glm.res$glmnet.fit$beta[,25] # TODO: this is an arbitrary rule for now
@@ -692,21 +694,67 @@ for (k in 1:length(patients)){
       # rf.model = null.model # if lasso sets all coeffs = 0, then use the null model
       # rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
     }
-    
+
     ## pull out features from rf models ##
-    rf.features <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
+    rf.features.list <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
     
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.features)),
-                      "cv.run"=rep(k,length(rf.features)),
-                      "left.out.person"=rep(patients[k],length(rf.features)),
-                      "rf.feature"=unlist(dimnames(rf.features)),
-                      "rf.coef.value"=as.data.frame(rf.features)$V1)
-    lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
-    rf.features <- rbind(rf.features, tmp)
+
+    tmp <- data.frame("test"=rep(top.names[l],length(rf.features.list)),
+                      "cv.run"=rep(k,length(rf.features.list)),
+                      "left.out.person"=rep(patients[k],length(rf.features.list)),
+                      "rf.feature"=unlist(dimnames(rf.features.list)),
+                      "rf.coef.value"=as.numeric(rf.features.list))
+    rf.features <- rbind(rf.features,tmp)
     # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
     # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
   }
 }
+
+## QUANTILES OF LASSO FOR EACH TEST
+# Percent var explained (not root because root might be undefined)
+PVE = function(predicted, true){
+  mse = sum((predicted - true)**2)
+  mse_null = sum((mean(true) - true)**2)
+  1 - mse / mse_null
+}
+# Sample some glm results 'under the null' (random outputs)
+glm_sample = function(x,y,reps = 100,nfolds=30){
+  samples = c()
+  for (i in 1:reps){
+    y_random = sample(y)
+    glm.res = cv.glmnet(x=x,y=y_random,
+                        standardize.response=FALSE,
+                        family="gaussian",
+                        nfolds=nfolds,
+                        nlambda=100)
+    lasso.variables.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
+    lasso.fml.lambda.min = paste("cbind(",paste(colnames(x)[1],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
+    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = data.frame(x)) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+    
+    y_model_pred = predict(lasso.model.lambda.min, newdata = data.frame(x))
+    r_model = RPVE(y_model_pred, y_random)
+    samples = c(samples, r_model)
+  }
+  samples
+}
+# Estimate distribution of the glm 'under the null'
+glm_dist = function(test_name, data, variables, reps = 100){
+  dt = as.matrix(wear[,colnames(wear) %in% c(test_name, variables)])
+  dt = na.omit(dt)
+  samples = glm_sample(dt[,-1],dt[,1],reps=5)
+  ecdf(samples)
+}
+# Elementary two-sided test given the null distribution
+emp_2side_pval = function(dist, val){
+  p = dist(val)
+  min(1 - p, p)*2
+}
+
+# Execute example
+emp_quant = glm_dist("GLU", wear, c(wear.variables, demo.variables), reps = 5)
+emp_2side_pval(emp_quant, -31.15)
+
+
 
 ## calculate correlation coefficients and pct var explained by the models (lambda manual)
 rsq.lasso.lambda.manual = c()
@@ -2064,7 +2112,7 @@ res = generate4D("30k")
 #  Figure 5A #
 ###############
 # Visits vs R^2
-generate5A = function(clin,dataset = "30k",cap=200){
+generate5A = function(clin,dataset = "30k",min_visits=10,cap=200){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
@@ -2079,11 +2127,11 @@ generate5A = function(clin,dataset = "30k",cap=200){
   
   # Here we select people with the largest number of observations
   toppat = table(corDf.tmp[[identifier]])
-  toppat = toppat[toppat > 10]
+  toppat = toppat[toppat > min_visits]
   toppat = names(toppat)
   toppat = toppat[1:min(cap,length(toppat))]
   
-  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin)]
+  dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,"Temp","Pulse",clin,"Clin_Result_Date")]
   
   # Compute R for individual models
   res = c()
@@ -2103,16 +2151,18 @@ generate5A = function(clin,dataset = "30k",cap=200){
     }
     
     err = sqrt(1 - var(allpreds[,1] - allpreds[,2])/var(allpreds[,1] - mean(allpreds[,1])))
-    res = rbind(res, c(sum(dd[[identifier]] == pat),err))
+    vis = sum(dd[[identifier]] == pat)
+    span = max(as.Date(ind.data$Clin_Result_Date)) - min(as.Date(ind.data$Clin_Result_Date))
+    res = rbind(res, c(vis, span, err))
   }
-  dres = data.frame(visits = res[,1], r = res[,2])
-  ggplot(dres, aes(visits, r)) + 
+  dres = data.frame(span = res[,2]/365, r = res[,3])
+  ggplot(dres, aes(span, r)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     geom_point(size=2) + 
-    geom_smooth(method="lm", formula = y ~ x + I(x^2), size=1)
+    geom_smooth(method="lm", formula = y ~ x, size=1)
   ggsave(paste0("plots/Figure-5A-",clin,"-",dataset,".png"),width = 9,height = 6,units = "in")
 }
-generate5A("CHOL","30k",cap=100)
+generate5A("CHOL","30k",cap=100,min_visits = 10)
 
 #####################################
 #   Figure 5A (Timecourse from 2D)  #
