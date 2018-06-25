@@ -2247,8 +2247,31 @@ ggplot(df, aes(test,delta, color = model)) + geom_point(size = 5, aes(shape=mode
 ###############
 #  Figure 5B #
 ###############
+getEvents = function(dres, codes)
+{
+  dres$date = as.Date(dres$date)
+  dres$change = c(0, dres$slope[2:length(dres$slope)] - dres$slope[2:length(dres$slope) - 1])
+  dres$change = abs(dres$change)
+  dres$time_diff = c(0, dres$date[2:length(dres$slope)] - dres$date[2:length(dres$slope) - 1])
+  newpat = c(TRUE,dres$identifier[2:length(dres$slope)] != dres$identifier[2:length(dres$slope) - 1])
+  dres = dres[!newpat,]
+  dres = dres[order(-dres$change),]
+  
+  res.events = c()
+  
+  for(i in 1:10){
+    events = codes[as.character(dres$identifier[evid]) == codes$ANON_ID,]
+    events$dist = abs(events$date - dres$date[evid])
+    events = events[order(events$dist),]
+    res.events = rbind(res.events, events[1:10,])
+  }
+  res.events
+}
+
+
 # Temporal evolution of the estimate of the mean
-generate5B = function(clin,vit,dataset = "30k",window=50){
+generate5B = function(clin,vit,dataset = "30k",window=50)
+  {
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
@@ -2281,19 +2304,40 @@ generate5B = function(clin,vit,dataset = "30k",window=50){
     }
   }
   
-  dres = data.frame(date = as.POSIXct(dates), slope = slopes, identifier = ids, rsquared = rsquared)
-  ggplot(dres, aes(date, slope, group = identifier, color = identifier)) + 
-    weartals_theme + theme(text = element_text(size=25)) +
-    geom_point(size=2) 
-  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"),width = 9,height = 6,units = "in")
+  dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared)
   
-  ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
+  plt_slope = ggplot(dres, aes(date, slope, group = identifier, color = identifier)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_line()
+#    geom_point(size=2) 
+  
+  plt_rsq = ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylab(expression(sqrt("Variance explained"))) +
     geom_line() 
-  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),width = 9,height = 6,units = "in")
+
+  events = getEvents(dres, codes)
+#  geom_vline(xintercept = rev(stats[trunc(stats$y) == 2, "x"])[1])
+
+  print(plt_slope)
+  print(plt_rsq)
+  
+  # ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"), 
+  #        plot = plt_slope, width = 9,height = 6,units = "in")
+  #  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),plot=plt_rsq,width = 9,height = 6,units = "in")
+  list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, events = events)
 }
-generate5B("CHOL","Pulse","30k",window = 50)
+codes = read.csv("../SECURE_data/SECURE/all_icds.csv",stringsAsFactors=FALSE)
+codes$date = as.Date(as.POSIXct(codes$ICD_DATE,format="%d-%b-%Y")) + 1 # POSIX no time mapped by Date to the previous day so add 1
+
+dres = generate5B("CHOL","Pulse","30k",window = 50)
+
+evid = 1
+dres$plt_slope +
+  geom_vline(xintercept = dres$events$date[evid]) +
+  geom_text(aes_q(x=dres$events$date[evid], label=paste0("\n",dres$events$ICD10[evid]), y=max(dres$dres$slope) - sd(dres$dres$slope)/2),
+            colour="black", angle=90, text=element_text())
+dres$events[1,]
 
 ###############
 #   Figure 5 #
