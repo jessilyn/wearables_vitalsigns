@@ -392,7 +392,7 @@ use.iPOP <- FALSE
 if (use.Troubleshoot.mode){
   #   top.names<-c("MONOAB", "HGB", "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
   # top.names<-c("ALT")# "TGL", "BASOAB", "EOSAB") # for testing model on small subset
-   top.names <- c("HGB", "TGL", "BASOAB", "EOSAB")
+   top.names <- c("HGB", "TGL")#, "BASOAB", "EOSAB")
   #top.names <- c("PLT")
 }
 
@@ -710,49 +710,49 @@ for (k in 1:length(patients)){
   }
 }
 
-## QUANTILES OF LASSO FOR EACH TEST
-# Percent var explained (not root because root might be undefined)
-PVE = function(predicted, true){
-  mse = sum((predicted - true)**2)
-  mse_null = sum((mean(true) - true)**2)
-  1 - mse / mse_null
-}
-# Sample some glm results 'under the null' (random outputs)
-glm_sample = function(x,y,reps = 100,nfolds=30){
-  samples = c()
-  for (i in 1:reps){
-    y_random = sample(y)
-    glm.res = cv.glmnet(x=x,y=y_random,
-                        standardize.response=FALSE,
-                        family="gaussian",
-                        nfolds=nfolds,
-                        nlambda=100)
-    lasso.variables.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
-    lasso.fml.lambda.min = paste("cbind(",paste(colnames(x)[1],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
-    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = data.frame(x)) # , weights = labs.wear$weight) # TODO: do we need to include weights?
-    
-    y_model_pred = predict(lasso.model.lambda.min, newdata = data.frame(x))
-    r_model = RPVE(y_model_pred, y_random)
-    samples = c(samples, r_model)
-  }
-  samples
-}
-# Estimate distribution of the glm 'under the null'
-glm_dist = function(test_name, data, variables, reps = 100){
-  dt = as.matrix(wear[,colnames(wear) %in% c(test_name, variables)])
-  dt = na.omit(dt)
-  samples = glm_sample(dt[,-1],dt[,1],reps=5)
-  ecdf(samples)
-}
-# Elementary two-sided test given the null distribution
-emp_2side_pval = function(dist, val){
-  p = dist(val)
-  min(1 - p, p)*2
-}
-
-# Execute example
-emp_quant = glm_dist("GLU", wear, c(wear.variables, demo.variables), reps = 5)
-emp_2side_pval(emp_quant, -31.15)
+# ## QUANTILES OF LASSO FOR EACH TEST
+# # Percent var explained (not root because root might be undefined)
+# PVE = function(predicted, true){
+#   mse = sum((predicted - true)**2)
+#   mse_null = sum((mean(true) - true)**2)
+#   1 - mse / mse_null
+# }
+# # Sample some glm results 'under the null' (random outputs)
+# glm_sample = function(x,y,reps = 100,nfolds=30){
+#   samples = c()
+#   for (i in 1:reps){
+#     y_random = sample(y)
+#     glm.res = cv.glmnet(x=x,y=y_random,
+#                         standardize.response=FALSE,
+#                         family="gaussian",
+#                         nfolds=nfolds,
+#                         nlambda=100)
+#     lasso.variables.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
+#     lasso.fml.lambda.min = paste("cbind(",paste(colnames(x)[1],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
+#     lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = data.frame(x)) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+#     
+#     y_model_pred = predict(lasso.model.lambda.min, newdata = data.frame(x))
+#     r_model = RPVE(y_model_pred, y_random)
+#     samples = c(samples, r_model)
+#   }
+#   samples
+# }
+# # Estimate distribution of the glm 'under the null'
+# glm_dist = function(test_name, data, variables, reps = 100){
+#   dt = as.matrix(wear[,colnames(wear) %in% c(test_name, variables)])
+#   dt = na.omit(dt)
+#   samples = glm_sample(dt[,-1],dt[,1],reps=5)
+#   ecdf(samples)
+# }
+# # Elementary two-sided test given the null distribution
+# emp_2side_pval = function(dist, val){
+#   p = dist(val)
+#   min(1 - p, p)*2
+# }
+# 
+# # Execute example
+# emp_quant = glm_dist("GLU", wear, c(wear.variables, demo.variables), reps = 5)
+# emp_2side_pval(emp_quant, -31.15)
 
 
 
