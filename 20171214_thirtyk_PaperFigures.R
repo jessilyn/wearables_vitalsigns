@@ -2327,8 +2327,8 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL)
   plt_rsq = ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylab(expression(sqrt("Variance explained"))) +
-    geom_point(size=2) +
-    geom_line() 
+    geom_point(size=4) +
+    geom_line(size=2) 
 
   events = getEvents(dres, codes)
 #  geom_vline(xintercept = rev(stats[trunc(stats$y) == 2, "x"])[1])
@@ -2378,10 +2378,10 @@ generate5Bevents = function(pats){
   cols = gg_color_hue(length(pats))
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
-    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color=cols[1]) +
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color="blue",size=2) +
     geom_text(aes_q(x=codes_pats$date[evid], label=paste0("\n",codes_pats$ICD10[evid]),
                     y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
-                    colour=cols[1], angle=90, text=element_text())
+                    colour="black", angle=90, text=element_text())
   }  
   print(plt_cur)
   ggsave(paste0(filename),
