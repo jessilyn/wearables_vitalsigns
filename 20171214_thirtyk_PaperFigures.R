@@ -1134,10 +1134,11 @@ library("Hmisc")
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
-clinical.groups[["Cardiovascular.Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Cardiovascular Disease"]]=c("CHOL","LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+clinical.groups[["Cardiometabolic Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
 clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
-clinical.groups[["Blood"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
+clinical.groups[["Hematologic"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
 #clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
 cca.corr.coefs <- c()
 patients <- unique(wear$iPOP_ID)
@@ -1159,19 +1160,19 @@ best.weigths = list(
   'Liver Function' = c(0.3,0.7) # ~ 0.26
 )
 
-set.seed(0)
+set.seed(123)
 results = c()
 for (nm in names(clinical.groups)){
   print(nm)
   # Remove rows with NAs
   data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
   data.wear = wear[,which(colnames(wear) %in% c(wear.variables))]
-  data.wear$AgeIn2016 = wear$AgeIn2016
+  # data.wear$AgeIn2016 = wear$AgeIn2016
   
-  data.wear$male = wear$Gender == "M"
-  data.wear$ethnA = wear$Ethn == "A"
-  data.wear$ethnB = wear$Ethn == "B"
-  data.wear$ethnC = wear$Ethn == "C"
+  # data.wear$male = wear$Gender == "M"
+  # data.wear$ethnA = wear$Ethn == "A"
+  # data.wear$ethnB = wear$Ethn == "B"
+  # data.wear$ethnC = wear$Ethn == "C"
   
   d <- cbind(data.clin, data.wear)
   d <- na.omit(d)
@@ -1202,8 +1203,8 @@ for (nm in names(clinical.groups)){
 
       # pensx = c(0.1,0.4,0.7,0.1,0.5,0.1,0.1,0.1)
       # pensz = c(0.1,0.4,0.7,0.9,0.1,0.3,0.5,0.9)
-      pensx = c(0.1,0.9,0.1,0.9)
-      pensz = c(0.1,0.9,0.9,0.1)
+      pensx = c(0.7,0.1,0.7,0.5)
+      pensz = c(0.7,0.7,0.1,0.5)
       
   # build the CCA model
   model.cc.cv = CCA.permute(train[,(ncol(data.clin)):(ncol(train))],  # TODO: cehck that this is choosing the correct columns for the right and left hand sides
@@ -1776,11 +1777,11 @@ gg_color_hue <- function(n) {
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
+#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
+#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
+#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
 
   ids = sort(table(corDf.tmp[[identifier]]))
   atleastafew = names(ids[(ids >= threshold) & (ids <= threshold_hi)]) # select patients with at least 10 tests
@@ -1803,28 +1804,30 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
     print(frm)
     model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
     preds = predict(model, newdata = corDf.tmp[testids,])
+#    print(summary(model))
     
     # Correlation
     # res.meanpred = c(res.meanpred, cor(corDf.tmp[testids,test.name],preds))
     
     # Sqrd root of variance explained
     var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
-    var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[testids,test.name]))**2)
-    if (test.name=="GLOB")
+    var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[-testids,test.name]))**2)
+    if (test.name=="LYM")
       plot(corDf.tmp[testids,test.name], preds)
     if (var.exp/var.null > 1)
       res = 0
     else 
-      res = sqrt(1 - var.exp/var.null)
+      res = cor(preds, corDf.tmp[testids,test.name])#sqrt(1 - var.exp/var.null)
   }
   else {
-    res = 0
+    res = NA
   }
   res
 }
 
 # Loop over all tests and all models for the personal medels comparsion. Plot results
-generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7){
+generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntest = NULL){
+  set.seed(0)
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf4A = iPOPcorDf
@@ -1839,18 +1842,21 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7){
   res.values = c()
   res.models = c()
   res.tests = c()
+  if (is.null(ntest))
+    ntest = length(test.names)
   
-  for (test.name in test.names){
+  for (test.name in test.names[1:ntest]){
     models = list()
     
     # population vitals model
-    models[["vitals"]] = "Pulse + Temp + Systolic + Diastolic + Respiration"
+    models[["vitals"]] = "Pulse" # + Systolic + Diastolic + Respiration"
     
     # population vitals + personal intercept model
-    models[["vitals + personal mean"]] = paste0(identifier," + Pulse + Temp + Systolic + Diastolic + Respiration")
+    models[["vitals + personal mean"]] = paste0(identifier," + Pulse") # + Systolic + Diastolic + Respiration")
     
     # population vitals + personal intercept model
-    # models[["vitals + personal mean and slope"]] = paste0(identifier," + Pulse + Temp + Systolic + Diastolic + Respiration + Pulse * ANON_ID + Temp * ANON_ID + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID")
+    models[["vitals + personal mean and slope"]] = paste0(identifier," + Pulse + Pulse * ANON_ID") # + Systolic + Diastolic + Respiration)
+    #   + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID
     
     # population vitals + personal intercept model
     models[["personal mean"]] = paste0(identifier)
@@ -1872,12 +1878,13 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7){
     weartals_theme + 
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
+  write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
 }
 
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
-generate4A("30k",threshold = 5, threshold_hi = 8, cap = 500)
+generate4A("30k",threshold = 6, cap = 50)
 
 # Find patients and tests with the following conditions:
 #  * patients with > 20 observations
@@ -2260,8 +2267,8 @@ getEvents = function(dres, codes)
   res.events = c()
   
   for(i in 1:10){
-    events = codes[as.character(dres$identifier[evid]) == codes$ANON_ID,]
-    events$dist = abs(events$date - dres$date[evid])
+    events = codes[as.character(dres$identifier[i]) == codes$ANON_ID,]
+    events$dist = abs(events$date - dres$date[i])
     events = events[order(events$dist),]
     res.events = rbind(res.events, events[1:10,])
   }
@@ -2270,7 +2277,7 @@ getEvents = function(dres, codes)
 
 
 # Temporal evolution of the estimate of the mean
-generate5B = function(clin,vit,dataset = "30k",window=50)
+generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL)
   {
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
@@ -2282,10 +2289,14 @@ generate5B = function(clin,vit,dataset = "30k",window=50)
   }
   
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[[vit]]),]
+  if (!is.null(filter)){
+    rows = corDf.tmp[[identifier]] %in% filter
+    corDf.tmp = corDf.tmp[rows,]
+  }
 
   # Here we select people with the largest number of observations
   toppat = table(corDf.tmp[[identifier]])
-  toppat = names(sort(-toppat))[1:3]
+  toppat = names(sort(-toppat))[1:length(filter)]
 
   dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat, c(identifier,"Clin_Result_Date",vit,clin)]
   
@@ -2293,10 +2304,12 @@ generate5B = function(clin,vit,dataset = "30k",window=50)
   slopes = c()
   rsquared = c()
   ids = c()
+  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
+  
   for (pat in toppat){
     dd.pat = dd[dd[[identifier]] == pat,]
     for (i in (window+1):nrow(dd.pat)){
-      model = lm(formula(paste(clin,"~",vit)), data = dd.pat[(i-window):i, ])
+      model = lm(formula(paste(clin,"~",paste(vitals,sep=" + "))), data = dd.pat[(i-window):i, ])
       slopes = c(slopes, model$coefficients[1])
       rsquared = c(rsquared, sqrt(summary(model)$r.squared))
       dates = c(dates, dd.pat$Clin_Result_Date[i])
@@ -2308,12 +2321,13 @@ generate5B = function(clin,vit,dataset = "30k",window=50)
   
   plt_slope = ggplot(dres, aes(date, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
-    geom_line()
-#    geom_point(size=2) 
+#    geom_line()
+    geom_point(size=2) 
   
   plt_rsq = ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylab(expression(sqrt("Variance explained"))) +
+    geom_point(size=2) +
     geom_line() 
 
   events = getEvents(dres, codes)
@@ -2327,18 +2341,54 @@ generate5B = function(clin,vit,dataset = "30k",window=50)
   #  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),plot=plt_rsq,width = 9,height = 6,units = "in")
   list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, events = events)
 }
-codes = read.csv("../SECURE_data/SECURE/all_icds.csv",stringsAsFactors=FALSE)
+
+## Load codes (initial)
+codes = read.csv("../SECURE_data/SECURE/initial_MI.csv",stringsAsFactors=FALSE,header = FALSE)
+colnames(codes) = c("ANON_ID","ICD_DATE","ICD9","ICD10","DX_NAME")
 codes$date = as.Date(as.POSIXct(codes$ICD_DATE,format="%d-%b-%Y")) + 1 # POSIX no time mapped by Date to the previous day so add 1
 
-dres = generate5B("CHOL","Pulse","30k",window = 50)
+# Find Patients with enough visits
+pats = unique(codes$ANON_ID)
+corDf.tmp = corDf[corDf$ANON_ID %in% pats,]
+counts = aggregate(corDf.tmp$ANON_ID, by=list(corDf.tmp$ANON_ID), FUN=length)
+counts = counts[order(-counts$x),]
 
-evid = 1
-dres$plt_slope +
-  geom_vline(xintercept = dres$events$date[evid]) +
-  geom_text(aes_q(x=dres$events$date[evid], label=paste0("\n",dres$events$ICD10[evid]), y=max(dres$dres$slope) - sd(dres$dres$slope)/2),
-            colour="black", angle=90, text=element_text())
-dres$events[1,]
+npats = 10
+pats = counts[counts[,2] > 50,1][1:10] # top 5 with at least 50 visits
+pats = c("D-145","D-148","N-3683","PD-6145")
+# removed "PD-9651"
 
+generate5Bevents = function(pats){
+  dres = generate5B("HCT","Pulse","30k",
+                    window = 20,filter=pats)
+  
+  codes_pats = codes[codes$ANON_ID %in% pats,]
+  ids.tmp = c("!",codes_pats$ANON_ID)
+  first = c(ids.tmp[-1] != ids.tmp[-length(ids.tmp)])
+  last = c(first[-1],TRUE)
+  
+  # correct for D-148 (last event instead of first)
+  if (pats == "D-148"){
+    first[6] = TRUE
+  }
+  filename = paste0("plots/Figure-5B-rsqured-",pats,".png")
+  
+  codes_pats = codes_pats[first,]
+  
+  cols = gg_color_hue(length(pats))
+  plt_cur = dres$plt_rqs + theme(legend.position="none")
+  for (evid in 1:sum(first)){
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color=cols[1]) +
+    geom_text(aes_q(x=codes_pats$date[evid], label=paste0("\n",codes_pats$ICD10[evid]),
+                    y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
+                    colour=cols[1], angle=90, text=element_text())
+  }  
+  print(plt_cur)
+  ggsave(paste0(filename),
+         plot=plt_cur,width = 9,height = 6,units = "in")
+}
+for (i in 1:4)
+  generate5Bevents(pats[i])
 ###############
 #   Figure 5 #
 ###############
