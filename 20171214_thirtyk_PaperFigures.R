@@ -1765,6 +1765,8 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
 ############
 ## Figure 4A: Check how individual means perform
 
+library("lme4")
+
 # Get ggplot colors
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
@@ -1774,7 +1776,7 @@ gg_color_hue <- function(n) {
 # Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
-getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7){
+getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
@@ -1802,7 +1804,12 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
     
     frm = paste(test.name,"~",model_coefs)
     print(frm)
-    model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
+    if (mixed)
+      model = lmer(frm, data=corDf.tmp[-testids,],na.action = na.omit, verbose = 1, control = lmerControl(
+        boundary.tol = 1e-2
+      ))
+    else
+      model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
     preds = predict(model, newdata = corDf.tmp[testids,])
 #    print(summary(model))
     
@@ -1860,15 +1867,18 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     models[["vitals + personal mean"]] = paste0(identifier," + ",paste(vits, collapse = " + "))
     
     # population vitals + personal intercept model
-    models[["vitals + personal mean and slope"]] = paste0(identifier," + ",paste(vits, collapse = " + ")," + ANON_ID*",paste(vits, collapse = " + ANON_ID*"))
-    #   + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID
+    models[["vitals + personal mean and slope"]] = paste(models[["vitals + personal mean"]]," + ",
+    #    "(Pulse + Temp | ANON_ID)") 
+      "(Temp + Pulse + Systolic + Diastolic + Respiration | ANON_ID)")
+    #  "Temp * ANON_ID + Pulse * ANON_ID + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID")
     
     # population vitals + personal intercept model
     models[["personal mean"]] = paste0(identifier)
     
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
-      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi)
+      mixed = "vitals + personal mean and slope" == mdl
+      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi, mixed = mixed)
       res.values = c(res.values, model$res)
       res.models = c(res.models, mdl)
       res.n = c(res.n, model$n)
@@ -1887,12 +1897,13 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 14, height = 3)
   print(pp)
   write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
+  res
 }
 
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
-generate4A("30k",threshold = 50, cap = 100)
+res = generate4A("30k",threshold = 50, cap = 500)
 
 # Find patients and tests with the following conditions:
 #  * patients with > 20 observations
