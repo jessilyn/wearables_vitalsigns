@@ -1257,6 +1257,27 @@ p=ggplot(df.res, aes(x=name, y=cor)) +
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 ggsave(paste0("plots/Figure2E.png"),p,width=5,height=4)
 
+
+##############
+#  Figure 2F #
+##############
+
+rf.features <-read.table("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20180622/20180621_DayPrior_noDemog_RF_Features.csv",
+                  header=FALSE,sep=',',stringsAsFactors=FALSE)
+colnames(rf.features) <- c("test", "cv.run", "iPOP_ID", "feature", "coefficient")
+rf.feature.summaries <- as.data.frame(summarise(group_by(rf.features, test, feature),
+                                                   mean=mean(coefficient), sd=sd(coefficient)))
+top.models <- c("HCT", "RBC", "HGB", "MONOAB", "A1C", "GLU", "PLT",  "CL")
+top.rf.features <- c()
+for (i in top.models) {
+  rf.feature.subset<-rf.feature.summaries[rf.feature.summaries$test %in% i,] 
+  rf.feature.sorted <- rf.feature.subset[order(rf.feature.subset$mean, decreasing=TRUE),]
+  top.rf.features <- rbind(top.rf.features, head(rf.feature.sorted[1:10,]))
+}
+
+rf.feature.summaries[rf.feature.summaries$test %in% top.models,]
+
+
 ##############
 #  Figure 3A #
 ##############
@@ -2378,7 +2399,7 @@ generate5Bevents = function(pats){
   cols = gg_color_hue(length(pats))
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
-    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color="blue",size=2) +
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color="blue",size=1) +
     geom_text(aes_q(x=codes_pats$date[evid], label=paste0("\n",codes_pats$ICD10[evid]),
                     y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
                     colour="black", angle=90, text=element_text())
