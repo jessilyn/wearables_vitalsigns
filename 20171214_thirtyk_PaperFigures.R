@@ -1777,11 +1777,11 @@ gg_color_hue <- function(n) {
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
-#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
-#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
-#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
-#  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
 
   ids = sort(table(corDf.tmp[[identifier]]))
   atleastafew = names(ids[(ids >= threshold) & (ids <= threshold_hi)]) # select patients with at least 10 tests
@@ -1821,8 +1821,10 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
   }
   else {
     res = NA
+    testids = NULL
   }
-  res
+  print(res)
+  list(res=res,n=length(testids))
 }
 
 # Loop over all tests and all models for the personal medels comparsion. Plot results
@@ -1840,22 +1842,25 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   }
   
   res.values = c()
+  res.n = c()
   res.models = c()
   res.tests = c()
   if (is.null(ntest))
     ntest = length(test.names)
   
+  vits = c("Pulse","Temp","Systolic","Diastolic","Respiration")
+  
   for (test.name in test.names[1:ntest]){
     models = list()
     
     # population vitals model
-    models[["vitals"]] = "Pulse" # + Systolic + Diastolic + Respiration"
+    models[["vitals"]] = paste(vits, collapse = " + ")
     
     # population vitals + personal intercept model
-    models[["vitals + personal mean"]] = paste0(identifier," + Pulse") # + Systolic + Diastolic + Respiration")
+    models[["vitals + personal mean"]] = paste0(identifier," + ",paste(vits, collapse = " + "))
     
     # population vitals + personal intercept model
-    models[["vitals + personal mean and slope"]] = paste0(identifier," + Pulse + Pulse * ANON_ID") # + Systolic + Diastolic + Respiration)
+    models[["vitals + personal mean and slope"]] = paste0(identifier," + ",paste(vits, collapse = " + ")," + ANON_ID*",paste(vits, collapse = " + ANON_ID*"))
     #   + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID
     
     # population vitals + personal intercept model
@@ -1863,28 +1868,31 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
-      res.values = c(res.values, getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = 5))
+      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi)
+      res.values = c(res.values, model$res)
       res.models = c(res.models, mdl)
+      res.n = c(res.n, model$n)
     }
   }
-  res = data.frame(test = res.tests, model = res.models, value = res.values)
+  res = data.frame(test = res.tests, model = res.models, value = res.values, n = res.n)
   print(res)
   res = res[order(-res$value),]
   res = res[order(res$model),] # order by the population vitals model
   res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
-  ggplot(res, aes(test, value, group = model, color = model)) + geom_point(size = 3, shape=1, aes(fill = model)) +
+  pp = ggplot(res, aes(test, value, group = model, color = model)) + geom_point(size = 3, shape=1, aes(fill = model)) +
     ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
     weartals_theme + 
     theme(text = element_text(size=14))
-  ggsave(paste0("plots/Figure-4A-",dataset,".png"), width = 14, height = 3)
+  ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 14, height = 3)
+  print(pp)
   write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
 }
 
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
-generate4A("30k",threshold = 6, cap = 50)
+generate4A("30k",threshold = 50, cap = 100)
 
 # Find patients and tests with the following conditions:
 #  * patients with > 20 observations
