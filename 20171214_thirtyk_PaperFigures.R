@@ -1152,7 +1152,7 @@ wear$LDL = as.numeric(wear$LDL)
 wear$TGL = as.numeric(wear$TGL)
 
 best.weigths = list(
-  Blood = c(0.7,0.7), # ~ 0.5
+  Hematologic = c(0.7,0.7), # ~ 0.5
   Inflammation = c(0.1,0.9), # ~ 0.37
   Electrolytes = c(0.5,0.5), # ~ 0.12
   Diabetes = c(0.1,0.7), # ~ 0.21
@@ -1253,7 +1253,7 @@ p=ggplot(df.res, aes(x=name, y=cor)) +
   geom_point(size=3, shape =1) +
   weartals_theme + 
   ylim(0,0.5) +
-  labs(x = "Physiology Subsets", y ="Correlation Coefficient")
+  labs(x = NULL, y ="Correlation Coefficient")
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 ggsave(paste0("plots/Figure2E.png"),p,width=5,height=4)
 
@@ -2335,8 +2335,8 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL)
   plt_rsq = ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylab(expression(sqrt("Variance explained"))) +
-    geom_point(size=2) +
-    geom_line() 
+    geom_point(size=4) +
+    geom_line(size=2) 
 
   events = getEvents(dres, codes)
 #  geom_vline(xintercept = rev(stats[trunc(stats$y) == 2, "x"])[1])
@@ -2386,10 +2386,10 @@ generate5Bevents = function(pats){
   cols = gg_color_hue(length(pats))
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
-    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color=cols[1]) +
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color="blue",size=2) +
     geom_text(aes_q(x=codes_pats$date[evid], label=paste0("\n",codes_pats$ICD10[evid]),
                     y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
-                    colour=cols[1], angle=90, text=element_text())
+                    colour="black", angle=90, text=element_text())
   }  
   print(plt_cur)
   ggsave(paste0(filename),
