@@ -1932,12 +1932,13 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   res = res[order(-res$value),]
   res = res[order(res$model),] # order by the population vitals model
   res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
-  pp = ggplot(res, aes(test, value, group = model, color = model)) + geom_point(size = 3, shape=1, aes(fill = model)) +
+  res = na.omit(res)
+  pp = ggplot(res, aes(test, value, group = model, color = model)) +
     ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
-    weartals_theme + 
+    weartals_theme + geom_point(size = 2, aes(fill = model)) + 
     theme(text = element_text(size=14))
-  ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 14, height = 3)
+  ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
   print(pp)
   write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
   res
@@ -2098,11 +2099,17 @@ generate4C = function(clin,vit,dataset = "30k"){
   }
   dd = corDf.tmp[,c(clin,vit,identifier)]
 
-  # Use loess to estimate the population model
+  # Use lm to estimate the population model
   frm = paste0(clin," ~ ",vit)
-  ww = loess(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  ww = lm(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
   grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
-  ff = approxfun(grid, predict(ww,grid))
+  df = data.frame(vit = grid)
+  df[[vit]] = grid
+  ff = approxfun(grid, predict(ww,df ))
+  # frm = paste0(clin," ~ ",vit)
+  # ww = loess(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  # grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
+  # ff = approxfun(grid, predict(ww,grid))
 
   cols = gg_color_hue(5)
   for (i in 1:2){
@@ -2339,7 +2346,7 @@ getEvents = function(dres, codes)
 
 
 # Temporal evolution of the estimate of the mean
-generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL)
+generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   {
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
@@ -2380,17 +2387,20 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL)
   }
   
   dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared)
+  dres$time = as.numeric(difftime(dres$date,min(dres$date),units="days")) / 365.0
   
-  plt_slope = ggplot(dres, aes(date, slope, group = identifier, color = identifier)) + 
+  plt_slope = ggplot(dres, aes(time, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
 #    geom_line()
     geom_point(size=2) 
   
-  plt_rsq = ggplot(dres, aes(date, rsquared, group = identifier, color = identifier)) + 
+  cols = gg_color_hue(3)
+  
+  plt_rsq = ggplot(dres, aes(time, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylab(expression(sqrt("Variance explained"))) +
-    geom_point(size=4) +
-    geom_line(size=2) 
+    geom_point(size=4, colour=cols[col]) +
+    geom_line(size=2, colour=cols[col]) 
 
   events = getEvents(dres, codes)
 #  geom_vline(xintercept = rev(stats[trunc(stats$y) == 2, "x"])[1])
@@ -2410,19 +2420,23 @@ colnames(codes) = c("ANON_ID","ICD_DATE","ICD9","ICD10","DX_NAME")
 codes$date = as.Date(as.POSIXct(codes$ICD_DATE,format="%d-%b-%Y")) + 1 # POSIX no time mapped by Date to the previous day so add 1
 
 # Find Patients with enough visits
-pats = unique(codes$ANON_ID)
-corDf.tmp = corDf[corDf$ANON_ID %in% pats,]
-counts = aggregate(corDf.tmp$ANON_ID, by=list(corDf.tmp$ANON_ID), FUN=length)
-counts = counts[order(-counts$x),]
+getTop10Patients = function(){
+  pats = unique(codes$ANON_ID)
+  corDf.tmp = corDf[corDf$ANON_ID %in% pats,]
+  counts = aggregate(corDf.tmp$ANON_ID, by=list(corDf.tmp$ANON_ID), FUN=length)
+  counts = counts[order(-counts$x),]
+  
+  npats = 10
+  pats = counts[counts[,2] > 50,1][1:10] # top 5 with at least 50 visits
+  pats
+}
+#pats = getTop10Patients()
 
-npats = 10
-pats = counts[counts[,2] > 50,1][1:10] # top 5 with at least 50 visits
-pats = c("D-145","D-148","N-3683","PD-6145")
-# removed "PD-9651"
+pats = c("D-145","D-148","PD-6145") #"N-3683",
 
-generate5Bevents = function(pats){
+generate5Bevents = function(pats,col){
   dres = generate5B("HCT","Pulse","30k",
-                    window = 20,filter=pats)
+                    window = 20,filter=pats,col)
   
   codes_pats = codes[codes$ANON_ID %in% pats,]
   ids.tmp = c("!",codes_pats$ANON_ID)
@@ -2435,22 +2449,22 @@ generate5Bevents = function(pats){
   }
   filename = paste0("plots/Figure-5B-rsqured-",pats,".png")
   
+  codes_pats$time = as.numeric(codes_pats$date - min(dres$dres$date))/365
   codes_pats = codes_pats[first,]
-  
-  cols = gg_color_hue(length(pats))
+
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
-    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$date[evid],color="blue",size=1) +
-    geom_text(aes_q(x=codes_pats$date[evid], label=paste0("\n",codes_pats$ICD10[evid]),
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$time[evid],color="blue",size=1) +
+    geom_text(aes_q(x=codes_pats$time[evid], label=paste0("\n",codes_pats$ICD10[evid]),
                     y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
                     colour="black", angle=90, text=element_text())
-  }  
+  }
   print(plt_cur)
   ggsave(paste0(filename),
-         plot=plt_cur,width = 9,height = 6,units = "in")
+         plot=plt_cur,width = 7.5,height = 6,units = "in")
 }
-for (i in 1:4)
-  generate5Bevents(pats[i])
+for (i in 1:3)
+  generate5Bevents(pats[i],i)
 ###############
 #   Figure 5 #
 ###############
