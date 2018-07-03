@@ -202,7 +202,7 @@ df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
 daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
-vitals$RECORDED_TIME<-as.Date(vitals$RECORDED_TIME, "%d-%b-%Y")
+vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%d-%b-%Y")
 colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
 windows=c(60) # define time windows with no steps for resting threshold (10,60,120, etc)
 
@@ -233,6 +233,12 @@ for (window in windows){
   names(restingDf.all) <- c("iPOP_ID","Date","restingHR","restingSkinTemp","restingSteps","DateTime")
   means.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), na.omit(mean)) 
   sd.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), sd) 
+  mean(na.omit(restingDf.all$restingHR)) # wRHR; mean 65.23 +/- 10.41, n=1,198,040 measurements
+  sqrt(var((na.omit(restingDf.all$restingHR))))  # sd wRHR
+  length(na.omit(restingDf.all$restingHR))
+  mean(na.omit(restingDf.all$restingSkinTemp)) # wRTemp; 90.89 +/- 3.09, n=1,181,648 measurements
+  sd(na.omit(restingDf.all$restingSkinTemp)) # sd wRTemp
+  length(na.omit(restingDf.all$restingSkinTemp))
   
   #Optional: use day-prior rather than day-of wearable data for comparison:
   if(dayPrior){
@@ -343,19 +349,35 @@ hist(iPOPvitals$Pulse, col="darkred", breaks=50,
      xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
+mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.84 +/- 11.21, n=2391
+sqrt(var(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)])) # stdev of cHR
+
 hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
+mean(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # mean cTemp; 97.84 +/- 0.39, n=1596
+sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
 
 #####################
 #  Figure 1D Bottom #
 #####################
 dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
+
+dfFigOne$Heart_Rate <- remove_outliers(dfFigOne$Heart_Rate) # clean data based on HR (TODO: later also clean on Skin Temp, Steps)
+length(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # number of wHR measurements in iPOP cohort
+mean(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # mean wHR mean 74.31 +/- 15.17, n=25,341,508
+sqrt(var(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)])) # stdev of wHR
 hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
      xlab = "wHR",
-     main = NULL, font.lab=2,lwd=2,font=2)
+     main = NULL, font.lab=2,lwd=2,font=2,
+     xlim=c(0,200))
+
+dfFigOne$Skin_Temperature_F <- remove_outliers(dfFigOne$Skin_Temperature_F) # clean data based on HR (TODO: later also clean on Skin Temp, Steps)
+length(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # number of wTemp measurements in iPOP cohort
+mean(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # mean wTemp mean 88.57 +/- 3.74, n=27,136,802
+sqrt(var(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)])) # stdev of wTemp 
 hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
      xlab = "wTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
