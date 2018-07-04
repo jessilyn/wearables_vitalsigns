@@ -1936,7 +1936,9 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   pp = ggplot(res, aes(test, value, group = model, color = model)) +
     ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
-    weartals_theme + geom_point(size = 2, aes(fill = model)) + 
+#    geom_jitter(size = 2, height = 0.0, width=0.2) + 
+    weartals_theme + 
+    geom_point(size = 3, shape=1) + 
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
   print(pp)
@@ -2020,7 +2022,7 @@ generate4B = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP")
     toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
   else
-    toppat = c("N-8819","N-5362","PD-4419","D-3086","D-6050")
+    toppat = c("PD-4419","D-6050","N-8819","N-5362","D-3086")
   
   # Alternatively, we select people with the largest number of observations
   # toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
@@ -2080,11 +2082,24 @@ generate4B = function(clin,vit,dataset = "30k"){
     geom_smooth(method="lm", formula = y ~ x, size=1, fill=NA) +
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
   ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
+
+  ## TRUE VS PREDICTED
+  preds = predict(model, newdata = corDf.ind)
+
+  dd = data.frame(true = corDf.ind$HCT, predicted = preds)
+
+  pp = ggplot(dd, aes(x=true, y=predicted)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_abline(intercept = 0, size=1) + 
+    geom_point(size=3, colour = gg_color_hue(5)[3])
+
+  cor(pp$data$true, pp$data$predicted)
+  ggsave(paste0("plots/Figure-4B-true-predicted-",corDf.ind$ANON_ID[1],".png"),width = 8, height = 6)
+  print(pp)
+  
   stats
 }
-#generate4B("CHOL","Diastolic","iPOP")
 stats = generate4B("HCT","Diastolic","30k")
-print(stats)
 
 generate4C = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
