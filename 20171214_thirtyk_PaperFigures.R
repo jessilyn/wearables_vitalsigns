@@ -362,6 +362,18 @@ sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
 #####################
 #  Figure 1D Bottom #
 #####################
+
+# resting HR and ST from Fig 1B data
+options(scipen=10)
+hist(restingDf.all$restingHR, col="darkred", breaks=50,
+     xlab = "wRHR", xlim=c(50,200),
+     main = NULL, font.lab=2,lwd=2,font=2)
+scale_y_continuous()
+hist(restingDf.all$restingSkinTemp, col="darkgrey", breaks=50,
+     xlab = "wRTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
+
+
 dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
 
