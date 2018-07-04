@@ -2481,14 +2481,35 @@ generate5Bevents = function(pats,col){
 
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
-    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$time[evid],color="blue",size=1) +
+    plt_cur = plt_cur + geom_vline(xintercept = codes_pats$time[evid],color="red",size=1) +
     geom_text(aes_q(x=codes_pats$time[evid], label=paste0("\n",codes_pats$ICD10[evid]),
                     y=max(dres$dres$rsquared) - sd(dres$dres$rsquared)/2),
                     colour="black", angle=90, text=element_text())
   }
+  
+  ## Other events (TODO: very manual for now...)
+  print(pats)
+  if (pats == "D-148"){
+    eid = 38
+    plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
+    print(dres$dres$date[eid])
+  }
+  if (pats == "D-145"){
+    eid = 4
+    plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
+    print(dres$dres$date[eid])
+  }
+  if (pats == "PD-6145"){
+    for (eid in c(21,25,32,49)){
+      plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
+      print(dres$dres$date[eid])
+    }
+  }
+  
   print(plt_cur)
   ggsave(paste0(filename),
          plot=plt_cur,width = 7.5,height = 6,units = "in")
+  dres
 }
 for (i in 1:3)
   generate5Bevents(pats[i],i)
