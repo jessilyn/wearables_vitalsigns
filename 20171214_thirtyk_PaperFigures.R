@@ -80,6 +80,9 @@ iPOPlabs <- read.csv(
 vitals <- fread(paste0(dir, "all_vitals.csv"),
                 header=TRUE,sep=',',stringsAsFactors=FALSE)
 vitals <- data.frame(vitals)
+length(na.omit(vitals$PULSE)) # 552,145
+length(na.omit(vitals$TEMPERATURE)) # 333,821
+
 # 30k labs
 labs <- fread(paste0(dir, "all_labs.csv"),
               header=TRUE,sep=',',stringsAsFactors=FALSE)
@@ -184,6 +187,9 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 ####################
 iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+
+#number of iPOPpers with > 50 clinic visits
+sum(table(iPOPcorDf.demo$iPOP_ID) > 50)
 
 ###############
 #  Figure 1B  #
@@ -1321,6 +1327,13 @@ hist(table(corDf$ANON_ID), col="darkgrey", breaks=1000, xlab = "Number of Clinic
 hist(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50], col="darkgrey", breaks=1000, xlab = "Number of Clinic Visits",
      main = NULL, font.lab=2,lwd=2,font=2) # dist. of clinic visits in 30k cohort
 describe(as.matrix(table(corDf$ANON_ID))) # mean & median number visits in 30k cohort
+mean(na.omit(corDf$Pulse)) # mean pulse 77.51
+sd(na.omit(corDf$Pulse)) # sd pulse 14.12
+mean(na.omit(corDf$Temp)) # mean temp 97.96
+sd(na.omit(corDf$Temp)) # sd temp 0.50
+length(na.omit(corDf$Pulse)) # 86,515
+length(na.omit(corDf$Temp)) # 75,187
+
 # duration of time monitored in 30K dataset:
 maxDate <-as.Date(as.matrix(tapply(corDf$Clin_Result_Date, corDf$ANON_ID, max)))
 minDate <- as.Date(tapply(corDf$Clin_Result_Date, corDf$ANON_ID, min))
@@ -1351,7 +1364,7 @@ hist(corDf$Temp, col="darkgrey", breaks=100,
      main = NULL, font.lab=2,lwd=2,font=2)
 
 ##############
-#  Figure 3C #
+#  Figure 3XX #
 ##############
 #30 K Univariate Correlation Fit Plots by Lukasz/Jessie
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
@@ -1560,7 +1573,7 @@ length(temp.diff.neut[!is.na(temp.diff.neut)])
 #}
 
 ##########################################
-#    Fig 3C; Suppl. Table 2 and 3        #
+#    Figure 3XX; Suppl. Table 2 and 3        #
 ##########################################
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; checked by Jessie on 2017-12-20
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using 30k dataset
@@ -1659,9 +1672,9 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
 write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180504_pct_var_30k_noDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
 #write.table(models.corr.coefs, "../SECURE_data/20180503_pct_var_30k_noDemog.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
-##########################################################
-#    Fig 3C + Demographics + BloodPressure + Respiration #
-##########################################################
+#############################################################
+#    Figure 3C + Demographics + BloodPressure + Respiration #
+#############################################################
 library(caret)
 library(plyr)
 
@@ -1815,6 +1828,24 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
         axis.text.y = element_text(hjust = 1))
   #ylim(0,0.5)
   
+## get mean RPVE for each model:
+
+allModelResults <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180505_model_compare_30k_withDemog.csv",
+         header =TRUE, stringsAsFactors = FALSE)
+models <- unique(allModelResults$model)
+
+# mean RVPE for the univariate models 
+for (i in models){
+print(i)
+sub <- allModelResults[allModelResults$model %in% i,]
+print(c("mean" , mean(sub$sqrt.pct.var)))
+print(c("sd" , sd(sub$sqrt.pct.var)))
+print(c("numTestObs", mean(sub$numTestObs)))
+print(c("numTrainingObs", mean(sub$numTrainObs)))
+}
+
+
+
 ############
 # Figure 4 #
 ############
