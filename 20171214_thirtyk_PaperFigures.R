@@ -208,9 +208,9 @@ df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
 daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
-vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%d-%b-%Y")
+vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%Y-%m-%d")
 colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
-windows=c(60) # define time windows with no steps for resting threshold (10,60,120, etc)
+windows=c(240) # define time windows with no steps for resting threshold (10,60,120, etc)
 
 dayPrior = FALSE
 
@@ -1844,7 +1844,8 @@ print(c("numTestObs", mean(sub$numTestObs)))
 print(c("numTrainingObs", mean(sub$numTrainObs)))
 }
 
-
+# increase in RVPE from demog-only to cVS + demog for top models:
+delta.corr.coef[order(delta.corr.coef$mean, decreasing = TRUE),]
 
 ############
 # Figure 4 #
