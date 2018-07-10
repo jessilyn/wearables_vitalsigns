@@ -1854,6 +1854,32 @@ delta.corr.coef[order(delta.corr.coef$mean, decreasing = TRUE),]
 
 library("lme4")
 
+# Extra analysis for the text
+dist = aggregate(corDf$Clin_Result_Date, list(ANON_ID = corDf$ANON_ID), length)
+sum(dist > 50)
+
+getTestStats = function(test){
+  hct = na.omit(corDf[,c("ANON_ID",test)])
+  hct.mn = aggregate(hct[[test]], list(ANON_ID = hct$ANON_ID), mean)
+  hct.var = aggregate(hct[[test]], list(ANON_ID = hct$ANON_ID), var)
+  hct.cnt = aggregate(hct[[test]], list(ANON_ID = hct$ANON_ID), length)
+
+  bs = var(hct.mn$x) # between-subject
+  ws = mean(hct.var$x[hct.cnt$x > 50]) # within-subject
+  list(bs=bs,ws=ws,cnt=hct.cnt$x)
+}
+res = getTestStats("HCT")
+sum(res$cnt > 50)
+
+getDiastolicSlope = function(test){
+  hct = na.omit(corDf[,c("ANON_ID","Diastolic",test)])
+  hct.mn = aggregate(list(HCT = hct[[test]], diastolic=hct$Diastolic), list(ANON_ID = hct$ANON_ID), mean)
+
+  model = lm(paste0(test," ~ Diastolic"),data=hct)
+  model$coefficients[2]
+}
+res = getDiastolicSlope("HCT")
+
 # Get ggplot colors
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
