@@ -1869,6 +1869,8 @@ getTestStats = function(test){
   list(bs=bs,ws=ws,cnt=hct.cnt$x)
 }
 res = getTestStats("HCT")
+res$bs
+res$ws
 sum(res$cnt > 50)
 
 getDiastolicSlope = function(test){
@@ -1876,9 +1878,10 @@ getDiastolicSlope = function(test){
   hct.mn = aggregate(list(HCT = hct[[test]], diastolic=hct$Diastolic), list(ANON_ID = hct$ANON_ID), mean)
 
   model = lm(paste0(test," ~ Diastolic"),data=hct)
-  model$coefficients[2]
+  model
 }
 res = getDiastolicSlope("HCT")
+summary(res)
 
 # Get ggplot colors
 gg_color_hue <- function(n) {
@@ -2015,6 +2018,8 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
   res
 }
+res = read.table("plots/Figure-4A-30k.csv")
+res
 
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
@@ -2476,28 +2481,41 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   
   plt_slope = ggplot(dres, aes(time, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
-#    geom_line()
+    geom_line(size=1.3) +
     geom_point(size=2) 
   
   cols = gg_color_hue(3)
   
   plt_rsq = ggplot(dres, aes(time, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
-    ylab(expression(sqrt("Variance explained"))) +
-    geom_point(size=4, colour=cols[col]) +
-    geom_line(size=2, colour=cols[col]) 
-
-  events = getEvents(dres, codes)
-#  geom_vline(xintercept = rev(stats[trunc(stats$y) == 2, "x"])[1])
-
-  print(plt_slope)
-  print(plt_rsq)
+    ylab(expression(sqrt("Variance explained")))
   
-  # ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"), 
-  #        plot = plt_slope, width = 9,height = 6,units = "in")
-  #  ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),plot=plt_rsq,width = 9,height = 6,units = "in")
+  if (dataset != "iPOP"){
+    plt_rsq = plt_rsq + geom_point(size=4, colour=cols[col]) +
+      geom_line(size=2, colour=cols[col]) 
+  }
+  else{
+    plt_rsq = plt_rsq + geom_point(size=4) +
+      geom_line(size=1.3) + ylim(c(0,0.6)) + theme(legend.position = "none")
+  }
+  
+  events = NULL
+  if (dataset != "iPOP")
+    events = getEvents(dres, codes)
+  
+  if (dataset == "iPOP"){
+    ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"), 
+          plot = plt_slope, width = 9,height = 6,units = "in")
+    ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),plot=plt_rsq,width = 9,height = 6,units = "in")
+  }
   list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, events = events)
 }
+
+visits = aggregate(iPOPcorDf$iPOP_ID,by=list(iPOPcorDf$iPOP_ID),length)
+visits = visits[order(-visits$x),]
+pats = visits[1:1,1]
+dres = generate5B("HCT","Pulse","iPOP",
+                  window = 30,filter=pats,1)
 
 ## Load codes (initial)
 codes = read.csv("../SECURE_data/SECURE/initial_MI.csv",stringsAsFactors=FALSE,header = FALSE)
@@ -2517,11 +2535,11 @@ getTop10Patients = function(){
 }
 #pats = getTop10Patients()
 
-pats = c("D-145","D-148","PD-6145") #"N-3683",
+pats = c("D-145","D-148","PD-6145") #, "N-3683")
 
 generate5Bevents = function(pats,col){
   dres = generate5B("HCT","Pulse","30k",
-                    window = 20,filter=pats,col)
+                    window = 30,filter=pats,col)
   
   codes_pats = codes[codes$ANON_ID %in% pats,]
   ids.tmp = c("!",codes_pats$ANON_ID)
@@ -2530,6 +2548,7 @@ generate5Bevents = function(pats,col){
   
   # correct for D-148 (last event instead of first)
   if (pats == "D-148"){
+    first[] = FALSE
     first[6] = TRUE
   }
   filename = paste0("plots/Figure-5B-rsqured-",pats,".png")
@@ -2548,17 +2567,18 @@ generate5Bevents = function(pats,col){
   ## Other events (TODO: very manual for now...)
   print(pats)
   if (pats == "D-148"){
-    eid = 38
+    eid = 28
     plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
     print(dres$dres$date[eid])
   }
   if (pats == "D-145"){
-    eid = 4
-    plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
-    print(dres$dres$date[eid])
+    for (eid in c(12, 17)){
+      plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
+      print(dres$dres$date[eid])
+    }
   }
   if (pats == "PD-6145"){
-    for (eid in c(21,25,32,49)){
+    for (eid in c(25)){
       plt_cur = plt_cur + geom_vline(xintercept = dres$dres$time[eid],color="blue",size=1)
       print(dres$dres$date[eid])
     }
