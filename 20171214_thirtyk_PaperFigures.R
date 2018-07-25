@@ -65,16 +65,22 @@ timespans <-c("AllData",
 wear <- read.csv(paste0(dir, 
                 "Basis2016_Clean_Norm_", timespans[7], "_20180504.csv"),
                  header=TRUE,sep=',',stringsAsFactors=FALSE)
+wearables.people <- unique(wear$iPOP_ID)
 
 # iPOP vitals (called vitals in Lukasz script)
 #setwd("/Users/jessilyn/Desktop/framework_paper/weartals")
 iPOPvitals <- read.csv(paste0(dir, "vitals.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
+# restrict to wearables only people
+iPOPvitals <- iPOPvitals[iPOPvitals$HIMCID %in% wearables.people,]
 
 #iPOP Labs (called labs in Lukasz script)
 iPOPlabs <- read.csv(
   paste0(dir, "lab_results_20170717.csv"),
   header=TRUE,sep=',',stringsAsFactors=FALSE)
+# restrict to wearables only people
+iPOPlabs <- iPOPlabs[iPOPlabs$HIMC_ID %in% wearables.people,]
+
 
 # 30k vitals
 vitals <- fread(paste0(dir, "all_vitals.csv"),
@@ -102,6 +108,9 @@ thirtyKdemog <- read.csv(paste0(dir, "SECURE_20180412_thirtyKDemog.csv"),
 
 # names of top clinical tests that will be used for the downstream analyses
 top.names<-top.names<-c("LYM", "NEUT", "LYMAB", "NEUTAB", "IGM", "HSCRP", "ALKP", "ALT", "HDL", "MCV", "TBIL", "CHOLHDL", "GLOB", "AG", "CO2", "CA", "LDLHDL", "BUN", "NHDL", "NA.", "UALB", "MONOAB", "CHOL", "MONO", "RDW", "HCT", "TP", "TGL", "EOS", "LDL", "GLU", "AST", "PLT", "K", "EOSAB", "BASOAB", "MCH", "ALB", "HGB", "A1C", "CL", "RBC", "BASO", "MCHC") # names of lab tests from the 30k simple bivariate models
+
+
+
 
 ###################
 ### CLEAN DATA ####
@@ -187,9 +196,34 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 ####################
 iPOPdaysMonitored <- read.csv("/Users/jessilyn/Desktop/framework_paper/Figure1/Slide 2/slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+# restrict to wearables only people
+iPOPdaysMonitored <- iPOPdaysMonitored[iPOPdaysMonitored$iPOP_ID %in% wearables.people,]
+mean(iPOPdaysMonitored$Days_monitored_by_clinic)/365 # 3.3 years of clinic monitoring
+mean(iPOPdaysMonitored$Total_NumOfClinMeasures) # avg of 42 clinic visits
+mean(iPOPdaysMonitored$Days_monitored_by_basis) # avg of 343 clinic visits
+mean(iPOPdaysMonitored$Days_overlapping_between_basis_and_clinic_monitoring) # avg of 313 clinic visits
 
 #number of iPOPpers with > 50 clinic visits
 sum(table(iPOPcorDf.demo$iPOP_ID) > 50)
+
+
+iPOP.table <- fread(paste0(dir, "ClinWearDemo_SamplePop.csv"),
+header=TRUE,sep=",",stringsAsFactors = FALSE)
+# restrict to wearables only people
+iPOP.table <- iPOP.table[iPOP.table$iPOP_ID %in% wearables.people,]
+iPOP.table$iPOP_ID <- as.factor(iPOP.table$iPOP_ID)
+iPOP.table$Gender <- as.factor(iPOP.table$Gender)
+iPOP.table$Ethn <- as.factor(iPOP.table$Ethn)
+iPOP.table$AgeIn2016 <- as.numeric(iPOP.table$AgeIn2016)
+table(iPOP.table[1:54,]$Ethn)
+female <- iPOP.table[iPOP.table$Gender=="F"]
+max(female$AgeIn2016);  min(female$AgeIn2016); mean(female$AgeIn2016) # max age of female particpants
+
+male <- iPOP.table[iPOP.table$Gender=="M"]
+male <- male[-max(dim(male)),]
+max(male$AgeIn2016);  min(male$AgeIn2016); mean(male$AgeIn2016) # max age of male particpants
+
+
 
 ###############
 #  Figure 1B  #
@@ -205,24 +239,32 @@ df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
 # restrict to daytime values only (between 6am-10pm)
 #df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
 df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
-daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 21 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+
+#below is actually nighttime for the test mike asked for
+#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 3 & hour( Timestamp_Local ) < 4 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
 vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%Y-%m-%d")
 colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
-windows=c(240) # define time windows with no steps for resting threshold (10,60,120, etc)
+windows=c(60, 120, 180, 240) # define time windows with no steps for resting threshold (10,60,120, etc)
 
 dayPrior = FALSE
+idx=0
 
 for (window in windows){
+  idx=idx+1
   restingDf <- c() 
   restingDf.all <- list() # keep all resting data for boxplots later
   maxsteps <- 1 #define max steps for resting threshold
   indiv.means <- c()
   indiv.sd <- c()
+  
   for(i in unique(daytime.df$iPOP_ID)){
-    print(i)
     subDf <- daytime.df[which(daytime.df$iPOP_ID %in% i),] #pull data per individual
+    if (dim(subDf)[1] > window) {
+    print(i)
     restingST<-c()
     restingST <- rollapplyr(subDf$Steps, width=window, by=1, sum, partial=TRUE)
     restingST[1:window-1]<-"NA" # remove 1st x observations because we dont know what happened prior to putting the watch on
@@ -231,6 +273,7 @@ for (window in windows){
     indiv.means[i] <- mean(restingDf$Heart_Rate, na.rm=TRUE) # mean RHR for all days/times for individual i
     indiv.sd[i] <- sd(restingDf$Heart_Rate, na.rm=TRUE) # RHR var for all days/times for individual i
     restingDf.all[[i]] <- restingDf # store all resting data for boxplots
+    }
   }
   
   restingDf.all <- rbindlist(restingDf.all)
@@ -239,12 +282,14 @@ for (window in windows){
   names(restingDf.all) <- c("iPOP_ID","Date","restingHR","restingSkinTemp","restingSteps","DateTime")
   means.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), na.omit(mean)) 
   sd.by.id<-aggregate(restingDf.all, list(restingDf.all$iPOP_ID), sd) 
-  mean(na.omit(restingDf.all$restingHR)) # wRHR; mean 65.23 +/- 10.41, n=1,198,040 measurements
-  sqrt(var((na.omit(restingDf.all$restingHR))))  # sd wRHR
-  length(na.omit(restingDf.all$restingHR))
-  mean(na.omit(restingDf.all$restingSkinTemp)) # wRTemp; 90.89 +/- 3.09, n=1,181,648 measurements
-  sd(na.omit(restingDf.all$restingSkinTemp)) # sd wRTemp
-  length(na.omit(restingDf.all$restingSkinTemp))
+  HR.personal.sd[idx] <- mean(na.omit(sd.by.id$restingHR)) # personal / intra-individual SD
+  wRHR.mean[idx] <- mean(na.omit(restingDf.all$restingHR)) # wRHR; mean 65.23 +/- 10.41, n=1,198,040 measurements
+  wRHR.sd[idx] <-sqrt(var((na.omit(restingDf.all$restingHR))))  # sd wRHR
+  wRHR.num.obs[idx] <- length(na.omit(restingDf.all$restingHR))
+  wRTemp.mean[idx] <- mean(na.omit(restingDf.all$restingSkinTemp)) # wRTemp; 90.89 +/- 3.09, n=1,181,648 measurements
+  wRTemp.sd[idx] <-sd(na.omit(restingDf.all$restingSkinTemp)) # sd wRTemp
+  wRTemp.num.obs[idx] <- length(na.omit(restingDf.all$restingSkinTemp))
+  Temp.personal.sd[idx] <- mean(na.omit(sd.by.id$restingSkinTemp))
   
   #Optional: use day-prior rather than day-of wearable data for comparison:
   if(dayPrior){
@@ -259,6 +304,36 @@ for (window in windows){
   df.name <- paste0("restingDf.vitals.", window)
   assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
 }
+ggplot()+
+  geom_line(aes(x=windows, y=wRHR.mean), color="red") +
+  geom_point(aes(x=windows, y=wRHR.mean), color="red") +
+  # geom_line(aes(x=windows, y=wRTemp.mean), color="blue") +
+  # geom_point(aes(x=windows, y=wRTemp.mean), color="blue") +
+  xlab("Resting Time Window (seconds)") +
+  ylab("Mean wRHR") # or wRTemp
+  
+cols <- c("red","blue","green","purple")
+ggplot()+
+  geom_line(aes(x=windows, y=wRHR.sd), color="red") +
+  geom_point(aes(x=windows, y=wRHR.sd), color="red") +
+  geom_line(aes(x=windows, y=HR.personal.sd), color="blue") +
+  geom_point(aes(x=windows, y=HR.personal.sd), color="blue") +
+  geom_line(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
+  geom_point(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
+  geom_line(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
+  geom_point(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
+  xlab("Resting Time Window (seconds)") +
+  ylab("HR SD") # or wRTemp +
+  guides
+  
+wRHR.mean
+wRHR.sd
+wRHR.num.obs
+HR.personal.sd
+wRTemp.mean
+wRTemp.sd
+wRTemp.num.obs
+Temp.personal.sd
 
 for(window in windows){
   restingDf.vitals <- eval(as.name(paste0("restingDf.vitals.",window)))
@@ -339,7 +414,7 @@ for(window in windows){
 ##########
 # Fig 1C #
 ##########
-hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=20,
+hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=10,
      xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
 hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
      xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
@@ -355,15 +430,21 @@ hist(iPOPvitals$Pulse, col="darkred", breaks=50,
      xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
-mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.84 +/- 11.21, n=2391
-sqrt(var(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)])) # stdev of cHR
-
+mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.54 +/- 9.92, n=1644
+cHR.sd <- sqrt(var(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)])) # stdev of cHR
+means<-aggregate(iPOPvitals$Pulse,list(iPOPvitals$iPOP_ID), mean) # check this compare to indiv means
+sd<-aggregate(iPOPvitals$Pulse, list(iPOPvitals$iPOP_ID), sd)
+# personal sd:
+cHR.individual.sd <- mean(na.omit(sd$x)) # intra-individual SD 6.913
 hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
-mean(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # mean cTemp; 97.84 +/- 0.39, n=1596
-sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
+mean(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # mean cTemp; 97.84 +/- 0.38, n=1136
+cTemp.sd <- sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
+means<-aggregate(iPOPvitals$Temp,list(iPOPvitals$iPOP_ID), mean) # check this compare to indiv means
+sd<-aggregate(iPOPvitals$Temp, list(iPOPvitals$iPOP_ID), sd)
+cTemp.individual.sd <- mean(na.omit(sd$x)) # intra-individual SD 0.2536
 
 #####################
 #  Figure 1D Bottom #
@@ -387,6 +468,7 @@ dfFigOne$Heart_Rate <- remove_outliers(dfFigOne$Heart_Rate) # clean data based o
 length(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # number of wHR measurements in iPOP cohort
 mean(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # mean wHR mean 74.31 +/- 15.17, n=25,341,508
 sqrt(var(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)])) # stdev of wHR
+
 hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
      xlab = "wHR",
      main = NULL, font.lab=2,lwd=2,font=2,
