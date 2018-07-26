@@ -240,10 +240,11 @@ df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
 #df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
 df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
 #daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
-daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 21 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 20 & hour( Timestamp_Local ) < 24 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 24 | hour( Timestamp_Local ) >= 0 & hour( Timestamp_Local ) < 1, ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 #below is actually nighttime for the test mike asked for
-#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 3 & hour( Timestamp_Local ) < 4 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 19 & hour( Timestamp_Local ) < 21 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
 vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%Y-%m-%d")
@@ -252,7 +253,14 @@ windows=c(60, 120, 180, 240) # define time windows with no steps for resting thr
 
 dayPrior = FALSE
 idx=0
-
+HR.personal.sd	<- c()
+wRHR.mean	<- c()
+wRHR.sd	<- c()
+wRHR.num.obs	<- c()
+wRTemp.mean	<- c()
+wRTemp.sd	<- c()
+wRTemp.num.obs	<- c()
+Temp.personal.sd	<- c()
 for (window in windows){
   idx=idx+1
   restingDf <- c() 
@@ -304,6 +312,8 @@ for (window in windows){
   df.name <- paste0("restingDf.vitals.", window)
   assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
 }
+
+
 ggplot()+
   geom_line(aes(x=windows, y=wRHR.mean), color="red") +
   geom_point(aes(x=windows, y=wRHR.mean), color="red") +
@@ -323,8 +333,7 @@ ggplot()+
   geom_line(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
   geom_point(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
   xlab("Resting Time Window (seconds)") +
-  ylab("HR SD") # or wRTemp +
-  guides
+  ylab("HR SD") # or wRTemp
   
 wRHR.mean
 wRHR.sd
