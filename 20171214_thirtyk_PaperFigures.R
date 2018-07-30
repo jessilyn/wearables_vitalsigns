@@ -1947,7 +1947,7 @@ library("lme4")
 
 # Extra analysis for the text
 dist = aggregate(corDf$Clin_Result_Date, list(ANON_ID = corDf$ANON_ID), length)
-sum(dist > 50)
+sum(dist$x > 50)
 
 getTestStats = function(test){
   hct = na.omit(corDf[,c("ANON_ID",test)])
@@ -1957,11 +1957,12 @@ getTestStats = function(test){
 
   bs = var(hct.mn$x) # between-subject
   ws = mean(hct.var$x[hct.cnt$x > 50]) # within-subject
-  list(bs=bs,ws=ws,cnt=hct.cnt$x)
+  list(bs=bs,ws=ws,tv=var(hct[,2]),cnt=hct.cnt$x)
 }
 res = getTestStats("HCT")
 res$bs
 res$ws
+res$tv
 sum(res$cnt > 50)
 
 getDiastolicSlope = function(test){
@@ -2626,27 +2627,35 @@ getTop10Patients = function(){
 }
 #pats = getTop10Patients()
 
-pats = c("D-145","D-148","PD-6145") #, "N-3683")
+#pats = c("D-145","D-148","PD-6145") #, "N-3683")
 
-generate5Bevents = function(pats,col){
-  dres = generate5B("HCT","Pulse","30k",
+generate5Bevents = function(pats,col,dataset="30k"){
+  dres = generate5B("HCT","Pulse",dataset,
                     window = 30,filter=pats,col)
   
-  codes_pats = codes[codes$ANON_ID %in% pats,]
-  ids.tmp = c("!",codes_pats$ANON_ID)
-  first = c(ids.tmp[-1] != ids.tmp[-length(ids.tmp)])
-  last = c(first[-1],TRUE)
-  
-  # correct for D-148 (last event instead of first)
-  if (pats == "D-148"){
-    first[] = FALSE
-    first[6] = TRUE
+  if(dataset == "30k"){
+    codes_pats = codes[codes$ANON_ID %in% pats,]
+    ids.tmp = c("!",codes_pats$ANON_ID)
+    first = c(ids.tmp[-1] != ids.tmp[-length(ids.tmp)])
+    last = c(first[-1],TRUE)
+    
+    # correct for D-148 (last event instead of first)
+    if (pats == "D-148"){
+      first[] = FALSE
+      first[6] = TRUE
+    }
+    codes_pats$time = as.numeric(codes_pats$date - min(dres$dres$date))/365
+    codes_pats = codes_pats[first,]
+  }
+  else{#Mike
+    times = c(7,43,52,64)
+    first = rep(FALSE, length(dres$dres$time))
+    first[times] = TRUE
+    codes_pats = list(time = as.numeric(dres$dres$time[times]), ICD10 = NULL)
+    print(dres$dres$date[times])
   }
   filename = paste0("plots/Figure-5B-rsqured-",pats,".png")
   
-  codes_pats$time = as.numeric(codes_pats$date - min(dres$dres$date))/365
-  codes_pats = codes_pats[first,]
-
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
     plt_cur = plt_cur + geom_vline(xintercept = codes_pats$time[evid],color="red",size=1) +
@@ -2680,8 +2689,14 @@ generate5Bevents = function(pats,col){
          plot=plt_cur,width = 7.5,height = 6,units = "in")
   dres
 }
-for (i in 1:3)
+for (i in 1:length(pats))
   generate5Bevents(pats[i],i)
+
+##MIKE
+dres = generate5Bevents("1636-69-001",1,dataset="iPOP")
+dres$dres$time
+dres$dres$date
+
 ###############
 #   Figure 5 #
 ###############
