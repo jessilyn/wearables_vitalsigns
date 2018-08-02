@@ -1963,7 +1963,7 @@ res = getTestStats("HCT")
 res$bs
 res$ws
 res$tv
-sum(res$cnt > 50)
+sum(res$cnt >= 50)
 
 getDiastolicSlope = function(test){
   hct = na.omit(corDf[,c("ANON_ID","Diastolic",test)])
@@ -1984,7 +1984,7 @@ gg_color_hue <- function(n) {
 # Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
-getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE){
+getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE, type="LM"){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
@@ -2012,13 +2012,33 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
     
     frm = paste(test.name,"~",model_coefs)
     print(frm)
+    
+    
     if (mixed)
       model = lmer(frm, data=corDf.tmp[-testids,],na.action = na.omit, verbose = 1, control = lmerControl(
         boundary.tol = 1e-2
       ))
+    else if (type=="RF"){
+      vars = c(test.name, attr(terms(formula(frm)),"term.labels"))
+      corDf.tmp.rf = corDf.tmp[,vars]
+      corDf.tmp.rf[[identifier]] = as.factor(corDf.tmp.rf[[identifier]])
+      
+      # one-hot encoding
+      onehot = model.matrix(~ ANON_ID - 1, corDf.tmp.rf)
+      colnames(onehot) = paste0("ID",1:ncol(onehot))
+      corDf.tmp.rf = cbind(corDf.tmp.rf, onehot)
+      corDf.tmp.rf[[identifier]] = NULL
+
+      model = randomForest(as.formula(paste(test.name,"~ .")), data=corDf.tmp.rf[-testids,])
+    }
     else
       model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
-    preds = predict(model, newdata = corDf.tmp[testids,])
+    
+    if (type=="RF")
+      preds = predict(model, newdata = corDf.tmp.rf[testids,])
+    else
+      preds = predict(model, newdata = corDf.tmp[testids,])
+    
 #    print(summary(model))
     
     # Correlation
@@ -2083,6 +2103,14 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     # population vitals + personal intercept model
     models[["personal mean"]] = paste0(identifier)
     
+    res.tests  = c(res.tests, test.name)
+    mdl = "vitals + personal mean"
+    model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi, mixed = FALSE, type = "RF")
+    res.values = c(res.values, model$res)
+    res.models = c(res.models, paste(mdl,"(RF)"))
+    res.n = c(res.n, model$n)
+    print("RF done")
+
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
       mixed = "vitals + personal mean and slope" == mdl
@@ -2101,22 +2129,37 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   pp = ggplot(res, aes(test, value, group = model, color = model)) +
     ylab(expression(sqrt("Variance explained"))) +
     xlab("Lab test") +
-#    geom_jitter(size = 2, height = 0.0, width=0.2) + 
+    geom_jitter(size = 2, height = 0.0, width=0.2) + 
     weartals_theme + 
-    geom_point(size = 3, shape=1) + 
+    geom_point(size = 1) + 
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
   print(pp)
   write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
   res
 }
-res = read.table("plots/Figure-4A-30k.csv")
-res
-
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
+#res = generate4A("30k",threshold = 50, cap = 500)
 res = generate4A("30k",threshold = 50, cap = 500)
+
+res = res[order(as.numeric(row.names(res))),]
+res$model = as.character(res$model)
+
+pp = ggplot(res, aes(test, value, group = model, color = model)) +
+  ylab(expression(sqrt("Variance explained"))) +
+  xlab("Lab test") +
+  geom_jitter(size = 2, height = 0.0, width=0.2) + 
+  weartals_theme + 
+  geom_point(size = 1) + 
+  theme(text = element_text(size=14))
+print(pp)
+
+#res[1:30 * 5 - 4,]$model = paste(res[1:30 * 5 - 4,]$model,"(RF)")
+
+# res = read.table("plots/Figure-4A-30k.csv")
+res
 
 # Find patients and tests with the following conditions:
 #  * patients with > 20 observations
@@ -2575,8 +2618,10 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
     weartals_theme + theme(text = element_text(size=25)) +
     geom_line(size=1.3) +
     geom_point(size=2) 
+  write.table(dres, file=paste0("plots/Figure-5B-",clin,"-",vit,"-",pat,".csv"),sep = ',')
   
   cols = gg_color_hue(3)
+  
   
   plt_rsq = ggplot(dres, aes(time, rsquared, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
