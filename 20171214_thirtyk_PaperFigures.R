@@ -178,10 +178,10 @@ iPOPcorDf <- merge(iPOPlabs,
                    by=c("iPOP_ID","Clin_Result_Date"))
 
 ### clean iPOPcorDf ###
-iPOPcorDf[, -c(1,2)] <- apply(iPOPcorDf[, -c(1,2)], 2, remove_outliers)
+#iPOPcorDf[, -c(1,2)] <- apply(iPOPcorDf[, -c(1,2)], 2, remove_outliers)
 
 ### clean corDf ### 
-corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers) 
+#corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers) 
 
 ### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
 # wear2<-wear
@@ -378,47 +378,62 @@ for(window in windows){
   hist(delta.daily.mean.RHR.pulse, col="darkred", main = paste0("Delta Mean cHR - Mean wRHR)"))
   hist(delta.daily.sd.RHR.pulse, col="darkred", main = paste0("Delta StdDev cHR - StdDev wRHR)"))
   
+  rhr.daily.means.id$idx <- as.numeric(rhr.daily.means.id$iPOP_ID)
+  
   # Scatter plot HR
-  ggplot(rhr.daily.means.id,
-         aes(x=restingHR,y=Pulse,col=as.factor(substr(iPOP_ID,9,12)))) +
+  p1 <- ggplot(rhr.daily.means.id,
+         aes(x=restingHR,y=Pulse,col=as.factor(rhr.daily.means.id$idx))) +
+             #col=as.factor(substr(iPOP_ID,9,12)))) +
     geom_point() +
-    labs(title=paste0("Clinical Pulse vs. Wearable RHR Mean (",window,"min resting)"),x="Resting Heart Rate",y="Pulse") +
+    #labs(title=paste0("Clinical Pulse vs. Wearable RHR Mean (",window,"min resting)"),x="Resting Heart Rate",y="Pulse") +
+    labs(title=NULL,x="wRHR",y="cHR") +
     annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
-             lwd=2, color="blue", alpha=.25) +
-    guides(col=guide_legend("ID")) +
+             lwd=1, color="blue", alpha=.25) +
+    #guides(col=guide_legend("Subject ID")) +
     xlim(40, 100) +
     ylim(40, 100)+
-    theme(plot.title=element_text(face="bold",colour="black",size=14),
-          axis.title.x=element_text(face="bold",colour="black",size=14),
-          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
-          axis.title.y=element_text(face="bold",colour="black",size=14),
-          axis.text.y=element_text(face="bold",colour="black",size=12),
+    theme(plot.title=element_text(face="bold",colour="black",size=16),
+          axis.title.x=element_text(face="bold",colour="black",size=16),
+          axis.text.x=element_text(face="bold",colour="black",size=16,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=16),
+          axis.text.y=element_text(face="bold",colour="black",size=16),
           axis.ticks.length = unit(.2,"cm"),
-          legend.title=element_text(face="bold", colour="black", size=14),
-          legend.text=element_text(face="bold", colour="black", size=12),
-          panel.background=element_rect(fill="grey94"))
+          legend.position="none",
+          #legend.title=element_text(face="bold", colour="black", size=16),
+          #legend.text=element_text(face="bold", colour="black", size=16),
+          panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+          #panel.background=element_rect(fill="grey94"))
   
   ## scatter plot skin temp
-  ggplot(rhr.daily.means.id,
+  p2 <- ggplot(rhr.daily.means.id,
          aes(x=restingSkinTemp,y=Temp,col=as.factor(substr(iPOP_ID,9,12)))) +
     geom_point() +
-    labs(title=paste0("Clinical Temp vs. Wearable Temp (",window,"min resting)"),
-         x="Resting Skin Temp",y="Core Temperature") +
+    #labs(title=paste0("Clinical Temp vs. Wearable Temp (",window,"min resting)"), x="Resting Skin Temp",y="Core Temperature") +
+    labs(title=NULL, x="wRTemp",y="cTemp") +
     annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
-             lwd=2, color="blue", alpha=.25) +
-    guides(col=guide_legend("ID")) +
-    xlim(90, 100) +
-    ylim(90, 100)+
-    theme(plot.title=element_text(face="bold",colour="black",size=14),
-          axis.title.x=element_text(face="bold",colour="black",size=14),
-          axis.text.x=element_text(face="bold",colour="black",size=12,angle=55,vjust=0.9,hjust=1),
-          axis.title.y=element_text(face="bold",colour="black",size=14),
-          axis.text.y=element_text(face="bold",colour="black",size=12),
+             lwd=1, color="blue", alpha=.25) +
+    #guides(col=guide_legend("ID")) +
+    xlim(92, 100) +
+    ylim(92, 100)+
+    theme(plot.title=element_text(face="bold",colour="black",size=16),
+          axis.title.x=element_text(face="bold",colour="black",size=16),
+          axis.text.x=element_text(face="bold",colour="black",size=16,angle=55,vjust=0.9,hjust=1),
+          axis.title.y=element_text(face="bold",colour="black",size=16),
+          axis.text.y=element_text(face="bold",colour="black",size=16),
           axis.ticks.length = unit(.2,"cm"),
-          legend.title=element_text(face="bold", colour="black", size=14),
-          legend.text=element_text(face="bold", colour="black", size=12),
-          panel.background=element_rect(fill="grey94"))
-}
+          legend.position="none",
+          #legend.title=element_text(face="bold", colour="black", size=16),
+          #legend.text=element_text(face="bold", colour="black", size=16),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"))
+          #panel.background=element_rect(fill="grey94"))
+  
+  grid.arrange(p1, p2, nrow = 2)
+# save as a 7x4.5 pdf
+  }
 
 ##########
 # Fig 1C #
@@ -1398,7 +1413,7 @@ rf.features <-read.table("/Users/jessilyn/Desktop/framework_paper/SECURE_data/20
 colnames(rf.features) <- c("test", "cv.run", "iPOP_ID", "feature", "coefficient")
 rf.feature.summaries <- as.data.frame(summarise(group_by(rf.features, test, feature),
                                                    mean=mean(coefficient), sd=sd(coefficient)))
-top.models <- c("HCT", "RBC", "HGB", "MONOAB", "A1C", "GLU", "PLT",  "CL")
+top.models <- c("HCT", "HGB", "RBC", "MONOAB", "GLU", "UALB",  "CL", "A1C")
 top.rf.features <- c()
 for (i in top.models) {
   rf.feature.subset<-rf.feature.summaries[rf.feature.summaries$test %in% i,] 
@@ -1768,7 +1783,14 @@ write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/
 #############################################################
 library(caret)
 library(plyr)
-
+#function to pull out lm model p-values
+lmp <- function (modelobject) {
+  if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+  f <- summary(modelobject)$fstatistic
+  p <- pf(f[1],f[2],f[3],lower.tail=F)
+  attributes(p) <- NULL
+  return(p)
+}
 names(corDf)[names(corDf) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and 30K datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
 names(corDf)[names(corDf)  %in% "LDL_Calc"] <-"LDL"  # fix names to be same between iPOP and 30K datasets ; corDf$LDL_Calc range = wear$LDL range
 corDf.demog <- merge(thirtyKdemog, corDf, by="ANON_ID")
@@ -1808,6 +1830,10 @@ models=c(" ~ Pulse", # univariate with pulse only
          # " ~ Pulse + I(Pulse^2) + Temp + I(Temp^2)
          # + Systolic + I(Systolic^2) + Diastolic + I(Diastolic^2) + Respiration + I(Respiration^2) + Age + Gender + Ethn" ) # this is the total possible info we can gain from vitals
 
+# for random forest:
+models=c(" ~ Pulse + Temp + Systolic + Diastolic + Respiration", # this is the total possible info we can gain from vitals
+         " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn") # this is the total possible info we can gain from vitals and demog
+
 models.corr.coefs <- c()
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
@@ -1818,7 +1844,9 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   
   # Do stratified cross-validation per subject
   # split into training and test
-  folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  #folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  # for random forest
+  folds <- createFolds(factor(corDf.tmp$Ethn), k = 3000, list = FALSE) # ~50 entries per fold; folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
   corDf.tmp$test.train <- folds
   
   # subjects = unique(ANON_ID)
@@ -1836,14 +1864,26 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
                          ) # prepare data for LM
     #df <- cbind(corDf2[[i]], corDf2[,c("Pulse", "Temp")])
     corDf2 <- na.omit(corDf2)
-    train.data <- corDf2[corDf2$test.train<9,]
-    test.data <-corDf2[corDf2$test.train==10,] # training set is ~10% of total set, but not exactly because it is ba;ancing by ethnicities
+    # train.data <- corDf2[corDf2$test.train<9,] 
+    # test.data <-corDf2[corDf2$test.train==10,] # training set is ~10% of total set, but not exactly because it is balancing by ethnicities
+    # 
+    # for random forest
+    train.data <- corDf2[corDf2$test.train<180,] # 60% training, 40% test data
+    test.data <-corDf2[corDf2$test.train>=180 & corDf2$test.train<300,] # training set is ~10% of total set, but not exactly because it is balancing by ethnicities
+    #train.data<-sample(train.data, 450, replace=FALSE) # comment out if not doing RF
+    
     t<-as.data.frame(table(train.data$Ethn)) # if there is an ethnicity that has zero entries in the training data
     test.data <- test.data[!(test.data$Ethn %in% as.character(t[t[,2]<1,][,1])),] #remove that ethnicity from the test data
     for (k in 1:length(models)){
-      model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
-      m <- summary(model) # quadratic univariate with pulse or temp only
+      # model<-lm(as.formula(paste0("labtest",models[k])),data=train.data)
+      # p.val <- lmp(model)
+      # m <- summary(model) # quadratic univariate with pulse or temp only
+      # model.null <- lm(as.formula(paste0("labtest"," ~ 1")),data=train.data)
+      
+      #for random forest
+      model<-randomForest(as.formula(paste0("labtest",models[k])),data=train.data)
       model.null <- lm(as.formula(paste0("labtest"," ~ 1")),data=train.data)
+      
       # r[tmp,tmp2]<-m$adj.r.squared # matrix of r-squared values for each left-one-out model
       # p[tmp,tmp2]<-1-pf(m$fstatistic[1],m$fstatistic[2],m$fstatistic[3]) # matrix of p-squared values for each left-one-out model
       numTrainObs<-length(train.data$Pulse) # train: the number of each clinical lab test that has corresponding vital signs
@@ -1858,32 +1898,48 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
       sqrt.pct.var <- sqrt(1- (rssm/rss0))
       if ((1- (rssm/rss0)) <0) {sqrt.pct.var <- 0}
       name.rsq <- paste("model.mean.rsq", k, sep = ".")
+      # for lm, add in pval = p.val below
       models.corr.coefs <- rbind(models.corr.coefs,
                                  c(model = name.rsq, cv.step = i, test = nm, corr.coef = r.pred, sqrt.pct.var = sqrt.pct.var, numTestObs = numTestObs, numTrainObs = numTrainObs))
     }
   }
 }
 
-
-write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180506_model_compare_30k_withDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
+#20180506_model_compare_30k_withDemog.csv
+# 20180801_30k_RF_noIDnoDemog.csv
+write.table(models.corr.coefs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180804_cVS_noID_RF_train_test_60_40.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 corr.coefs <- as.data.frame(models.corr.coefs)
 corr.coefs$cv.step <- as.numeric(as.character(corr.coefs$cv.step))
 corr.coefs$corr.coef <- as.numeric(as.character(corr.coefs$corr.coef))
 corr.coefs$sqrt.pct.var <- as.numeric(as.character(corr.coefs$sqrt.pct.var))
+corr.coefs$numTestObs <- as.numeric(as.character(corr.coefs$numTestObs))
+corr.coefs$numTrainObs <- as.numeric(as.character(corr.coefs$numTrainObs))
+mean.numTrainObs <- (corr.coefs %>%
+                       group_by(test, model) %>% 
+                       summarise_at(vars("numTrainObs"), funs(mean)))
+mean.numTestObs <- (corr.coefs %>%
+                       group_by(test, model) %>% 
+                       summarise_at(vars("numTestObs"), funs(mean)))
+meanNumObs <- merge(mean.numTrainObs, mean.numTestObs, by = c("test", "model"))
+write.table(meanNumObs, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180804_NumObs_summarized_cVS_noID_RF_train_test_60_40.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 library(dplyr)
 ## plot corr coefs or sqrt pct var explained (need to change code to plot second one)
 model.corr.coefs <- (corr.coefs %>%
                        group_by(test, model) %>% 
                        summarise_at(vars("sqrt.pct.var"), funs(mean,sd))) # change to summarise_at(vars("sqrt.pct.var") or "corr.coef"
-model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7", "model.mean.rsq.8"), 
-                                    to = c("~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ Demographics", "~ All Vitals + Demographics"))
+model.corr.coefs$model <- mapvalues(model.corr.coefs$model, from = c("model.mean.rsq.1", "model.mean.rsq.2"), 
+                                    #from = c("model.mean.rsq.1", "model.mean.rsq.2", "model.mean.rsq.3", "model.mean.rsq.4", "model.mean.rsq.5", "model.mean.rsq.6", "model.mean.rsq.7", "model.mean.rsq.8"), 
+                                    to = c("~ All Vitals", "~ All Vitals + Demographics"))
+                                    # "~ Pulse","~ Temp","~ Systolic", "~ Diastolic", "~ Respiration", "~ All Vitals", "~ Demographics", "~ All Vitals + Demographics"))
                                     # to = c("~ Systolic", "~ Diastolic", "~ Respiration", "~ Systolic + Diastolic + Respiration", "~ Pulse + P^2 + Temp + T^2 + Systolic + S^2) + Diastolic + D^2 + Respiration + R^2"))
 model.corr.coefs <- na.omit(model.corr.coefs)
 model.corr.coefs$test  = factor(model.corr.coefs$test, levels=pull(model.corr.coefs[order(-model.corr.coefs$mean),][,1]))
 model.corr.coefs$mean <- pmax(model.corr.coefs$mean, 0)
 model.corr.coefs.top.names <- model.corr.coefs[model.corr.coefs$test %in% top.names,]
+
+write.table(model.corr.coefs.top.names, "/Users/jessilyn/Desktop/framework_paper/Figure3/Fig3C/20180804_summarized_cVS_noID_RF_train_test_60_40.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 # plot how rsq changes with the different models, and add in error bars from sd.plot
 ggplot(model.corr.coefs.top.names, aes(x=test, y=mean, group=model, col=as.factor(model.corr.coefs.top.names$model))) +
@@ -1897,7 +1953,7 @@ ggplot(model.corr.coefs.top.names, aes(x=test, y=mean, group=model, col=as.facto
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.text.x = element_text(angle = 60, hjust = 1),
         axis.text.y = element_text(hjust = 1)) +
-  ylim(0,0.5) +
+  ylim(0,0.7) +
   scale_fill_discrete(name="Model")+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5, position=position_dodge(.05))
 
