@@ -2798,6 +2798,31 @@ dres = generate5Bevents("1636-69-001",1,dataset="iPOP")
 dres$dres$time
 dres$dres$date
 
+## How much data we need for the estimates
+mid = "1636-69-001"
+corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[["HCT"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+
+# Here we select people with the largest number of observations
+
+vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
+d = corDf.tmp[corDf.tmp$iPOP_ID %in% mid, c("HCT",vts)]
+d = na.omit(d)
+
+nobs = 40
+npoints = 2
+res = matrix(0, npoints, nobs)
+for (i in 6:nobs){
+  for (j in 1:npoints){
+    model = lm("HCT ~ .",data=d[(j*nobs + 1 - i):(j*nobs-1),])
+    sm = summary(model)
+    pp = predict(model, newdata=d[j*nobs,])
+    err = (pp - d[j*nobs,"HCT"])**2 / (mean(d[,"HCT"]) - d[j*nobs,"HCT"])**2
+    res[j,i] = err
+  }
+}
+plot(7:nobs,colMeans(res[,7:nobs]),ylab="RPVE of HCT prediction",xlab="observation used for the model")
+
 ###############
 #   Figure 5 #
 ###############
