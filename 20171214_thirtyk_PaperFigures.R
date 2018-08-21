@@ -38,6 +38,16 @@ remove_outliers <- function(x, na.rm = TRUE, ...) {
   y
 }
 
+findOutlier <- function(data, cutoff = 2) {
+  ## Calculate the sd
+  sds <- apply(data, 2, sd, na.rm = TRUE)
+  ## Identify the cells with value greater than cutoff * sd (column wise)
+  result <- mapply(function(d, s) {
+    which(d > cutoff * s)
+  }, data, sds)
+  result
+}
+
 fastDate <- function(x, tz=NULL)
   #as.Date(fastPOSIXct(x, tz=tz))
   as.Date(x, tz=tz)
@@ -149,13 +159,6 @@ names(iPOPlabs)[which(names(iPOPlabs)=="RESULT_TIME")] <- "Clin_Result_Date"
 iPOPlabs$Clin_Result_Date <- format(
   as.Date(iPOPlabs$Clin_Result_Date, "%d-%b-%Y"), "%Y-%m-%d")
 
-# allClin <- c("A1C","AG","ALB","ALCRU","ALKP","ALT","AST","BASO",
-#              "BASOAB","BUN","CA","CHOL","CHOLHDL","CL","CO2",
-#              "CR","EGFR","EOS","EOSAB","ESR","GLOB","GLU","HCT","HDL",
-#              "HGB","HSCRP","IGM","K","LDL","LDLHDL","LYM","LYMAB",
-#              "MCH","MCHC","MCV","MONO","MONOAB","NA.","NEUT",
-#              "NEUTAB","NHDL","PLT", "RBC","RDW","TBIL","TGL","TP","UALB","UALBCR","WBC") 
-
 allClin <- c("ALKP", "LYM", "HSCRP", "ALT", "NEUT", "TBIL", "IGM", "TGL", "MCV", "MCH", "CO2", "LYMAB", "NEUTAB", "UALB", "CHOL", "MONOAB", "ALB", "NA.", "HDL", "PLT", "AG", "HGB", "EOS", "CL", "BUN", "GLOB", "CA", "CHOLHDL", "HCT", "BASOAB", "A1C", "GLU", "LDLHDL", "TP", "EOSAB", "K", "NHDL", "RBC", "MONO", "AST", "MCHC", "RDW", "BASO", "LDL")
 
 for(i in 1:length(allClin)){ #this removes non-numeric characters
@@ -163,6 +166,7 @@ for(i in 1:length(allClin)){ #this removes non-numeric characters
   cache <- gsub("[^0-9.]","",cache) #this keeps decimals
   iPOPlabs[,c(allClin[i])] <- cache
 }
+
 #Make correlation variables numeric
 iPOPlabs[,c(allClin)] <- apply(
   iPOPlabs[,c(allClin)], 2,
@@ -177,12 +181,28 @@ iPOPcorDf <- merge(iPOPlabs,
                                  "Pulse","Temp","BMI","systolic","diastolic")],
                    by=c("iPOP_ID","Clin_Result_Date"))
 
+iPOPcorDf2 <- iPOPcorDf
 ### clean iPOPcorDf ###
-#iPOPcorDf[, -c(1,2)] <- apply(iPOPcorDf[, -c(1,2)], 2, remove_outliers)
+iPOPcorDf[, -c(1,2)] <- apply(iPOPcorDf[, -c(1,2)], 2, remove_outliers)
+outliers <- findOutlier(iPOPcorDf)
+library(compare)
+comparison <- compare(iPOPcorDf,iPOPcorDf2,allowAll=TRUE)
+difference <-
+  data.frame(lapply(1:ncol(iPOPcorDf),function(i)setdiff(iPOPcorDf[,i],comparison$tM[,i])))
+colnames(difference) <- colnames(iPOPcorDf)
+difference #no data points are removed.
 
 ### clean corDf ### 
-#corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers) 
+summary(corDf)
+corDf2 <- corDf
+corDf[, -c(1,2)] <- apply(corDf[, -c(1,2)], 2, remove_outliers) 
 
+comparison <- compare(corDf,corDf2,allowAll=TRUE)
+difference <-
+  data.frame(lapply(1:ncol(corDf),function(i)setdiff(corDf[,i],comparison$tM[,i])))
+colnames(difference) <- colnames(corDf)
+difference
+outliers <- findOutlier(corDf) # http://rpubs.com/lcollado/7904
 ### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
 # wear2<-wear
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, function(x) as.numeric(as.character(x)))
