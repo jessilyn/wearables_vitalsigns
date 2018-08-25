@@ -2804,7 +2804,6 @@ corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[["HCT"]]),]
 corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
 
 # Here we select people with the largest number of observations
-
 vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
 d = corDf.tmp[corDf.tmp$iPOP_ID %in% mid, c("HCT",vts)]
 d = na.omit(d)
