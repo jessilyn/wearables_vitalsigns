@@ -22,6 +22,7 @@ library("glmnet")
 library(lme4)
 require(fasttime) #fastPOSIXct
 require(lubridate)
+library(tidyr)
 require(zoo) #rollapply
 
 source("ggplot-theme.R") 
@@ -1855,6 +1856,8 @@ models=c(" ~ Pulse + Temp + Systolic + Diastolic + Respiration", # this is the t
          " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn") # this is the total possible info we can gain from vitals and demog
 
 models.corr.coefs <- c()
+cv.runs = 1
+nms
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
   corDf.tmp = corDf.demog[corDf.demog$cv.folds==i,]  #remove ANON_ID and Clin_Result_Date & demographics
@@ -2689,21 +2692,34 @@ generate5C = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   slopes = c()
   rsquared = c()
   ids = c()
+  vtrue = c()
+  vpred = c()
   vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
   
   for (pat in toppat){
     dd.pat = dd[dd[[identifier]] == pat,]
-    for (i in (window+1):nrow(dd.pat)){
+    for (i in (window+1):(nrow(dd.pat)-1) ){
       model = lm(formula(paste(clin,"~",paste(vitals,sep=" + "))), data = dd.pat[(i-window):i, ])
       slopes = c(slopes, model$coefficients[1])
       rsquared = c(rsquared, sqrt(summary(model)$r.squared))
       dates = c(dates, dd.pat$Clin_Result_Date[i])
+      vtrue = c(vtrue, dd.pat[i+1,clin])
+      vpred = c(vpred, predict(model, newdata = dd.pat[i+1,]) )
       ids = c(ids, pat)
     }
   }
   
-  dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared)
+  dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared, true = vtrue,
+                    predicted = vpred)
   dres$time = as.numeric(difftime(dres$date,min(dres$date),units="days")) / 365.0
+  
+  dres.pred = gather(dres, values, measurement, true:predicted, factor_key=TRUE)
+  
+  plt_pred = ggplot(dres.pred, aes(time, measurement, group = values, color = values)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_line(size=1.3) +
+    geom_point(size=2) 
+  print(plt_pred)
   
   plt_slope = ggplot(dres, aes(time, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
@@ -2736,8 +2752,10 @@ generate5C = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
           plot = plt_slope, width = 6, height = 6,units = "in")
     ggsave(paste0("plots/Figure-5C-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),
            plot=plt_rsq,width = 6, height = 6,units = "in")
+    ggsave(paste0("plots/Figure-5C-",clin,'-',vit,"-",window,"-",dataset,"-predictions.png"),
+           plot=plt_pred,width = 6, height = 6,units = "in")
   }
-  list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, events = events)
+  list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, plt_pred = plt_pred, events = events)
 }
 
 visits = aggregate(iPOPcorDf$iPOP_ID,by=list(iPOPcorDf$iPOP_ID),length)
@@ -2822,6 +2840,10 @@ generate5Cevents = function(pats,col,dataset="30k"){
   print(plt_cur)
   ggsave(paste0(filename),
          plot=plt_cur,width = 6,height = 6,units = "in")
+  filename = paste0("plots/Figure-5C-pred-",pats,".png")
+  ggsave(paste0(filename),
+         plot=dres$plt_pred,width = 6,height = 6,units = "in")
+  
   dres
 }
 
@@ -2829,50 +2851,63 @@ pats = c("D-145","D-148","PD-6145") #, "N-3683")
 for (i in 1:length(pats))
   generate5Cevents(pats[i],i)
 
-generate5D = function(pat = "1636-69-001"){
+generate5D = function(pat = "1636-69-001",lab.test = "HCT"){
 ## 1636-69-001
-dres = generate5Cevents(pat,1,dataset="iPOP")
-dres$dres$time
-dres$dres$date
+
+
+nobs = 25
+neval = 5
+nstart = 6
+shift = 0
 
 ## How much data we need for the estimates
-mid = "1636-69-001"
-corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[["HCT"]]),]
+corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[lab.test]]),]
 corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Temp"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["systolic"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["diastolic"]]),]
+tbl = table(corDf.tmp$iPOP_ID)
+patids = names(tbl[tbl >= nobs + neval])
+wall = which(corDf.tmp$iPOP_ID == patids[1])
+half2 = wall[ceiling(length(wall)/2):length(wall)]
+corDf.tmp[half2,]$iPOP_ID = "1636-69-001-late"
+patids = c("1636-69-001-late", patids)
+patids = patids[1:2]
 
 # Here we select people with the largest number of observations
 vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
-d = corDf.tmp[corDf.tmp$iPOP_ID %in% mid, c("HCT",vts)]
-d = na.omit(d)
 
-nobs = 25
-npoints = 3
-nstart = 8
-shift = 0
-res = matrix(0, npoints, nobs)
+res = matrix(0, length(patids), nobs)
 for (i in nstart:nobs){
-  for (j in 1:npoints){
-    model = lm("HCT ~ .",data=d[shift + (j*nobs + 1 - i):(j*nobs-1),])
+  for (j in 1:length(patids)){
+    pat = patids[j]
+    d = corDf.tmp[corDf.tmp$iPOP_ID %in% pat, c(lab.test,vts)]
+    ntest = nrow(d)
+    
+    train = (ntest - neval + 1 - i):(ntest-neval)
+    test = (ntest - neval + 1):ntest
+    
+    model = lm(paste0(lab.test," ~ ."),data=d[train,])
+    
     sm = summary(model)
-    pp = predict(model, newdata=d[shift + j*nobs,])
-    err = (pp - d[shift + j*nobs,"HCT"])**2 / mean((mean(d[,"HCT"]) - d[,"HCT"])**2)
+    pp = predict(model, newdata=d[ntest,])
+    err = mean((pp - d[(ntest - neval + 1):ntest,lab.test])**2) / mean((mean(d[train,lab.test]) - d[test,lab.test])**2)
     res[j,i] = err
   }
 }
-res
-rmse = colMeans(res[,nstart:nobs])
-rmse[rmse > 1] = 1
-df = data.frame(observations = nstart:nobs, RPVE = sqrt(1-rmse))
+mse = colMeans(res[,nstart:nobs])
+mse[mse > 1] = 1
+df = data.frame(observations = nstart:nobs, RPVE = sqrt(1 - mse))
 #plot(df,ylab="RPVE of HCT prediction",xlab="observation used for the model")
 
 ggplot(df, aes(observations, RPVE)) + 
   geom_point(size=3) +
   weartals_theme + theme(text = element_text(size=25)) +
   theme(legend.position="none")
-ggsave(paste0("plots/Figure-5D-",pat,".png"),width = 8, height = 6)
-write.table(df, file=paste0("data/Figure-5D-",pat,".csv"))
+ggsave(paste0("plots/Figure-5D-",pat,"-",lab.test,".png"),width = 8, height = 6)
+write.table(df, file=paste0("data/Figure-5D-",pat,"-",lab.test,".csv"))
 }
-generate5D()
+generate5D("1636-69-001", "HCT")
 
 ###############
 #   Figure 5 #
