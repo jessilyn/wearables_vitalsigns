@@ -2856,9 +2856,9 @@ generate5D = function(pat = "1636-69-001",lab.test = "HCT"){
 
 
 nobs = 25
-neval = 5
+neval = 3
 nstart = 6
-shift = 0
+shift = 2
 
 ## How much data we need for the estimates
 corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[lab.test]]),]
@@ -2877,15 +2877,15 @@ patids = patids[1:2]
 # Here we select people with the largest number of observations
 vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
 
-res = matrix(0, length(patids), nobs)
+res = matrix(1, length(patids), nobs)
 for (i in nstart:nobs){
   for (j in 1:length(patids)){
     pat = patids[j]
     d = corDf.tmp[corDf.tmp$iPOP_ID %in% pat, c(lab.test,vts)]
-    ntest = nrow(d)
+    ntest = nrow(d) - shift
     
-    train = (ntest - neval + 1 - i):(ntest-neval)
-    test = (ntest - neval + 1):ntest
+    train = shift + (ntest - neval + 1 - i):(ntest-neval)
+    test = shift + (ntest - neval + 1):ntest
     
     model = lm(paste0(lab.test," ~ ."),data=d[train,])
     
@@ -2895,19 +2895,22 @@ for (i in nstart:nobs){
     res[j,i] = err
   }
 }
-mse = colMeans(res[,nstart:nobs])
+mse = colMeans(res[,1:nobs])
 mse[mse > 1] = 1
-df = data.frame(observations = nstart:nobs, RPVE = sqrt(1 - mse))
+df = data.frame(observations = 1:nobs, RPVE = sqrt(1 - mse))
 #plot(df,ylab="RPVE of HCT prediction",xlab="observation used for the model")
 
-ggplot(df, aes(observations, RPVE)) + 
+plt = ggplot(df, aes(observations, RPVE)) + 
   geom_point(size=3) +
   weartals_theme + theme(text = element_text(size=25)) +
-  theme(legend.position="none")
-ggsave(paste0("plots/Figure-5D-",pat,"-",lab.test,".png"),width = 8, height = 6)
+  theme(legend.position="none") +
+  scale_x_continuous(breaks = pretty(df$observations, n = 13)) 
+print(plt)
+ggsave(paste0("plots/Figure-5D-",pat,"-",lab.test,".png"),width = 6, height = 6)
 write.table(df, file=paste0("data/Figure-5D-",pat,"-",lab.test,".csv"))
+df
 }
-generate5D("1636-69-001", "HCT")
+res = generate5D("1636-69-001", "HCT")
 
 ###############
 #   Figure 5 #
