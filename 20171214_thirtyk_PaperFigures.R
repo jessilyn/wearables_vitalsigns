@@ -22,6 +22,7 @@ library("glmnet")
 library(lme4)
 require(fasttime) #fastPOSIXct
 require(lubridate)
+library(tidyr)
 require(zoo) #rollapply
 
 source("ggplot-theme.R") 
@@ -1868,6 +1869,8 @@ models=c(" ~ Pulse + Temp + Systolic + Diastolic + Respiration", # this is the t
          " ~ Pulse + Temp + Systolic + Diastolic + Respiration + Age + Gender + Ethn") # this is the total possible info we can gain from vitals and demog
 
 models.corr.coefs <- c()
+cv.runs = 1
+nms
 for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   print(i)
   corDf.tmp = corDf.demog[corDf.demog$cv.folds==i,]  #remove ANON_ID and Clin_Result_Date & demographics
@@ -2220,11 +2223,10 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     xlab("Lab test") +
     geom_jitter(size = 2, height = 0.0, width=0.2) + 
     weartals_theme + 
-    geom_point(size = 1) + 
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
   print(pp)
-  write.table(res, file=paste0("plots/Figure-4A-",dataset,".csv"))
+  write.table(res, file=paste0("data/Figure-4A-",dataset,".csv"))
   res
 }
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
@@ -2236,14 +2238,22 @@ res = generate4A("30k",threshold = 50, cap = 500)
 res = res[order(as.numeric(row.names(res))),]
 res$model = as.character(res$model)
 
+## Reproduce Figure 4A without rerunning the code (read from a file)
+if ("from.file" %in% ls()){
+res = read.table(file=paste0("plots/Figure-4A-30k.csv"))
+res = res[order(-res$value),]
+res = res[order(res$model),] # order by the population vitals model
+res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
 pp = ggplot(res, aes(test, value, group = model, color = model)) +
   ylab(expression(sqrt("Variance explained"))) +
   xlab("Lab test") +
   geom_jitter(size = 2, height = 0.0, width=0.2) + 
   weartals_theme + 
-  geom_point(size = 1) + 
+#  geom_point(size = 1) + 
   theme(text = element_text(size=14))
 print(pp)
+ggsave(paste0("plots/Figure-4A-30k.png"), plot = pp, width = 12, height = 3)
+}
 
 #res[1:30 * 5 - 4,]$model = paste(res[1:30 * 5 - 4,]$model,"(RF)")
 
@@ -2301,8 +2311,8 @@ identifyNiceCase = function(clin,dataset){
 res = identifyNiceCase("HCT","30k")
 res[order(-res$error),]
 
-## Figure 4B: Individual models Lab ~ Vital
-generate4B = function(clin,vit,dataset = "30k"){
+## Figure 4D and 4F: Individual models Lab ~ Vital
+generate4DF = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
@@ -2378,10 +2388,12 @@ generate4B = function(clin,vit,dataset = "30k"){
   ggplot(dd, aes_string(vit, clin, group = "accuracy", colour = "accuracy")) + 
     weartals_theme + theme(text = element_text(size=25)) +
     #  geom_point(size=0) + 
+    theme(legend.position="none") +
     geom_smooth(method="lm", formula = y ~ x, size=1, fill=NA) +
     stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
-  ggsave(paste0("plots/Figure-4B-",dataset,".png"),width = 9, height = 6)
-
+  ggsave(paste0("plots/Figure-4D-",dataset,".png"),width = 8, height = 6)
+  write.table(dd, file=paste0("data/Figure-4D-",dataset,".csv"))
+  
   ## TRUE VS PREDICTED
   preds = predict(model, newdata = corDf.ind)
 
@@ -2393,14 +2405,15 @@ generate4B = function(clin,vit,dataset = "30k"){
     geom_point(size=3, colour = gg_color_hue(5)[3])
 
   cor(pp$data$true, pp$data$predicted)
-  ggsave(paste0("plots/Figure-4B-true-predicted-",corDf.ind$ANON_ID[1],".png"),width = 8, height = 6)
+  ggsave(paste0("plots/Figure-4F-true-predicted-",corDf.ind$ANON_ID[1],".png"),width = 8, height = 6)
+  write.table(dd, file=paste0("data/Figure-4F-",corDf.ind$ANON_ID[1],".csv"))
   print(pp)
   
   stats
 }
-stats = generate4B("HCT","Diastolic","30k")
+stats = generate4DF("HCT","Diastolic","30k")
 
-generate4C = function(clin,vit,dataset = "30k"){
+generate4E = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[clin]]),]
@@ -2426,22 +2439,23 @@ generate4C = function(clin,vit,dataset = "30k"){
   # ff = approxfun(grid, predict(ww,grid))
 
   cols = gg_color_hue(5)
-  for (i in 1:2){
     ggplot(dd[dd[[identifier]] %in% tocmp,], aes_string(vit, clin, color = identifier)) + 
       weartals_theme + theme(text = element_text(size=25)) +
       scale_fill_manual(values = cols[c(1,3)]) +
       scale_color_manual(values = cols[c(1,3)]) +
       geom_point(size=2, aes_string(color = identifier)) + 
       geom_smooth(method="lm", formula = y ~ x, size=1) +
+      theme(legend.position="none") +
       stat_function(fun = ff, size=0.7, color="black", linetype="dashed")
-    ggsave(paste0("plots/Figure-4C-",i,"-",dataset,".png"))
-  }
+    ggsave(paste0("plots/Figure-4E-",dataset,".png"), width = 8, height = 6)
+    write.table(dd[dd[[identifier]] %in% tocmp,],
+                file=paste0("data/Figure-4E.csv"))
 }
-generate4C("HCT","Diastolic","30k")
+generate4E("HCT","Diastolic","30k")
 
 library("grid")
 
-generate4D = function(dataset){
+generate4C = function(dataset){
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
     corDf.tmp = iPOPcorDf
@@ -2451,7 +2465,7 @@ generate4D = function(dataset){
     corDf.tmp = corDf
   }
   
-  png(paste0("plots/Figure-4D-",dataset,".png"),height=300,width=1500,units="px")
+  png(paste0("plots/Figure-4C-",dataset,".png"),height=300,width=1200,units="px")
   grid.newpage()
   pushViewport(viewport(layout = grid.layout(1, 5)))
   
@@ -2481,7 +2495,9 @@ generate4D = function(dataset){
         
         
         qq = qplot(cf[[identifier]][vit], geom="histogram")  + weartals_theme + xlab(paste0(clin," ~ ",vit)) +
-          ylab("count")
+          ylab("count") + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0))
+        write.table(cf[[identifier]],
+                    file=paste0("data/Figure-4C-",vit,".csv"))
         
         for (k in 1:length(annotate.pat)){
           val = cf[[identifier]][annotate.pat[k],vit]
@@ -2490,13 +2506,15 @@ generate4D = function(dataset){
           qq = qq + geom_vline(xintercept=val,color=cols[k],size=1.5)
         }
         print(qq, vp = viewport(layout.pos.row = i, layout.pos.col = j))
+        
       }
     }
   }
   dev.off()
+  
   cf
 }
-res = generate4D("30k")
+res = generate4C("30k")
 
 ###############
 #  Figure 5A #
@@ -2660,7 +2678,7 @@ getEvents = function(dres, codes)
 
 
 # Temporal evolution of the estimate of the mean
-generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
+generate5C = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   {
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
@@ -2687,27 +2705,40 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   slopes = c()
   rsquared = c()
   ids = c()
+  vtrue = c()
+  vpred = c()
   vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
   
   for (pat in toppat){
     dd.pat = dd[dd[[identifier]] == pat,]
-    for (i in (window+1):nrow(dd.pat)){
+    for (i in (window+1):(nrow(dd.pat)-1) ){
       model = lm(formula(paste(clin,"~",paste(vitals,sep=" + "))), data = dd.pat[(i-window):i, ])
       slopes = c(slopes, model$coefficients[1])
       rsquared = c(rsquared, sqrt(summary(model)$r.squared))
       dates = c(dates, dd.pat$Clin_Result_Date[i])
+      vtrue = c(vtrue, dd.pat[i+1,clin])
+      vpred = c(vpred, predict(model, newdata = dd.pat[i+1,]) )
       ids = c(ids, pat)
     }
   }
   
-  dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared)
+  dres = data.frame(date = as.Date(as.POSIXct(dates)), slope = slopes, identifier = ids, rsquared = rsquared, true = vtrue,
+                    predicted = vpred)
   dres$time = as.numeric(difftime(dres$date,min(dres$date),units="days")) / 365.0
+  
+  dres.pred = gather(dres, values, measurement, true:predicted, factor_key=TRUE)
+  
+  plt_pred = ggplot(dres.pred, aes(time, measurement, group = values, color = values)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_line(size=1.3) +
+    geom_point(size=2) 
+  print(plt_pred)
   
   plt_slope = ggplot(dres, aes(time, slope, group = identifier, color = identifier)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     geom_line(size=1.3) +
     geom_point(size=2) 
-  write.table(dres, file=paste0("plots/Figure-5B-",clin,"-",vit,"-",pat,".csv"),sep = ',')
+  write.table(dres, file=paste0("data/Figure-5C-",clin,"-",vit,"-",pat,".csv"),sep = ',')
   
   cols = gg_color_hue(3)
   
@@ -2730,17 +2761,20 @@ generate5B = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
     events = getEvents(dres, codes)
   
   if (dataset == "iPOP"){
-    ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"), 
-          plot = plt_slope, width = 9,height = 6,units = "in")
-    ggsave(paste0("plots/Figure-5B-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),plot=plt_rsq,width = 9,height = 6,units = "in")
+    ggsave(paste0("plots/Figure-5C-",clin,'-',vit,"-",window,"-",dataset,"-slopes.png"), 
+          plot = plt_slope, width = 6, height = 6,units = "in")
+    ggsave(paste0("plots/Figure-5C-",clin,'-',vit,"-",window,"-",dataset,"-rsqured.png"),
+           plot=plt_rsq,width = 6, height = 6,units = "in")
+    ggsave(paste0("plots/Figure-5C-",clin,'-',vit,"-",window,"-",dataset,"-predictions.png"),
+           plot=plt_pred,width = 6, height = 6,units = "in")
   }
-  list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, events = events)
+  list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, plt_pred = plt_pred, events = events)
 }
 
 visits = aggregate(iPOPcorDf$iPOP_ID,by=list(iPOPcorDf$iPOP_ID),length)
 visits = visits[order(-visits$x),]
 pats = visits[1:1,1]
-dres = generate5B("HCT","Pulse","iPOP",
+dres = generate5C("HCT","Pulse","iPOP",
                   window = 30,filter=pats,1)
 
 ## Load codes (initial)
@@ -2761,10 +2795,8 @@ getTop10Patients = function(){
 }
 #pats = getTop10Patients()
 
-#pats = c("D-145","D-148","PD-6145") #, "N-3683")
-
-generate5Bevents = function(pats,col,dataset="30k"){
-  dres = generate5B("HCT","Pulse",dataset,
+generate5Cevents = function(pats,col,dataset="30k"){
+  dres = generate5C("HCT","Pulse",dataset,
                     window = 30,filter=pats,col)
   
   if(dataset == "30k"){
@@ -2788,7 +2820,7 @@ generate5Bevents = function(pats,col,dataset="30k"){
     codes_pats = list(time = as.numeric(dres$dres$time[times]), ICD10 = NULL)
     print(dres$dres$date[times])
   }
-  filename = paste0("plots/Figure-5B-rsqured-",pats,".png")
+  filename = paste0("plots/Figure-5C-rsqured-",pats,".png")
   
   plt_cur = dres$plt_rqs + theme(legend.position="none")
   for (evid in 1:sum(first)){
@@ -2820,41 +2852,78 @@ generate5Bevents = function(pats,col,dataset="30k"){
   
   print(plt_cur)
   ggsave(paste0(filename),
-         plot=plt_cur,width = 7.5,height = 6,units = "in")
+         plot=plt_cur,width = 6,height = 6,units = "in")
+  filename = paste0("plots/Figure-5C-pred-",pats,".png")
+  ggsave(paste0(filename),
+         plot=dres$plt_pred,width = 6,height = 6,units = "in")
+  
   dres
 }
-for (i in 1:length(pats))
-  generate5Bevents(pats[i],i)
 
-##MIKE
-dres = generate5Bevents("1636-69-001",1,dataset="iPOP")
-dres$dres$time
-dres$dres$date
+pats = c("D-145","D-148","PD-6145") #, "N-3683")
+for (i in 1:length(pats))
+  generate5Cevents(pats[i],i)
+
+generate5D = function(pat = "1636-69-001",lab.test = "HCT"){
+## 1636-69-001
+
+
+nobs = 25
+neval = 3
+nstart = 6
+shift = 2
 
 ## How much data we need for the estimates
-mid = "1636-69-001"
-corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[["HCT"]]),]
+corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[lab.test]]),]
 corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Temp"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["systolic"]]),]
+corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["diastolic"]]),]
+tbl = table(corDf.tmp$iPOP_ID)
+patids = names(tbl[tbl >= nobs + neval])
+wall = which(corDf.tmp$iPOP_ID == patids[1])
+half2 = wall[ceiling(length(wall)/2):length(wall)]
+corDf.tmp[half2,]$iPOP_ID = "1636-69-001-late"
+patids = c("1636-69-001-late", patids)
+patids = patids[1:2]
 
 # Here we select people with the largest number of observations
-
 vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
-d = corDf.tmp[corDf.tmp$iPOP_ID %in% mid, c("HCT",vts)]
-d = na.omit(d)
 
-nobs = 40
-npoints = 2
-res = matrix(0, npoints, nobs)
-for (i in 6:nobs){
-  for (j in 1:npoints){
-    model = lm("HCT ~ .",data=d[(j*nobs + 1 - i):(j*nobs-1),])
+res = matrix(1, length(patids), nobs)
+for (i in nstart:nobs){
+  for (j in 1:length(patids)){
+    pat = patids[j]
+    d = corDf.tmp[corDf.tmp$iPOP_ID %in% pat, c(lab.test,vts)]
+    ntest = nrow(d) - shift
+    
+    train = shift + (ntest - neval + 1 - i):(ntest-neval)
+    test = shift + (ntest - neval + 1):ntest
+    
+    model = lm(paste0(lab.test," ~ ."),data=d[train,])
+    
     sm = summary(model)
-    pp = predict(model, newdata=d[j*nobs,])
-    err = (pp - d[j*nobs,"HCT"])**2 / (mean(d[,"HCT"]) - d[j*nobs,"HCT"])**2
+    pp = predict(model, newdata=d[ntest,])
+    err = mean((pp - d[(ntest - neval + 1):ntest,lab.test])**2) / mean((mean(d[train,lab.test]) - d[test,lab.test])**2)
     res[j,i] = err
   }
 }
-plot(7:nobs,colMeans(res[,7:nobs]),ylab="RPVE of HCT prediction",xlab="observation used for the model")
+mse = colMeans(res[,1:nobs])
+mse[mse > 1] = 1
+df = data.frame(observations = 1:nobs, RPVE = sqrt(1 - mse))
+#plot(df,ylab="RPVE of HCT prediction",xlab="observation used for the model")
+
+plt = ggplot(df, aes(observations, RPVE)) + 
+  geom_point(size=3) +
+  weartals_theme + theme(text = element_text(size=25)) +
+  theme(legend.position="none") +
+  scale_x_continuous(breaks = pretty(df$observations, n = 13)) 
+print(plt)
+ggsave(paste0("plots/Figure-5D-",pat,"-",lab.test,".png"),width = 6, height = 6)
+write.table(df, file=paste0("data/Figure-5D-",pat,"-",lab.test,".csv"))
+df
+}
+res = generate5D("1636-69-001", "HCT")
 
 ###############
 #   Figure 5 #
