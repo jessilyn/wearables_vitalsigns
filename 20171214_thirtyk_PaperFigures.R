@@ -213,6 +213,15 @@ difference <-
 colnames(difference) <- colnames(corDf)
 difference
 outliers <- findOutlier(corDf) # http://rpubs.com/lcollado/7904
+
+## clean 30k icd and cpt dates
+icd$ICD_DATE <- format(
+  as.Date(icd$ICD_DATE, "%d-%b-%Y"), "%Y-%m-%d")
+icd$ICD_DATE <- as.Date(icd$ICD_DATE, "%Y-%m-%d")
+cpt$CPT_DATE <- format(
+  as.Date(cpt$CPT_DATE, "%d-%b-%Y"), "%Y-%m-%d")
+cpt$CPT_DATE <- as.Date(cpt$CPT_DATE, "%Y-%m-%d")
+
 ### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
 # wear2<-wear
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, function(x) as.numeric(as.character(x)))
@@ -3373,4 +3382,35 @@ tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot
 
 #### END ####
 
+## REVISION CODE ##
 
+#Hematologic correlations
+
+# PLT + GLOB + TP + HGB + HCT + RDW + MCH + MCV + RBC + MCHC
+subsample <- corDf[sample(nrow(corDf), size = 10000, replace = FALSE),]
+pairs(~ HGB + HCT + RBC,data=subsample, 
+      main="CBC Correlations")
+pairs(~ HGB + HCT + RBC + MONOAB + A1C + GLU_SerPlas + PLT + CL, data=subsample, 
+      main="Top Lab Test Correlations")
+
+blood = na.omit(corDf[,c("ANON_ID","Clin_Result_Date","HGB","HCT")])
+model.blood <- lm(HGB ~ HCT, data = blood)
+summary(model.blood)
+#plot(model.blood)
+
+
+colnames(icd)[colnames(icd)=="ICD_DATE"] <- "Clin_Result_Date"
+colnames(cpt)[colnames(cpt)=="CPT_DATE"] <- "Clin_Result_Date"
+icd$Clin_Result_Date<- as.character(icd$Clin_Result_Date)
+cpt$Clin_Result_Date<- as.character(cpt$Clin_Result_Date)
+
+blood$residuals <- model.blood$residuals ## Add the residuals to the data.frame
+o <- order(blood$residuals^2, decreasing=T) ## Reorder to put largest first
+top.residuals <- blood[o[1:10],]
+top.residuals$Clin_Result_Date <- as.Date(top.residuals$Clin_Result_Date)
+top.residuals$Clin_Result_Date<- as.character(top.residuals$Clin_Result_Date)
+hgb.hct.divergence <- merge(top.residuals, icd, by = c("ANON_ID", "Clin_Result_Date"))
+
+plot(HGB ~ HCT, data = blood)
+abline(model.blood, col = "red")
+points(HGB ~ HCT, data = top.residuals, col="red", pch=19)
