@@ -418,7 +418,7 @@ for(window in windows){
           axis.title.y=element_text(face="bold",colour="black",size=16),
           axis.text.y=element_text(face="bold",colour="black",size=16),
           axis.ticks.length = unit(.2,"cm"),
-          legend.position="none",
+          #legend.position="none",
           #legend.title=element_text(face="bold", colour="black", size=16),
           #legend.text=element_text(face="bold", colour="black", size=16),
           panel.grid.minor = element_blank(),
@@ -428,13 +428,14 @@ for(window in windows){
   
   ## scatter plot skin temp
   p2 <- ggplot(rhr.daily.means.id,
-         aes(x=restingSkinTemp,y=Temp,col=as.factor(substr(iPOP_ID,9,12)))) +
+         aes(x=restingSkinTemp,y=Temp,col=as.factor(rhr.daily.means.id$idx))) +
+             #col=as.factor(substr(iPOP_ID,9,12)))) +
     geom_point() +
     #labs(title=paste0("Clinical Temp vs. Wearable Temp (",window,"min resting)"), x="Resting Skin Temp",y="Core Temperature") +
     labs(title=NULL, x="wRTemp",y="cTemp") +
     annotate("segment",x=-Inf,xend=Inf,y=-Inf,yend=Inf,
              lwd=1, color="blue", alpha=.25) +
-    #guides(col=guide_legend("ID")) +
+    guides(col=guide_legend("Subject ID")) +
     xlim(92, 100) +
     ylim(92, 100)+
     theme(plot.title=element_text(face="bold",colour="black",size=16),
@@ -443,9 +444,9 @@ for(window in windows){
           axis.title.y=element_text(face="bold",colour="black",size=16),
           axis.text.y=element_text(face="bold",colour="black",size=16),
           axis.ticks.length = unit(.2,"cm"),
-          legend.position="none",
-          #legend.title=element_text(face="bold", colour="black", size=16),
-          #legend.text=element_text(face="bold", colour="black", size=16),
+          #legend.position="none",
+          legend.title=element_text(face="bold", colour="black", size=16),
+          legend.text=element_text(face="bold", colour="black", size=16),
           panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           panel.background = element_blank(), axis.line = element_line(colour = "black"))
@@ -460,6 +461,8 @@ for(window in windows){
 ##########
 hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=10,
      xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
+hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="red", breaks=10,
+     xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2, lty="blank")
 hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
      xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
 hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
@@ -470,9 +473,7 @@ mean(iPOPdaysMonitored$Days_monitored_by_clinic)
 ###############
 # Fig 1D  top #
 ###############
-hist(iPOPvitals$Pulse, col="darkred", breaks=50,
-     xlab = "cHR", xlim=c(50,200),
-     main = NULL, font.lab=2,lwd=2,font=2)
+
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
 mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.54 +/- 9.92, n=1644
 cHR.sd <- sqrt(var(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)])) # stdev of cHR
@@ -480,9 +481,7 @@ means<-aggregate(iPOPvitals$Pulse,list(iPOPvitals$iPOP_ID), mean) # check this c
 sd<-aggregate(iPOPvitals$Pulse, list(iPOPvitals$iPOP_ID), sd)
 # personal sd:
 cHR.individual.sd <- mean(na.omit(sd$x)) # intra-individual SD 6.913
-hist(iPOPvitals$Temp, col="darkgrey", breaks=50,
-     xlab = "cTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
+
 length(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # number of cTemp measurements in iPOP cohort
 mean(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]) # mean cTemp; 97.84 +/- 0.38, n=1136
 cTemp.sd <- sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
@@ -490,20 +489,28 @@ means<-aggregate(iPOPvitals$Temp,list(iPOPvitals$iPOP_ID), mean) # check this co
 sd<-aggregate(iPOPvitals$Temp, list(iPOPvitals$iPOP_ID), sd)
 cTemp.individual.sd <- mean(na.omit(sd$x)) # intra-individual SD 0.2536
 
+pdf(file = paste0(dir, "../Figure1/Figure1D_hists.pdf"))
+par(mfrow = c(2,2), mai = c(0.7, 0.7, 0.7, 0.7))
+hist(iPOPvitals$Pulse, col="tomato3", , border="tomato4", breaks=50,
+     xlab = "cHR", xlim=c(50,200),
+     main = NULL, font.lab=2,lwd=2,font=2)
+hist(iPOPvitals$Temp, col="turquoise3", border="turquoise4", breaks=10,
+     xlab = "cTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
 #####################
 #  Figure 1D Bottom #
 #####################
 
-# resting HR and ST from Fig 1B data
+# resting HR and ST from Fig 1B data - need to run code for Fig 1B first
 options(scipen=10)
-hist(restingDf.all$restingHR, col="darkred", breaks=50,
+hist(restingDf.all$restingHR, col="tomato3", border="tomato4", breaks=50,
      xlab = "wRHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
 scale_y_continuous()
-hist(restingDf.all$restingSkinTemp, col="darkgrey", breaks=50,
+hist(restingDf.all$restingSkinTemp, col="turquoise3", border="turquoise4", breaks=46,
      xlab = "wRTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
-
+dev.off()
 
 dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
             header=TRUE,sep=",",stringsAsFactors = FALSE)
@@ -513,18 +520,18 @@ length(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # number of wHR measure
 mean(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # mean wHR mean 74.31 +/- 15.17, n=25,341,508
 sqrt(var(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)])) # stdev of wHR
 
-hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
-     xlab = "wHR",
-     main = NULL, font.lab=2,lwd=2,font=2,
-     xlim=c(0,200))
+# hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
+#      xlab = "wHR",
+#      main = NULL, font.lab=2,lwd=2,font=2,
+#      xlim=c(0,200))
 
 dfFigOne$Skin_Temperature_F <- remove_outliers(dfFigOne$Skin_Temperature_F) # clean data based on HR (TODO: later also clean on Skin Temp, Steps)
 length(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # number of wTemp measurements in iPOP cohort
 mean(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # mean wTemp mean 88.57 +/- 3.74, n=27,136,802
 sqrt(var(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)])) # stdev of wTemp 
-hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
-     xlab = "wTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
+# hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
+#      xlab = "wTemp", xlim=c(65,105),
+#      main = NULL, font.lab=2,lwd=2,font=2)
 
 #characterize the iPOP data set
 length(na.omit(iPOPvitals$Temp)) + length(na.omit(iPOPvitals$Pulse)) # total number of clinical vital signs measured
@@ -1448,10 +1455,12 @@ rf.feature.summaries[rf.feature.summaries$test %in% top.models,]
 #  Figure 3A #
 ##############
 
-hist(table(corDf$ANON_ID), col="darkgrey", breaks=1000, xlab = "Number of Clinic Visits",
-     main = NULL, font.lab=2,lwd=2,font=2) # dist. of clinic visits in 30k cohort
-hist(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50], col="darkgrey", breaks=1000, xlab = "Number of Clinic Visits",
-     main = NULL, font.lab=2,lwd=2,font=2) # dist. of clinic visits in 30k cohort
+hist(table(corDf$ANON_ID), col="red", breaks=200, xlab = "Number of Clinic Visits / Person",
+     main = NULL, font.lab=2,lwd=2,font=2,lty="blank",
+     xlim = c(0,350)) # dist. of clinic visits in 30k cohort
+hist(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50], col="red", breaks=200, xlab = "Number of Clinic Visits / Person",
+     main = NULL, font.lab=2,lwd=2,font=2,lty="blank",
+     xlim = c(50,350)) # dist. of clinic visits in 30k cohort
 describe(as.matrix(table(corDf$ANON_ID))) # mean & median number visits in 30k cohort
 mean(na.omit(corDf$Pulse)) # mean pulse 77.51
 sd(na.omit(corDf$Pulse)) # sd pulse 14.12
@@ -1464,9 +1473,12 @@ length(na.omit(corDf$Temp)) # 75,187
 maxDate <-as.Date(as.matrix(tapply(corDf$Clin_Result_Date, corDf$ANON_ID, max)))
 minDate <- as.Date(tapply(corDf$Clin_Result_Date, corDf$ANON_ID, min))
 duration <- as.numeric(maxDate-minDate)
+withDuration <- cbind(as.data.frame(table(corDf$ANON_ID)), duration)
 describe(duration) # mean & median number of days of monitoring in 30k cohort
-hist(duration[duration > 50], col="darkgrey", breaks=1000, xlab = "Time Period Monitored (Days)",
-     main = NULL, font.lab=2,lwd=2,font=2)
+hist(withDuration$duration, col="red", breaks=200, xlab = "Time Monitored by Clinic (Days)",
+     main = NULL, font.lab=2,lwd=2,font=2, lty="blank")
+hist(withDuration$duration[withDuration$Freq > 50], col="red", breaks=200, xlab = "Time Monitored by Clinic (Days)",
+     main = NULL, font.lab=2,lwd=2,font=2, lty="blank")
 
 #characterize the 30k data set
 length(unique(corDf$ANON_ID)) # num people in 30k dataset where both labs and vitals exist
@@ -1480,14 +1492,15 @@ length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 ##############
 #  Figure 3B #
 ##############
-
-hist(corDf$Pulse, col="darkred", breaks=100,
-     xlab = "cHR",
+pdf(file = paste0(dir, "../Figure3/Figure3B_hists.pdf"))
+par(mfrow = c(2,2))
+hist(corDf$Pulse, col="tomato3", border="tomato4", breaks=50,
+     xlab = "cHR", xlim=c(50,200),
      main = NULL, font.lab=2,lwd=2,font=2)
-
-hist(corDf$Temp, col="darkgrey", breaks=100,
+hist(corDf$Temp, col="turquoise3", border="turquoise4", breaks=5,
      xlab = "cTemp", xlim=c(65,105),
      main = NULL, font.lab=2,lwd=2,font=2)
+dev.off()
 
 ##############
 #  Figure 3XX #
@@ -3125,6 +3138,19 @@ na.omit(corDf) %>%
 # get mean +/- SE for each of the 50 clin values
 library("psych")
 thirtyk.summary <- describe(corDf)
+ipop.corDf.summary <- describe(iPOPcorDf)
+ipop.demog.summary <- describe(iPOPdemographics$AgeIn2016)
+table(iPOPdemographics)
+write.csv(thirtyk.summary, "/Users/jessilyn/Desktop/framework_paper/Suppl_Table_1/supplTable1.csv")
+write.csv(ipop.corDf.summary, "/Users/jessilyn/Desktop/framework_paper/Suppl_Table_1/supplTable2.csv")
+
+raw.wear <- read.csv(paste0(dir,
+                            "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
+                     header=TRUE,sep=',',stringsAsFactors=FALSE)
+
+describe(raw.wear$GSR)
+describe(raw.wear$Heart_Rate)
+describe(raw.wear$Steps)
 
 # get p-values and rsquared of univariate correlations
 vitalVars <- which(names(corDf) %in% c("Pulse","Temp"))
