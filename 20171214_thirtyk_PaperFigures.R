@@ -108,10 +108,19 @@ labs <- fread(paste0(dir, "all_labs.csv"),
 #                    header=TRUE,sep=',',stringsAsFactors=FALSE)
 corDf <- read.csv(paste0(dir, "20180412_Cleaned_joined_30k_labs_ALLvitals.csv"),
                    header=TRUE,sep=',',stringsAsFactors=FALSE)
+#30k Codes
+icd <- fread(paste0(dir, "all_icds.csv"),
+             header=TRUE,sep=',',stringsAsFactors=FALSE)
+cpt <- fread(paste0(dir, "all_cpts.csv"),
+             header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #iPOP demographics
 iPOPdemographics <- read.csv(paste0(dir, "SECURE_ClinWearDemo_SamplePop.csv"),
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
+iPOPicd <-fread(paste0(dir, "diagnoses_110718.csv"),
+                header=TRUE,sep=',',stringsAsFactors=FALSE)
+iPOPcpt <-fread(paste0(dir, "procedures_110718.csv"),
+                header=TRUE,sep=',',stringsAsFactors=FALSE)
 
 #thirtyK demographics
 thirtyKdemog <- read.csv(paste0(dir, "SECURE_20180412_thirtyKDemog.csv"),
