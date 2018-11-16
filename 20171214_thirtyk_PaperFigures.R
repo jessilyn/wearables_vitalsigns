@@ -619,6 +619,10 @@ if(use.Demog){
 } else if(!use.Demog) {
   vitals.variables <- c("Pulse", "Temp") #
 }
+if (use.iPOP){
+  vitals.variables = c(vitals.variables,"iPOP_ID")
+}
+
 
 patients = unique(iPOPcorDf$iPOP_ID)
 
@@ -629,20 +633,42 @@ val.null.pred <- rep(list(NA),length(top.names)) # list of vectors to store null
 num.true <- rep(list(NA),length(top.names)) # number of observations per individual per clinic test
 
 for (k in 1:length(patients)){
+  cat("Patient",patients[k],"\n") # LOO
+
   train <- patients[patients != patients[k]]
   test <- patients[patients == patients[k]]
-  cat("Patient",patients[k],"\n") # LOO
-  dat.train.unsorted<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% train, ] # subset input data by training set
+  train.ids = iPOPcorDf.demo$iPOP_ID %in% train
+  test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+  
+  if (use.iPOP){
+    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+    test.idx = which(test.ids)
+    
+    nfrac = length(test.idx)
+    if (nfrac < 6)
+      next
+    nfrac = floor(length(test.idx)*0.2)
+    
+    test.idx = sample(test.idx)[1:nfrac]
+    test.ids = (1:length(test.ids) %in% test.idx)
+    train.ids = !test.ids
+  }
+  
+  dat.train.unsorted<-iPOPcorDf.demo[train.ids, ] # subset input data by training set
   dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
-  dat.test<-iPOPcorDf.demo[ iPOPcorDf.demo$iPOP_ID %in% test, ] # subset input data by testing set
+  dat.test<-iPOPcorDf.demo[test.ids, ] # subset input data by testing set
   
   for (l in 1:length(top.names)){
     cat("Test",top.names[l],"\n")
     # create training set
-    x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
-    x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-    x.train.ids<-x.train$iPOP_ID
-    x.train<-x.train[,-1]
+    x.train <- dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+    x.train <- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    x.train.ids <- x.train$iPOP_ID
+    
+    if (!use.iPOP){
+      x.train <- x.train[,-1]
+    }
+
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     # create test set
