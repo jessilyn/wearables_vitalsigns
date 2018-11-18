@@ -575,7 +575,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 source("ggplot-theme.R") # just to make things look nice
 
 # choose for during troubleshooting
-use.Troubleshoot.mode = TRUE
+use.Troubleshoot.mode = FALSE
 #choose whether Demographics in models (supply TRUE or FALSE)
 use.Demog <- FALSE
 #choose whether iPOP_ID variable is used (supply TRUE or FALSE)
@@ -704,6 +704,8 @@ for (j in 1:length(top.names)){
 }
 names(rsq.vitals) = top.names
 names(pct.var.explained) = top.names
+
+pct.var.explained[pct.var.explained<0]=0
 sqrt.pct.var <- sqrt(pct.var.explained)
 as.matrix(sort(sqrt(pct.var.explained)))
 ####
