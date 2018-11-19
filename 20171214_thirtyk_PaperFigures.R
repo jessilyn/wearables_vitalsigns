@@ -25,7 +25,7 @@ require(lubridate)
 library(tidyr)
 require(zoo) #rollapply
 
-source("ggplot-theme.R") 
+source("ggplot-theme.R") # just to make things look nice
 
 if(!dir.exists("plots")) dir.create("plots")
 
@@ -571,363 +571,408 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 ###############
 
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
-
-source("ggplot-theme.R") # just to make things look nice
-
-# choose for during troubleshooting
-use.Troubleshoot.mode = FALSE
-#choose whether Demographics in models (supply TRUE or FALSE)
-use.Demog <- FALSE
-#choose whether iPOP_ID variable is used (supply TRUE or FALSE)
-use.iPOP <- FALSE
-
-if (use.Troubleshoot.mode){
-  #   top.names<-c("MONOAB", "HGB", "HCT", "RBC") # "RBC", "PLT") # for testing model on small subset
-  # top.names<-c("ALT")# "TGL", "BASOAB", "EOSAB") # for testing model on small subset
-   top.names <- c("HGB", "TGL")#, "BASOAB", "EOSAB")
-  #top.names <- c("PLT")
-}
-
-####
-# CODE FOR SIMPLE LM
-#
-sum.vectors.in.list <- function(x) {
-  c(sum(na.omit(x)))
-}
-
-rsq.all = c()
-pct.var.all = c()
-iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
-iPOPcorDf.demo$Gender <- as.factor(iPOPcorDf.demo$Gender)
-iPOPcorDf.demo$Ethn <- as.factor(iPOPcorDf.demo$Ethn)
-
-#change gender and ethnicity to dummy variables
-gender <- data.frame(model.matrix( ~ Gender - 1, data=iPOPcorDf.demo))
-ethn <- data.frame(model.matrix( ~ Ethn - 1, data=iPOPcorDf.demo))
-
-#remove the least populated gender and ethnicity (NCOL-1)
-cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
-gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
-ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
-#cbind new gender and ethnicity variables to "wear"
-iPOPcorDf.demo <- cbind(iPOPcorDf.demo,gender,ethn)
-
-#store names as vitals.variables
-#vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
-if(use.Demog){
-  vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
-} else if(!use.Demog) {
-  vitals.variables <- c("Pulse", "Temp") #
-}
-if (use.iPOP){
-  vitals.variables = c(vitals.variables,"iPOP_ID")
-}
-
-
-patients = unique(iPOPcorDf$iPOP_ID)
-
-val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
-val.pred <- rep(list(NA),length(top.names)) # list of vectors to store trained model predicted values; each vector is for 1 clinical lab
-val.null.pred <- rep(list(NA),length(top.names)) # list of vectors to store null model predicted values; each vector is for 1 clinical lab
-# p.value<-list()  # TODO: decide if this is a relevant parameter to collect - I think not...?
-num.true <- rep(list(NA),length(top.names)) # number of observations per individual per clinic test
-
-for (k in 1:length(patients)){
-  cat("Patient",patients[k],"\n") # LOO
-
-  train <- patients[patients != patients[k]]
-  test <- patients[patients == patients[k]]
-  train.ids = iPOPcorDf.demo$iPOP_ID %in% train
-  test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-  
-  if (use.iPOP){
-    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-    test.idx = which(test.ids)
-    
-    nfrac = length(test.idx)
-    if (nfrac < 6)
-      next
-    nfrac = floor(length(test.idx)*0.2)
-    
-    test.idx = sample(test.idx)[1:nfrac]
-    test.ids = (1:length(test.ids) %in% test.idx)
-    train.ids = !test.ids
+# use.Troubleshoot.mode - choose for during troubleshooting
+# use.Demog - choose whether Demographics in models (supply TRUE or FALSE)
+# use.iPOP - choose whether iPOP_ID variable is used (supply TRUE or FALSE)
+cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FALSE){
+  if (use.Troubleshoot.mode){
+     top.names <- c("HGB", "TGL")
   }
   
-  dat.train.unsorted<-iPOPcorDf.demo[train.ids, ] # subset input data by training set
-  dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
-  dat.test<-iPOPcorDf.demo[test.ids, ] # subset input data by testing set
+  ####
+  # CODE FOR SIMPLE LM
+  #
+  sum.vectors.in.list <- function(x) {
+    c(sum(na.omit(x)))
+  }
   
-  for (l in 1:length(top.names)){
-    cat("Test",top.names[l],"\n")
-    # create training set
-    x.train <- dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
-    x.train <- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-    x.train.ids <- x.train$iPOP_ID
+  rsq.all = c()
+  pct.var.all = c()
+  iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+  iPOPcorDf.demo$Gender <- as.factor(iPOPcorDf.demo$Gender)
+  iPOPcorDf.demo$Ethn <- as.factor(iPOPcorDf.demo$Ethn)
+  
+  #change gender and ethnicity to dummy variables
+  gender <- data.frame(model.matrix( ~ Gender - 1, data=iPOPcorDf.demo))
+  ethn <- data.frame(model.matrix( ~ Ethn - 1, data=iPOPcorDf.demo))
+  
+  #remove the least populated gender and ethnicity (NCOL-1)
+  cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+  gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+  ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+  #cbind new gender and ethnicity variables to "wear"
+  iPOPcorDf.demo <- cbind(iPOPcorDf.demo,gender,ethn)
+  
+  #store names as vitals.variables
+  #vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
+  if(use.Demog){
+    vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
+  } else if(!use.Demog) {
+    vitals.variables <- c("Pulse", "Temp") #
+  }
+  if (use.iPOP){
+    vitals.variables = c(vitals.variables,"iPOP_ID")
+  }
+  
+  patients = unique(iPOPcorDf$iPOP_ID)
+  
+  res = list()
+  res$val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
+  res$val.pred <- rep(list(NA),length(top.names)) # list of vectors to store trained model predicted values; each vector is for 1 clinical lab
+  res$val.null.pred <- rep(list(NA),length(top.names)) # list of vectors to store null model predicted values; each vector is for 1 clinical lab
+  # p.value<-list()  # TODO: decide if this is a relevant parameter to collect - I think not...?
+  res$num.true <- rep(list(NA),length(top.names)) # number of observations per individual per clinic test
+  
+  for (k in 1:length(patients)){
+    cat("Patient",patients[k],"\n") # LOO
+  
+    train <- patients[patients != patients[k]]
+    test <- patients[patients == patients[k]]
+    train.ids = iPOPcorDf.demo$iPOP_ID %in% train
+    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
     
-    if (!use.iPOP){
-      x.train <- x.train[,-1]
+    if (use.iPOP){
+      test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+      test.idx = which(test.ids)
+      
+      nfrac = length(test.idx)
+      if (nfrac < 6)
+        next
+      nfrac = floor(length(test.idx)*0.2)
+      
+      test.idx = sample(test.idx)[1:nfrac]
+      test.ids = (1:length(test.ids) %in% test.idx)
+      train.ids = !test.ids
+    }
+    
+    iPOPcorDf.demo.tmp = iPOPcorDf.demo
+    if (use.iPOP){
+      iPOPcorDf.demo.tmp$iPOP_ID = 1*(iPOPcorDf.demo.tmp$iPOP_ID == patients[k])
     }
 
-    predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
-    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
-    # create test set
-    x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
-    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
-    val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
-    num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) # number of test observations for left out person
-    fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(vitals.variables,collapse=" + "))
-    fml.null = paste(top.names[l]," ~ 1")
-    bivar.lm.model = lm(as.formula(fml), data = x.train) # build the model
-    val.pred[[l]] = c(val.pred[[l]], predict(bivar.lm.model, newdata = x.test)) # predict on trained model
-    bivar.null.lm.model<-lm(as.formula(fml.null), data = x.train) # create null model for hypothesis testing and for calculating RSS0
-    val.null.pred[[l]] = c(val.null.pred[[l]], predict(bivar.null.lm.model, newdata = x.test)) # predict on null model
-    # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
-    # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
+    dat.train.unsorted = iPOPcorDf.demo.tmp[train.ids, ] # subset input data by training set
+    dat.train = dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
+    dat.test = iPOPcorDf.demo.tmp[test.ids, ] # subset input data by testing set
+    
+    for (l in 1:length(top.names)){
+      cat("Test",top.names[l],"\n")
+      # create training set
+      x.train <- dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+      x.train <- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+      x.train.ids <- x.train$iPOP_ID
+      
+      if (!use.iPOP){
+        x.train <- x.train[,-1]
+      }
+  
+      predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
+      outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+      # create test set
+      x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
+      x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+      res$val.true[[l]] = c(res$val.true[[l]], x.test[,top.names[l]]) # true values of left out person
+      res$num.true[[l]]<-c(res$num.true[[l]],length(x.test[,top.names[l]])) # number of test observations for left out person
+      fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(vitals.variables,collapse=" + "))
+      fml.null = paste(top.names[l]," ~ 1")
+      bivar.lm.model = lm(as.formula(fml), data = x.train) # build the model
+      res$val.pred[[l]] = c(res$val.pred[[l]], predict(bivar.lm.model, newdata = x.test)) # predict on trained model
+      bivar.null.lm.model<-lm(as.formula(fml.null), data = x.train) # create null model for hypothesis testing and for calculating RSS0
+      res$val.null.pred[[l]] = c(res$val.null.pred[[l]], predict(bivar.null.lm.model, newdata = x.test)) # predict on null model
+      # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
+      # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
+    }
   }
+  num.test.obs <- lapply(res$num.true, sum.vectors.in.list)
+  
+  res$rsq.vitals = c()
+  res$p.val.rsq.vitals = c()
+  res$rssm.vitals = c()
+  res$rss0.vitals = c()
+  res$pct.var.explained = c()
+  res$num.Records.check <- c()
+  for (j in 1:length(top.names)){
+    res$rsq.vitals = c(res$rsq.vitals, cor(res$val.pred[[j]], res$val.true[[j]], use = "complete.obs"))
+    res$p.val.rsq.vitals = c(res$p.val.rsq.vitals, cor.test(res$val.pred[[j]], res$val.true[[j]], use = "complete.obs")$p.value)
+    res$rssm.vitals = sum(na.omit((res$val.true[[j]] - res$val.pred[[j]])^2))
+    res$rss0.vitals = sum(na.omit((res$val.true[[j]] - res$val.null.pred[[j]])^2))
+    res$pct.var.explained = c(res$pct.var.explained, (1 - ( res$rssm.vitals / res$rss0.vitals )))
+    res$num.Records.check <- c(res$num.Records.check, (length(res$val.pred[[j]])-1)) # same as num.test.obs
+  }
+  names(res$rsq.vitals) = top.names
+  names(res$pct.var.explained) = top.names
+  
+  res$pct.var.explained[res$pct.var.explained<0]=0
+  res$sqrt.pct.var <- sqrt(res$pct.var.explained)
+  res
 }
-num.test.obs <- lapply(num.true, sum.vectors.in.list)
 
-rsq.vitals = c()
-p.val.rsq.vitals = c()
-rssm.vitals = c()
-rss0.vitals = c()
-pct.var.explained = c()
-num.Records.check <- c()
-for (j in 1:length(top.names)){
-  rsq.vitals = c(rsq.vitals, cor(val.pred[[j]], val.true[[j]], use = "complete.obs"))
-  p.val.rsq.vitals = c(p.val.rsq.vitals, cor.test(val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
-  rssm.vitals = sum(na.omit((val.true[[j]] - val.pred[[j]])^2))
-  rss0.vitals = sum(na.omit((val.true[[j]] - val.null.pred[[j]])^2))
-  pct.var.explained = c(pct.var.explained, (1 - ( rssm.vitals / rss0.vitals )))
-  num.Records.check <- c(num.Records.check, (length(val.pred[[j]])-1)) # same as num.test.obs
-}
-names(rsq.vitals) = top.names
-names(pct.var.explained) = top.names
-
-pct.var.explained[pct.var.explained<0]=0
-sqrt.pct.var <- sqrt(pct.var.explained)
-as.matrix(sort(sqrt(pct.var.explained)))
 ####
 # CODE FOR LASSO, RF
 ####
 
-#clean wear data frame
-wear[,8:length(names(wear))] <- apply(
-  wear[,8:length(names(wear))], 2,
-  function(x) as.numeric(as.character(x)))
-wear$Gender <- as.factor(wear$Gender)
-wear$Ethn <- as.factor(wear$Ethn)
-wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-
-#change gender and ethnicity to dummy variables
-gender <- data.frame(model.matrix( ~ Gender - 1, data=wear))
-ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear))
-
-#remove the least populated gender and ethnicity (NCOL-1)
-cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
-gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
-ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
-
-#store names as demo.variables
-demo.variables <- c("AgeIn2016", names(gender), names(ethn))
-
-#cbind new gender and ethnicity variables to "wear"
-wear <- cbind(wear,gender,ethn)
-
-val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
-null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
-lasso.val.pred.lambda.manual <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-lasso.val.pred.lambda.min <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
-rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
-
-num.Records <- c()
-lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
-                                           "left.out.person"=character(),"lasso.feature"=character(),
-                                           "lasso.coef.value"=character())
-lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"lasso.feature"=character(),
-                                        "lasso.coef.value"=character())
-lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
-                                        "left.out.person"=character(),"lasso.feature"=character(),
-                                        "lasso.coef.value"=character())
-rf.features <- data.frame("test"=character(),"cv.run"=character(),
-                          "left.out.person"=character(),"rf.feature"=character(),
-                          "rf.coef.value"=character())
-
-if(use.Demog){
-    demo.variables <- c("AgeIn2016", names(gender), names(ethn))
-  } else if(!use.Demog) {
-      demo.variables <- c()
-}
-
-for (k in 1:length(patients)){
-  train <- patients[patients != patients[k]]
-  test <- patients[patients == patients[k]]
-  cat("Patient",patients[k],"\n") # LOO
-  #set up iPOP dummy variable if use.iPOP=TRUE
-  if(use.iPOP){
-    cache <- data.frame(model.matrix( ~ iPOP_ID - 1, data=wear))
-    cache <- cache[,-which(names(cache)==paste0("iPOP_ID",gsub("-",".",test)))]
-    wear <- cbind(wear,cache)
-    demo.variables <- c(demo.variables,names(cache)) #append iPOPs to demo
-  } 
-  dat.train.unsorted <- wear[ wear$iPOP_ID %in% train, ] # subset input data by training set
-  dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
-  dat.test<-wear[ wear$iPOP_ID %in% test, ] # subset input data by testing set
-  for (l in 1:length(top.names)){
-    cat("Test",top.names[l],"\n")
-    x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID", top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-    x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
-    x.train.ids<-x.train$iPOP_ID
-    x.train<-x.train[,-1] 
-    # if(!NROW(x.train)){ #if x.train is empty
-    #   print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
-    # } else {
-    #   print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
-    # }
-    predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
-    outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
-    
-    # create test set
-    x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
-    # if(!NROW(x.test)){ #if x.test is empty
-    #   print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
-    # } else {
-    #   print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
-    # }
-    val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
-    
-    num.Records <- rbind(num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
-    
-    rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
-    
-    #decide on number for nfolds from number of obs per subject
-    frq <- as.vector(table(x.train.ids))
-    
-    #optional argument for leave-one-out CV method
-    n <- length(frq)
-    
-    #optional argument to specify folds for CV
-    folds <- rep(1:length(frq),frq[1:length(frq)])
-    
-    ## run lasso for variable selection
-    # n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
-    x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
-    glm.res = cv.glmnet(x=x_train,y=outcome,
-                        standardize.response=FALSE,
-                        family="gaussian",
-                        nfolds=n,
-                        foldid=folds,
-                        nlambda=100)
- 
-#    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?    
-    
-    #store all lasso variable coefs (lambda specific: manual, min, and 1se)
-    factors.lambda.manual = glm.res$glmnet.fit$beta[,25] # TODO: this is an arbitrary rule for now
-    lasso.variables.lambda.manual = factors.lambda.manual#[abs(factors.lambda.manual)!=0]
-    factors.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
-    lasso.variables.lambda.min = factors.lambda.min#[abs(factors.lambda.min)!=0]
-    factors.lambda.1se <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.1se)]
-    lasso.variables.lambda.1se = factors.lambda.1se#[abs(factors.lambda.1se)!=0]
-    
-    ## pull out features from lasso models ##
-    
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.manual)),
-                      "cv.run"=rep(k,length(lasso.variables.lambda.manual)),
-                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.manual)),
-                      "lasso.feature"=names(lasso.variables.lambda.manual),
-                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.manual))
-    lasso.features.lambda.manual <- rbind(lasso.features.lambda.manual,tmp)
-    
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.min)),
-                      "cv.run"=rep(k,length(lasso.variables.lambda.min)),
-                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.min)),
-                      "lasso.feature"=names(lasso.variables.lambda.min),
-                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.min))
-    lasso.features.lambda.min <- rbind(lasso.features.lambda.min,tmp)
-    
-    tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.1se)),
-                      "cv.run"=rep(k,length(lasso.variables.lambda.1se)),
-                      "left.out.person"=rep(patients[k],length(lasso.variables.lambda.1se)),
-                      "lasso.feature"=names(lasso.variables.lambda.1se),
-                      "lasso.coef.value"=as.numeric(lasso.variables.lambda.1se))
-    lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
-    
-    #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
-    lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
-    lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
-    lasso.variables.to.use.lambda.1se = names(factors.lambda.1se[abs(factors.lambda.1se)>1e-10])
-    
-    # build null, lasso, and rf models
-    set.seed(1)
-    null.fml = paste(top.names[l]," ~ 1")
-    null.model = lm(as.formula(null.fml), data = x.train) # create null model for hypothesis testing and for calculating RSS0
-    null.val.pred[[l]] = c(null.val.pred[[l]], predict(null.model, newdata = x.test)) # predict on null model
-    
-    lasso.fml.lambda.manual = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.manual,collapse=" + "))
-    # lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
-    # lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
-    # check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.manual!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
-      lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
-    } else {
-      lasso.model.lambda.manual = null.model # if lasso sets all coeffs = 0, then use the null model
-      lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
-      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.manual[[l]])
-      # lasso.val.pred.lambda.manual[[l]] = c(lasso.val.pred.lambda.manual[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
-    }
-    
-    lasso.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
-    #check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.min!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
-      lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
-    } else {
-      lasso.model.lambda.min = null.model # if lasso sets all coeffs = 0, then use the null model
-      lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
-      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.min[[l]])
-      # lasso.val.pred.lambda.min[[l]] = c(lasso.val.pred.lambda.min[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
-    }
-    
-    lasso.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.1se,collapse=" + "))
-    #check that the formula is valid (i.e. not empty)
-    if(lasso.fml.lambda.1se!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      lasso.model.lambda.1se = lm(as.formula(lasso.fml.lambda.1se), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
-      lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
-    } else {
-      lasso.model.lambda.1se = null.model # if lasso sets all coeffs = 0, then use the null model
-      lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
-      # cache <-  length(val.true[[l]])-length(lasso.val.pred.lambda.1se[[l]])
-      # lasso.val.pred.lambda.1se[[l]] = c(lasso.val.pred.lambda.1se[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
-    }
-    
-    rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
-    #check that the formula is valid (i.e. not empty)
-    if(rf.fml!=paste0("cbind( ",top.names[l]," ) ~ ")){
-      rf.model = randomForest(as.formula(rf.fml), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
-      rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
-    } else {
-      # rf.model = null.model # if lasso sets all coeffs = 0, then use the null model
-      # rf.val.pred[[l]] = c(rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
-    }
-
-    ## pull out features from rf models ##
-    rf.features.list <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
-    
-
-    tmp <- data.frame("test"=rep(top.names[l],length(rf.features.list)),
-                      "cv.run"=rep(k,length(rf.features.list)),
-                      "left.out.person"=rep(patients[k],length(rf.features.list)),
-                      "rf.feature"=unlist(dimnames(rf.features.list)),
-                      "rf.coef.value"=as.numeric(rf.features.list))
-    rf.features <- rbind(rf.features,tmp)
-    # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
-    # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
+wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP = FALSE, npatients = NULL){
+  if (use.Troubleshoot.mode){
+    top.names <- c("HGB", "TGL")
   }
+  #clean wear data frame
+  wear[,8:length(names(wear))] <- apply(
+    wear[,8:length(names(wear))], 2,
+    function(x) as.numeric(as.character(x)))
+  wear$Gender <- as.factor(wear$Gender)
+  wear$Ethn <- as.factor(wear$Ethn)
+  wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  if (use.iPOP){
+    wear.variables = c(wear.variables,"iPOP_ID")
+  }
+  
+  #change gender and ethnicity to dummy variables
+  gender <- data.frame(model.matrix( ~ Gender - 1, data=wear))
+  ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear))
+  
+  #remove the least populated gender and ethnicity (NCOL-1)
+  cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+  gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+  ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+  
+  #store names as demo.variables
+  demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+  
+  #cbind new gender and ethnicity variables to "wear"
+  wear <- cbind(wear,gender,ethn)
+  
+  res = list()
+  res$val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
+  res$null.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store nullmodel-predicted values; each vector is for 1 clinical lab
+  res$lasso.val.pred.lambda.manual <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
+  res$lasso.val.pred.lambda.min <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
+  res$lasso.val.pred.lambda.1se <- rep(list(NA),length(top.names)) # list of vectors to store lasso-trainedmodel-predicted values; each vector is for 1 clinical lab
+  res$rf.val.pred <- rep(list(NA),length(top.names))  # list of vectors to store rf-trainedmodel-predicted values; each vector is for 1 clinical lab
+  
+  res$num.Records <- c()
+  res$lasso.features.lambda.manual <- data.frame("test"=character(),"cv.run"=character(),
+                                             "left.out.person"=character(),"lasso.feature"=character(),
+                                             "lasso.coef.value"=character())
+  res$lasso.features.lambda.min <- data.frame("test"=character(),"cv.run"=character(),
+                                          "left.out.person"=character(),"lasso.feature"=character(),
+                                          "lasso.coef.value"=character())
+  res$lasso.features.lambda.1se <- data.frame("test"=character(),"cv.run"=character(),
+                                          "left.out.person"=character(),"lasso.feature"=character(),
+                                          "lasso.coef.value"=character())
+  res$rf.features <- data.frame("test"=character(),"cv.run"=character(),
+                            "left.out.person"=character(),"rf.feature"=character(),
+                            "rf.coef.value"=character())
+  
+  if(use.Demog){
+      demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+    } else if(!use.Demog) {
+        demo.variables <- c()
+  }
+  
+  patients = unique(iPOPcorDf$iPOP_ID)
+  if (is.null(npatients))
+    npatients = length(patients)
+  
+  for (k in 1:npatients){
+    cat("Patient",patients[k],"\n") # LOO
+    
+    train <- patients[patients != patients[k]]
+    test <- patients[patients == patients[k]]
+    train.ids = iPOPcorDf.demo$iPOP_ID %in% train
+    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+    
+    if (use.iPOP){
+      test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+      test.idx = which(test.ids)
+      
+      nfrac = length(test.idx)
+      if (nfrac < 6)
+        next
+      nfrac = floor(length(test.idx)*0.2)
+      
+      test.idx = sample(test.idx)[1:nfrac]
+      test.ids = (1:length(test.ids) %in% test.idx)
+      train.ids = !test.ids
+    }
+    
+    wear.tmp = wear
+    if (use.iPOP){
+      wear.tmp$iPOP_ID = 1*(wear.tmp$iPOP_ID == patients[k])
+    }
+    
+    
+    dat.train.unsorted <- wear.tmp[ train.ids, ] # subset input data by training set
+    dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
+    dat.test<-wear.tmp[ test.ids, ] # subset input data by testing set
+    
+    for (l in 1:length(top.names)){
+      cat("Test",top.names[l],"\n")
+      x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID", top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
+      x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+      x.train.ids<-x.train$iPOP_ID
+      if (!use.iPOP){
+        x.train <- x.train[,-1,drop=FALSE]
+      }
+      
+      # if(!NROW(x.train)){ #if x.train is empty
+      #   print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
+      # } else {
+      #   print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
+      # }
+      predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
+      outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
+      
+      # create test set
+      x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
+      x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+      # if(!NROW(x.test)){ #if x.test is empty
+      #   print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
+      # } else {
+      #   print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
+      # }
+      res$val.true[[l]] = c(res$val.true[[l]], x.test[,top.names[l]]) # true values of left out person
+      
+      res$num.Records <- rbind(res$num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
+      
+      rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
+      
+      #decide on number for nfolds from number of obs per subject
+      frq <- as.vector(table(x.train.ids))
+      
+      #optional argument for leave-one-out CV method
+      n <- max(3,length(frq))
+        
+      #optional argument to specify folds for CV
+      folds <- rep(1:length(frq),frq[1:length(frq)])
+      
+      ## run lasso for variable selection
+      # n <- as.numeric(length(outcome)) #optional argument for leave-one-out CV method for nfold
+      x_train <- model.matrix( ~ .-1, as.data.frame(predictors))
+      glm.res = cv.glmnet(x=x_train,y=outcome,
+                          standardize.response=FALSE,
+                          family="gaussian",
+                          nfolds=n,
+  #                        foldid=folds,
+                          nlambda=100)
+   
+  #    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?    
+      
+      #store all lasso variable coefs (lambda specific: manual, min, and 1se)
+      factors.lambda.manual = glm.res$glmnet.fit$beta[,25] # TODO: this is an arbitrary rule for now
+      lasso.variables.lambda.manual = factors.lambda.manual#[abs(factors.lambda.manual)!=0]
+      factors.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
+      lasso.variables.lambda.min = factors.lambda.min#[abs(factors.lambda.min)!=0]
+      factors.lambda.1se <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.1se)]
+      lasso.variables.lambda.1se = factors.lambda.1se#[abs(factors.lambda.1se)!=0]
+      
+      ## pull out features from lasso models ##
+      
+      tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.manual)),
+                        "cv.run"=rep(k,length(lasso.variables.lambda.manual)),
+                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.manual)),
+                        "lasso.feature"=names(lasso.variables.lambda.manual),
+                        "lasso.coef.value"=as.numeric(lasso.variables.lambda.manual))
+      res$lasso.features.lambda.manual <- rbind(res$lasso.features.lambda.manual,tmp)
+      
+      tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.min)),
+                        "cv.run"=rep(k,length(lasso.variables.lambda.min)),
+                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.min)),
+                        "lasso.feature"=names(lasso.variables.lambda.min),
+                        "lasso.coef.value"=as.numeric(lasso.variables.lambda.min))
+      res$lasso.features.lambda.min <- rbind(res$lasso.features.lambda.min,tmp)
+      
+      tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.1se)),
+                        "cv.run"=rep(k,length(lasso.variables.lambda.1se)),
+                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.1se)),
+                        "lasso.feature"=names(lasso.variables.lambda.1se),
+                        "lasso.coef.value"=as.numeric(lasso.variables.lambda.1se))
+      res$lasso.features.lambda.1se <- rbind(res$lasso.features.lambda.1se,tmp)
+      
+      #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
+      lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
+      lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
+      lasso.variables.to.use.lambda.1se = names(factors.lambda.1se[abs(factors.lambda.1se)>1e-10])
+      
+      # # Remove iPop
+      # if (use.iPOP){
+      #   lasso.variables.to.use.lambda.manual = c("iPOP_ID",lasso.variables.to.use.lambda.manual[!grepl("iPOP", lasso.variables.to.use.lambda.manual)])
+      #   lasso.variables.to.use.lambda.min = c("iPOP_ID",lasso.variables.to.use.lambda.min[!grepl("iPOP", lasso.variables.to.use.lambda.min)])
+      #   lasso.variables.to.use.lambda.1se = c("iPOP_ID",lasso.variables.to.use.lambda.1se[!grepl("iPOP", lasso.variables.to.use.lambda.1se)])
+      # }
+      if (use.iPOP){
+        lasso.variables.to.use.lambda.manual = c("iPOP_ID",lasso.variables.to.use.lambda.manual)
+        lasso.variables.to.use.lambda.min = c("iPOP_ID",lasso.variables.to.use.lambda.min)
+        lasso.variables.to.use.lambda.1se = c("iPOP_ID",lasso.variables.to.use.lambda.1se)
+      }
+      
+      # build null, lasso, and rf models
+      set.seed(1)
+      null.fml = paste(top.names[l]," ~ 1")
+      null.model = lm(as.formula(null.fml), data = x.train) # create null model for hypothesis testing and for calculating RSS0
+      res$null.val.pred[[l]] = c(res$null.val.pred[[l]], predict(null.model, newdata = x.test)) # predict on null model
+      
+      lasso.fml.lambda.manual = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.manual,collapse=" + "))
+      # lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+      # res$lasso.val.pred.lambda.manual[[l]] = c(res$lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
+      # check that the formula is valid (i.e. not empty)
+      if(lasso.fml.lambda.manual!=paste0("cbind( ",top.names[l]," ) ~ ")){
+        lasso.model.lambda.manual = lm(as.formula(lasso.fml.lambda.manual), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+        res$lasso.val.pred.lambda.manual[[l]] = c(res$lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
+      } else {
+        lasso.model.lambda.manual = null.model # if lasso sets all coeffs = 0, then use the null model
+        res$lasso.val.pred.lambda.manual[[l]] = c(res$lasso.val.pred.lambda.manual[[l]], predict(lasso.model.lambda.manual, newdata = x.test)) # predict on trained model
+        # cache <-  length(res$val.true[[l]])-length(res$lasso.val.pred.lambda.manual[[l]])
+        # res$lasso.val.pred.lambda.manual[[l]] = c(res$lasso.val.pred.lambda.manual[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      }
+      
+      lasso.fml.lambda.min = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.min,collapse=" + "))
+      #check that the formula is valid (i.e. not empty)
+      if(lasso.fml.lambda.min!=paste0("cbind( ",top.names[l]," ) ~ ")){
+        lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+        res$lasso.val.pred.lambda.min[[l]] = c(res$lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
+      } else {
+        lasso.model.lambda.min = null.model # if lasso sets all coeffs = 0, then use the null model
+        res$lasso.val.pred.lambda.min[[l]] = c(res$lasso.val.pred.lambda.min[[l]], predict(lasso.model.lambda.min, newdata = x.test)) # predict on trained model
+        # cache <-  length(res$val.true[[l]])-length(res$lasso.val.pred.lambda.min[[l]])
+        # res$lasso.val.pred.lambda.min[[l]] = c(res$lasso.val.pred.lambda.min[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      }
+      
+      lasso.fml.lambda.1se = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(lasso.variables.to.use.lambda.1se,collapse=" + "))
+      #check that the formula is valid (i.e. not empty)
+      if(lasso.fml.lambda.1se!=paste0("cbind( ",top.names[l]," ) ~ ")){
+        lasso.model.lambda.1se = lm(as.formula(lasso.fml.lambda.1se), data = x.train) # , weights = labs.wear$weight) # TODO: do we need to include weights?
+        res$lasso.val.pred.lambda.1se[[l]] = c(res$lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
+      } else {
+        lasso.model.lambda.1se = null.model # if lasso sets all coeffs = 0, then use the null model
+        res$lasso.val.pred.lambda.1se[[l]] = c(res$lasso.val.pred.lambda.1se[[l]], predict(lasso.model.lambda.1se, newdata = x.test)) # predict on trained model
+        # cache <-  length(res$val.true[[l]])-length(res$lasso.val.pred.lambda.1se[[l]])
+        # res$lasso.val.pred.lambda.1se[[l]] = c(res$lasso.val.pred.lambda.1se[[l]], rep(NA,cache)) # fill with NA(s) if invalid model was supplied
+      }
+      
+      rf.fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(rf.variables.to.use,collapse=" + "))
+      #check that the formula is valid (i.e. not empty)
+      if(rf.fml!=paste0("cbind( ",top.names[l]," ) ~ ")){
+        rf.model = randomForest(as.formula(rf.fml), data = x.train)  #weights = labs.wear$weight) # TODO: do we need to include weights?
+        res$rf.val.pred[[l]] = c(res$rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
+      } else {
+        # rf.model = null.model # if lasso sets all coeffs = 0, then use the null model
+        # res$rf.val.pred[[l]] = c(res$rf.val.pred[[l]], predict(rf.model, newdata = x.test)) # predict on left out person
+      }
+  
+      ## pull out features from rf models ##
+      rf.features.list <- as.matrix(importance(rf.model)[order(importance(rf.model), decreasing=TRUE),])
+      
+  
+      tmp <- data.frame("test"=rep(top.names[l],length(rf.features.list)),
+                        "cv.run"=rep(k,length(rf.features.list)),
+                        "left.out.person"=rep(patients[k],length(rf.features.list)),
+                        "rf.feature"=unlist(dimnames(rf.features.list)),
+                        "rf.coef.value"=as.numeric(rf.features.list))
+      res$rf.features <- rbind(res$rf.features,tmp)
+      # t<- anova(bivar.null.lm.model, bivar.lm.model) # to get p-values for model
+      # p.value[[l]] <- as.numeric(t[2,][["Pr(>F)"]])  # to get p-values for model
+    }
+  }
+  res
 }
 
 # ## QUANTILES OF LASSO FOR EACH TEST
@@ -975,192 +1020,202 @@ for (k in 1:length(patients)){
 # emp_2side_pval(emp_quant, -31.15)
 
 
-
-## calculate correlation coefficients and pct var explained by the models (lambda manual)
-rsq.lasso.lambda.manual = c()
-num.cor.pairs.lasso.lambda.manual = c()
-p.val.rsq.lasso.manual = c()
-rssm.lasso.lambda.manual = c()
-rss0.lasso.lambda.manual = c()
-lasso.pct.var.explained.lambda.manual = c()
-lasso.num.Records.lambda.manual <- c()
-
-rsq.lasso.lambda.min = c()
-num.cor.pairs.lasso.lambda.min = c()
-p.val.rsq.lasso.min = c()
-rssm.lasso.lambda.min = c()
-rss0.lasso.lambda.min = c()
-lasso.pct.var.explained.lambda.min = c()
-lasso.num.Records.lambda.min <- c()
-
-rsq.lasso.lambda.1se = c()
-num.cor.pairs.lasso.lambda.1se = c()
-p.val.rsq.lasso.1se = c()
-rssm.lasso.lambda.1se = c()
-rss0.lasso.lambda.1se = c()
-lasso.pct.var.explained.lambda.1se = c()
-lasso.num.Records.lambda.1se <- c()
-
-rsq.rf = c()
-num.cor.pairs.rf = c()
-p.val.rsq.rf = c()
-rssm.rf = c()
-rss0.rf = c()
-rf.pct.var.explained = c()
-rf.num.Records <- c()
-
-#note: rf only runs once below
-
-for (j in 1:length(top.names)){
-  #lasso (lambda.manual)
-  if(length(which(!is.na(lasso.val.pred.lambda.manual[[j]])))>=3){
-    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, length(which(!is.na(lasso.val.pred.lambda.manual[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
-    rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs"))
-    p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, cor.test(lasso.val.pred.lambda.manual[[j]], val.true[[j]], use = "complete.obs")$p.value)
-    #insert step here to check if correlation was significant?
-    rssm.lasso.lambda.manual = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.manual[[j]])^2))
-    rss0.lasso.lambda.manual = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
-    lasso.num.Records.lambda.manual <- c(num.Records, length(lasso.val.pred.lambda.manual[[j]]))
-  } else {
-    p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, NA)
-    num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, 0)
-    rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, NA)
-    lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
-    lasso.num.Records.lambda.manual <- c(num.Records, NA)
+combineResults = function(cVS.lm, wVS.results, use.Troubleshoot.mode = FALSE){ 
+  if (use.Troubleshoot.mode){
+    top.names <- c("HGB", "TGL")
   }
-  #lasso (lambda.min)
-  if(length(which(!is.na(lasso.val.pred.lambda.min[[j]])))>=3){
-    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
-    rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, cor(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs"))
-    p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, cor.test(lasso.val.pred.lambda.min[[j]], val.true[[j]], use = "complete.obs")$p.value)
-    #insert step here to check if correlation was significant?
-    rssm.lasso.lambda.min = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.min[[j]])^2))
-    rss0.lasso.lambda.min = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, (1 - ( rssm.lasso.lambda.min / rss0.lasso.lambda.min )))
-    lasso.num.Records.lambda.min <- c(num.Records, length(lasso.val.pred.lambda.min[[j]]))    
-  } else {
-    p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, NA)
-    num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, 0)
-    rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, NA)
-    lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, NA)
-    lasso.num.Records.lambda.min <- c(num.Records, NA)   
+  ## calculate correlation coefficients and pct var explained by the models (lambda manual)
+  rsq.lasso.lambda.manual = c()
+  num.cor.pairs.lasso.lambda.manual = c()
+  p.val.rsq.lasso.manual = c()
+  rssm.lasso.lambda.manual = c()
+  rss0.lasso.lambda.manual = c()
+  lasso.pct.var.explained.lambda.manual = c()
+  lasso.num.Records.lambda.manual <- c()
+  
+  rsq.lasso.lambda.min = c()
+  num.cor.pairs.lasso.lambda.min = c()
+  p.val.rsq.lasso.min = c()
+  rssm.lasso.lambda.min = c()
+  rss0.lasso.lambda.min = c()
+  lasso.pct.var.explained.lambda.min = c()
+  lasso.num.Records.lambda.min <- c()
+  
+  rsq.lasso.lambda.1se = c()
+  num.cor.pairs.lasso.lambda.1se = c()
+  p.val.rsq.lasso.1se = c()
+  rssm.lasso.lambda.1se = c()
+  rss0.lasso.lambda.1se = c()
+  lasso.pct.var.explained.lambda.1se = c()
+  lasso.num.Records.lambda.1se <- c()
+  
+  rsq.rf = c()
+  num.cor.pairs.rf = c()
+  p.val.rsq.rf = c()
+  rssm.rf = c()
+  rss0.rf = c()
+  rf.pct.var.explained = c()
+  rf.num.Records <- c()
+  
+  #note: rf only runs once below
+  
+  for (j in 1:length(top.names)){
+    #lasso (lambda.manual)
+    if(length(which(!is.na(wVS.results$lasso.val.pred.lambda.manual[[j]])))>=3){
+      num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, length(which(!is.na(wVS.results$lasso.val.pred.lambda.manual[[j]]))))
+      #insert step here to check if sample size for correlation test meets minimum threshold
+      rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, cor(wVS.results$lasso.val.pred.lambda.manual[[j]], wVS.results$val.true[[j]], use = "complete.obs"))
+      p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, cor.test(wVS.results$lasso.val.pred.lambda.manual[[j]], wVS.results$val.true[[j]], use = "complete.obs")$p.value)
+      #insert step here to check if correlation was significant?
+      rssm.lasso.lambda.manual = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$lasso.val.pred.lambda.manual[[j]])^2))
+      rss0.lasso.lambda.manual = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$null.val.pred[[j]])^2))
+      lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, (1 - ( rssm.lasso.lambda.manual / rss0.lasso.lambda.manual )))
+      lasso.num.Records.lambda.manual <- c(wVS.results$num.Records, length(wVS.results$lasso.val.pred.lambda.manual[[j]]))
+    } else {
+      p.val.rsq.lasso.manual <- c(p.val.rsq.lasso.manual, NA)
+      num.cor.pairs.lasso.lambda.manual <- c(num.cor.pairs.lasso.lambda.manual, 0)
+      rsq.lasso.lambda.manual = c(rsq.lasso.lambda.manual, NA)
+      lasso.pct.var.explained.lambda.manual = c(lasso.pct.var.explained.lambda.manual, NA)
+      lasso.num.Records.lambda.manual <- c(wVS.results$num.Records, NA)
+    }
+    #lasso (lambda.min)
+    if(length(which(!is.na(wVS.results$lasso.val.pred.lambda.min[[j]])))>=3){
+      num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, length(which(!is.na(wVS.results$lasso.val.pred.lambda.min[[j]]))))
+      #insert step here to check if sample size for correlation test meets minimum threshold
+      rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, cor(wVS.results$lasso.val.pred.lambda.min[[j]], wVS.results$val.true[[j]], use = "complete.obs"))
+      p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, cor.test(wVS.results$lasso.val.pred.lambda.min[[j]], wVS.results$val.true[[j]], use = "complete.obs")$p.value)
+      #insert step here to check if correlation was significant?
+      rssm.lasso.lambda.min = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$lasso.val.pred.lambda.min[[j]])^2))
+      rss0.lasso.lambda.min = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$null.val.pred[[j]])^2))
+      lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, (1 - ( rssm.lasso.lambda.min / rss0.lasso.lambda.min )))
+      lasso.num.Records.lambda.min <- c(wVS.results$num.Records, length(wVS.results$lasso.val.pred.lambda.min[[j]]))    
+    } else {
+      p.val.rsq.lasso.min <- c(p.val.rsq.lasso.min, NA)
+      num.cor.pairs.lasso.lambda.min <- c(num.cor.pairs.lasso.lambda.min, 0)
+      rsq.lasso.lambda.min = c(rsq.lasso.lambda.min, NA)
+      lasso.pct.var.explained.lambda.min = c(lasso.pct.var.explained.lambda.min, NA)
+      lasso.num.Records.lambda.min <- c(wVS.results$num.Records, NA)   
+    }
+    #lasso (lambda.1se)
+    if(length(which(!is.na(wVS.results$lasso.val.pred.lambda.1se[[j]])))>=3){
+      num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, length(which(!is.na(wVS.results$lasso.val.pred.lambda.min[[j]]))))
+      #insert step here to check if sample size for correlation test meets minimum threshold
+      rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, cor(wVS.results$lasso.val.pred.lambda.1se[[j]], wVS.results$val.true[[j]], use = "complete.obs"))
+      p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, cor.test(wVS.results$lasso.val.pred.lambda.1se[[j]], wVS.results$val.true[[j]], use = "complete.obs")$p.value)
+      #insert step here to check if correlation was significant?
+      rssm.lasso.lambda.1se = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$lasso.val.pred.lambda.1se[[j]])^2))
+      rss0.lasso.lambda.1se = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$null.val.pred[[j]])^2))
+      lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, (1 - ( rssm.lasso.lambda.1se / rss0.lasso.lambda.1se )))
+      lasso.num.Records.lambda.1se <- c(wVS.results$num.Records, length(wVS.results$lasso.val.pred.lambda.1se[[j]]))    
+    } else {
+      p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, NA)
+      num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, 0)
+      rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, NA)
+      lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, NA)
+      lasso.num.Records.lambda.1se <- c(wVS.results$num.Records, NA)   
+    }
+    #rf
+    if(length(which(!is.na(wVS.results$rf.val.pred[[j]])))>=3){
+      num.cor.pairs.rf <- c(num.cor.pairs.rf, length(which(!is.na(wVS.results$rf.val.pred[[j]]))))
+      #insert step here to check if sample size for correlation test meets minimum threshold
+      rsq.rf = c(rsq.rf, cor(wVS.results$rf.val.pred[[j]], wVS.results$val.true[[j]], use = "complete.obs"))
+      p.val.rsq.rf <- c(p.val.rsq.rf, cor.test(wVS.results$rf.val.pred[[j]], wVS.results$val.true[[j]], use = "complete.obs")$p.value)
+      #insert step here to check if correlation was significant?
+      rssm.rf = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$rf.val.pred[[j]])^2))
+      rss0.rf = sum(na.omit((wVS.results$val.true[[j]] - wVS.results$null.val.pred[[j]])^2))
+      rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
+      rf.num.Records <- c(wVS.results$num.Records, length(wVS.results$rf.val.pred[[j]]))
+    } else {
+      p.val.rsq.rf <- c(p.val.rsq.rf, NA)
+      num.cor.pairs.rf <- c(num.cor.pairs.rf, 0)
+      rsq.rf = c(rsq.rf, NA)
+      rf.pct.var.explained = c(rf.pct.var.explained, NA)
+      rf.num.Records <- c(wVS.results$num.Records, NA)
+    }
   }
-  #lasso (lambda.1se)
-  if(length(which(!is.na(lasso.val.pred.lambda.1se[[j]])))>=3){
-    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, length(which(!is.na(lasso.val.pred.lambda.min[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
-    rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, cor(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs"))
-    p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, cor.test(lasso.val.pred.lambda.1se[[j]], val.true[[j]], use = "complete.obs")$p.value)
-    #insert step here to check if correlation was significant?
-    rssm.lasso.lambda.1se = sum(na.omit((val.true[[j]] - lasso.val.pred.lambda.1se[[j]])^2))
-    rss0.lasso.lambda.1se = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, (1 - ( rssm.lasso.lambda.1se / rss0.lasso.lambda.1se )))
-    lasso.num.Records.lambda.1se <- c(num.Records, length(lasso.val.pred.lambda.1se[[j]]))    
-  } else {
-    p.val.rsq.lasso.1se <- c(p.val.rsq.lasso.1se, NA)
-    num.cor.pairs.lasso.lambda.1se <- c(num.cor.pairs.lasso.lambda.1se, 0)
-    rsq.lasso.lambda.1se = c(rsq.lasso.lambda.1se, NA)
-    lasso.pct.var.explained.lambda.1se = c(lasso.pct.var.explained.lambda.1se, NA)
-    lasso.num.Records.lambda.1se <- c(num.Records, NA)   
-  }
-  #rf
-  if(length(which(!is.na(rf.val.pred[[j]])))>=3){
-    num.cor.pairs.rf <- c(num.cor.pairs.rf, length(which(!is.na(rf.val.pred[[j]]))))
-    #insert step here to check if sample size for correlation test meets minimum threshold
-    rsq.rf = c(rsq.rf, cor(rf.val.pred[[j]], val.true[[j]], use = "complete.obs"))
-    p.val.rsq.rf <- c(p.val.rsq.rf, cor.test(rf.val.pred[[j]], val.true[[j]], use = "complete.obs")$p.value)
-    #insert step here to check if correlation was significant?
-    rssm.rf = sum(na.omit((val.true[[j]] - rf.val.pred[[j]])^2))
-    rss0.rf = sum(na.omit((val.true[[j]] - null.val.pred[[j]])^2))
-    rf.pct.var.explained = c(rf.pct.var.explained, (1 - ( rssm.rf / rss0.rf )))
-    rf.num.Records <- c(num.Records, length(rf.val.pred[[j]]))
-  } else {
-    p.val.rsq.rf <- c(p.val.rsq.rf, NA)
-    num.cor.pairs.rf <- c(num.cor.pairs.rf, 0)
-    rsq.rf = c(rsq.rf, NA)
-    rf.pct.var.explained = c(rf.pct.var.explained, NA)
-    rf.num.Records <- c(num.Records, NA)
-  }
+  names(rsq.lasso.lambda.manual) = top.names
+  names(lasso.pct.var.explained.lambda.manual) = top.names
+  lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
+  #^ Error about NaNs may occur from trying to sqrt a negative number
+  
+  names(rsq.lasso.lambda.min) = top.names
+  names(lasso.pct.var.explained.lambda.min) = top.names
+  lasso.sqrt.pct.var.lambda.min <- sqrt(lasso.pct.var.explained.lambda.min)
+  #^ Error about NaNs may occur from trying to sqrt a negative number
+  
+  names(rsq.lasso.lambda.1se) = top.names
+  names(lasso.pct.var.explained.lambda.1se) = top.names
+  lasso.sqrt.pct.var.lambda.1se <- sqrt(lasso.pct.var.explained.lambda.1se)
+  #^ Error about NaNs may occur from trying to sqrt a negative number
+  
+  names(rsq.rf) = top.names
+  names(rf.pct.var.explained) = top.names
+  rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
+  #^ Error about NaNs may occur from trying to sqrt a negative number
+  
+  fig.2c.df <- cbind(rownames(as.data.frame(cVS.results$sqrt.pct.var)), 
+                              as.data.frame(cVS.results$sqrt.pct.var), 
+                              as.data.frame(lasso.sqrt.pct.var.lambda.manual),
+                              as.data.frame(lasso.sqrt.pct.var.lambda.min),
+                              as.data.frame(lasso.sqrt.pct.var.lambda.1se),
+                              as.data.frame(rf.sqrt.pct.var), 
+                              as.data.frame(num.cor.pairs.lasso.lambda.manual),
+                              as.data.frame(num.cor.pairs.lasso.lambda.min),
+                              as.data.frame(num.cor.pairs.lasso.lambda.1se),
+                              as.data.frame(num.cor.pairs.rf),
+                     as.data.frame(p.val.rsq.lasso.manual),
+                     as.data.frame(p.val.rsq.lasso.min),
+                     as.data.frame(p.val.rsq.lasso.1se),
+                     as.data.frame(p.val.rsq.rf),
+                              row.names=NULL)
+  
+  
+  colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf", 
+                         "num.obs.lasso.manual","num.obs.lasso.min","num.obs.lasso.1se","num.obs.rf",
+                         "p.val.lasso.manual","p.val.lasso.min","p.val.lasso.1se","p.val.rf")
+  #fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
+  fig.2c.corr.coefs <- cbind(rownames(as.data.frame(cVS.results$rsq.vitals)), 
+                             as.data.frame(cVS.results$rsq.vitals), 
+                             as.data.frame(rsq.lasso.lambda.manual), 
+                             as.data.frame(rsq.lasso.lambda.min), 
+                             as.data.frame(rsq.lasso.lambda.1se), 
+                             as.data.frame(rsq.rf), 
+                             row.names=NULL)
+  colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
+  
+  #fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
+  # fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
+  # ^This line was throwing an error; revised version below:
+  fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")] <- sapply(fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
+  #fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(fig.2c.corr.coefs$test[order(-fig.2c.corr.coefs$lasso.min)]))
+  
+  #choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
+  list(fig.2c.corr.coefs = fig.2c.corr.coefs, fig.2c.df = fig.2c.df)
 }
-names(rsq.lasso.lambda.manual) = top.names
-names(lasso.pct.var.explained.lambda.manual) = top.names
-lasso.sqrt.pct.var.lambda.manual <- sqrt(lasso.pct.var.explained.lambda.manual)
-#^ Error about NaNs may occur from trying to sqrt a negative number
 
-names(rsq.lasso.lambda.min) = top.names
-names(lasso.pct.var.explained.lambda.min) = top.names
-lasso.sqrt.pct.var.lambda.min <- sqrt(lasso.pct.var.explained.lambda.min)
-#^ Error about NaNs may occur from trying to sqrt a negative number
-
-names(rsq.lasso.lambda.1se) = top.names
-names(lasso.pct.var.explained.lambda.1se) = top.names
-lasso.sqrt.pct.var.lambda.1se <- sqrt(lasso.pct.var.explained.lambda.1se)
-#^ Error about NaNs may occur from trying to sqrt a negative number
-
-names(rsq.rf) = top.names
-names(rf.pct.var.explained) = top.names
-rf.sqrt.pct.var <- sqrt(rf.pct.var.explained)
-#^ Error about NaNs may occur from trying to sqrt a negative number
-
-fig.2c.df <- cbind(rownames(as.data.frame(sqrt.pct.var)), 
-                            as.data.frame(sqrt.pct.var), 
-                            as.data.frame(lasso.sqrt.pct.var.lambda.manual),
-                            as.data.frame(lasso.sqrt.pct.var.lambda.min),
-                            as.data.frame(lasso.sqrt.pct.var.lambda.1se),
-                            as.data.frame(rf.sqrt.pct.var), 
-                            as.data.frame(num.cor.pairs.lasso.lambda.manual),
-                            as.data.frame(num.cor.pairs.lasso.lambda.min),
-                            as.data.frame(num.cor.pairs.lasso.lambda.1se),
-                            as.data.frame(num.cor.pairs.rf),
-                   as.data.frame(p.val.rsq.lasso.manual),
-                   as.data.frame(p.val.rsq.lasso.min),
-                   as.data.frame(p.val.rsq.lasso.1se),
-                   as.data.frame(p.val.rsq.rf),
-                            row.names=NULL)
-
-
-colnames(fig.2c.df)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf", 
-                       "num.obs.lasso.manual","num.obs.lasso.min","num.obs.lasso.1se","num.obs.rf",
-                       "p.val.lasso.manual","p.val.lasso.min","p.val.lasso.1se","p.val.rf")
-#fig.2c.df$test = factor(fig.2c.df$test, levels = as.factor(names(sqrt.pct.var)[order(-sqrt.pct.var)]))
-fig.2c.corr.coefs <- cbind(rownames(as.data.frame(rsq.vitals)), 
-                           as.data.frame(rsq.vitals), 
-                           as.data.frame(rsq.lasso.lambda.manual), 
-                           as.data.frame(rsq.lasso.lambda.min), 
-                           as.data.frame(rsq.lasso.lambda.1se), 
-                           as.data.frame(rsq.rf), 
-                           row.names=NULL)
-colnames(fig.2c.corr.coefs)<-c("test", "vitals", "lasso.manual", "lasso.min", "lasso.1se", "rf")
-
-#fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(names(rsq.vitals)[order(-rsq.vitals)]))
-# fig.2c.corr.coefs[fig.2c.corr.coefs<0]=0 # clamp to zero
-# ^This line was throwing an error; revised version below:
-fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")] <- sapply(fig.2c.corr.coefs[,c("vitals","lasso.manual","lasso.min","lasso.1se","rf")],function(x) ifelse(x<0,0,x)) # clamp to zero
-#fig.2c.corr.coefs$test = factor(fig.2c.corr.coefs$test, levels = as.factor(fig.2c.corr.coefs$test[order(-fig.2c.corr.coefs$lasso.min)]))
-
-#choose lambda to plot ("lasso.manual", "lasso.min", or "lasso.1se")
+cVS.results = cVS.lm(use.Troubleshoot.mode = FALSE, use.iPOP = TRUE)
+wVS.results = wVS.models(use.Troubleshoot.mode = FALSE, use.iPOP = TRUE, npatients = 5)
+fig.tables = combineResults(cVS.lm,wVS.results, use.Troubleshoot.mode = FALSE)
 
 ##UNCOMMENT IF RUNNING LOCALLY
 lambda.choice <- "lasso.min"
 
-fig.2c.plot <- melt(fig.2c.corr.coefs,id.vars="test")
+fig.2c.plot <- melt(fig.tables$fig.2c.corr.coefs,id.vars="test")
 fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-fig.2c.plot$test = factor(fig.2c.plot$test, levels = as.factor(fig.2c.plot$test[order(-fig.2c.plot$value)]))
+#fig.2c.plot$test = factor(fig.2c.plot$test, levels = factor(fig.2c.plot$test[order(-fig.2c.plot$value)]))
 #^ Ran out of time, but I can simplify this later, which will probably rid the error.
 fig.2c <- fig.2c.plot
-#fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
 ## DONE UNCOMMENT
 
-num.Records <- as.data.frame(num.Records)
+wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
 # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
 #                          TestObs = as.numeric(TestObs))
 # Plot the % var explained
 
 ##UNCOMMENT IF RUNNING LOCALLY
-ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
+ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) +
+  geom_point(size = 5, aes(shape=variable, color=variable)) +
   weartals_theme +
   ylim(0,1) +
   scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
@@ -1189,8 +1244,8 @@ tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
 lasso.features.lambda.1se <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
 
 # store the results
-write.csv(fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
-write.csv(fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.csv(fig.tables$fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+write.csv(fig.tables$fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
 write.table(num.Records, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(num.Records.check, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
 write.table(lasso.features.lambda.manual, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
