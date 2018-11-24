@@ -2174,17 +2174,23 @@ gg_color_hue <- function(n) {
   hcl(h = hues, l = 65, c = 100)[1:n]
 }
 
+filter.nas = function(data, cols){
+  cols = cols[cols %in% names(data)]
+  if (length(cols) == 0)
+    return(data)
+  for (col in cols){
+    data = data[!is.na(data[,col]),]
+  }
+  data
+}
+
 # Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
-getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE, type="LM"){
-  # TODO: that's an ugly way to remove NAs but correct
-  corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, model_vars=c(), threshold_hi = 1e7, mixed=FALSE, type="LM", min_patients = 10){
+  # TODO: that's an ugly wayL to remove NAs but correct
+  corDf.tmp = filter.nas(corDf4A, c(test.name,model_vars,"Temp","Pulse","Systolic","Diastolic","Respiration"))
+  print(dim(corDf.tmp))
 
   ids = sort(table(corDf.tmp[[identifier]]))
   atleastafew = names(ids[(ids >= threshold) & (ids <= threshold_hi)]) # select patients with at least 10 tests
@@ -2193,7 +2199,7 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
   testids = c()
   
   # compute correlation if we have at least 10 patients 
-  if (length(atleastafew) > 10){
+  if (length(atleastafew) > min_patients){
     # Select the last observation from each patient who qualified (at least n0 obs)
     for (id in atleastafew){
       lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
@@ -2217,21 +2223,25 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
       corDf.tmp.rf[[identifier]] = as.factor(corDf.tmp.rf[[identifier]])
       
       # one-hot encoding
-      onehot = model.matrix(~ ANON_ID - 1, corDf.tmp.rf)
+      onehot = model.matrix(as.formula(paste0("~ ",identifier," - 1")), corDf.tmp.rf)
       colnames(onehot) = paste0("ID",1:ncol(onehot))
       corDf.tmp.rf = cbind(corDf.tmp.rf, onehot)
       corDf.tmp.rf[[identifier]] = NULL
 
       model = randomForest(as.formula(paste(test.name,"~ .")), data=corDf.tmp.rf[-testids,])
     }
-    else
-      model = lm(frm, data=corDf.tmp[-testids,],na.action = na.omit)
-    
-    if (type=="RF")
+    else{
+      corDf.tmp[[identifier]] = factor(corDf.tmp[[identifier]])
+      model = lm(frm, data=corDf.tmp[-testids,])
+    }
+
+    if (type=="RF"){
       preds = predict(model, newdata = corDf.tmp.rf[testids,])
-    else
+      print(preds)
+    }
+    else{
       preds = predict(model, newdata = corDf.tmp[testids,])
-    
+    }
 #    print(summary(model))
     
     # Correlation
@@ -2255,13 +2265,24 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
   list(res=res,n=length(testids))
 }
 
+correct.vars = function(data){
+  vars = list("HSCRP","TBIL","IGM","TGL","UALB","AG","AST","LDL")
+  for (var in vars){
+    data[,var] = gsub("<", "", data[,var])
+    data[,var] = as.numeric(data[,var])
+  }
+  data
+}
+
 # Loop over all tests and all models for the personal medels comparsion. Plot results
 generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntest = NULL){
   set.seed(0)
   if (dataset == "iPOP"){
     identifier = "iPOP_ID"
-    corDf4A = iPOPcorDf
+    corDf4A = wear
     test.names = allClin
+    
+    corDf4A = correct.vars(corDf4A)
   }
   else{
     identifier = "ANON_ID"
@@ -2275,30 +2296,37 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   res.tests = c()
   if (is.null(ntest))
     ntest = length(test.names)
+  min_patients = 10
   
   vits = c("Pulse","Temp","Systolic","Diastolic","Respiration")
   
   for (test.name in test.names[1:ntest]){
     models = list()
-    
-    # population vitals model
-    models[["vitals"]] = paste(vits, collapse = " + ")
-    
-    # population vitals + personal intercept model
-    models[["vitals + personal mean"]] = paste0(identifier," + ",paste(vits, collapse = " + "))
-    
-    # population vitals + personal intercept model
-    models[["vitals + personal mean and slope"]] = paste(models[["vitals + personal mean"]]," + ",
-    #    "(Pulse + Temp | ANON_ID)") 
-      "(Temp + Pulse + Systolic + Diastolic + Respiration | ANON_ID)")
-    #  "Temp * ANON_ID + Pulse * ANON_ID + Systolic * ANON_ID + Diastolic * ANON_ID + Respiration * ANON_ID")
-    
-    # population vitals + personal intercept model
-    models[["personal mean"]] = paste0(identifier)
+    model_vars = c()
+    if (dataset == "iPOP"){
+      model_vars = names(wear)[57:563] #c("gsr_mean")
+      models[["vitals + personal mean"]] = paste(c(identifier, model_vars), collapse = " + ")
+      min_patients = 0
+    }
+    else
+    {
+      # population vitals model
+      models[["vitals"]] = paste(vits, collapse = " + ")
+      
+      # population vitals + personal intercept model
+      models[["vitals + personal mean"]] = paste0(identifier," + ",paste(vits, collapse = " + "))
+      
+      # population vitals + personal intercept model
+      models[["vitals + personal mean and slope"]] = paste(models[["vitals + personal mean"]]," + ",
+        "(Temp + Pulse + Systolic + Diastolic + Respiration | ANON_ID)")
+
+      # population vitals + personal intercept model
+      models[["personal mean"]] = paste0(identifier)
+    }
     
     res.tests  = c(res.tests, test.name)
     mdl = "vitals + personal mean"
-    model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi, mixed = FALSE, type = "RF")
+    model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], model_vars = model_vars,threshold_hi = threshold_hi, mixed = FALSE, type = "RF")
     res.values = c(res.values, model$res)
     res.models = c(res.models, paste(mdl,"(RF)"))
     res.n = c(res.n, model$n)
@@ -2307,7 +2335,7 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
       mixed = "vitals + personal mean and slope" == mdl
-      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], threshold_hi = threshold_hi, mixed = mixed)
+      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]], model_vars = model_vars,threshold_hi = threshold_hi, mixed = mixed)
       res.values = c(res.values, model$res)
       res.models = c(res.models, mdl)
       res.n = c(res.n, model$n)
@@ -2327,14 +2355,15 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
     theme(text = element_text(size=14))
   ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
   print(pp)
-  write.table(res, file=paste0("data/Figure-4A-",dataset,".csv"))
+  write.csv(res, file=paste0("data/Figure-4A-",dataset,".csv"))
   res
 }
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
 #res = generate4A("30k",threshold = 50, cap = 500)
-res = generate4A("30k",threshold = 50, cap = 500)
+res = generate4A("iPOP",threshold = 5, cap = 50, ntest=2)
+res = generate4A("30k",threshold = 50, cap = 50, ntest=20)
 
 res = res[order(as.numeric(row.names(res))),]
 res$model = as.character(res$model)
