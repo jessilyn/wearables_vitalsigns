@@ -24,6 +24,7 @@ require(fasttime) #fastPOSIXct
 require(lubridate)
 library(tidyr)
 require(zoo) #rollapply
+library("parallel")
 
 source("ggplot-theme.R") # just to make things look nice
 
@@ -47,6 +48,16 @@ findOutlier <- function(data, cutoff = 2) {
     which(d > cutoff * s)
   }, data, sds)
   result
+}
+
+filter.nas = function(data, cols){
+  cols = cols[cols %in% names(data)]
+  if (length(cols) == 0)
+    return(data)
+  for (col in cols){
+    data = data[!is.na(data[,col]),]
+  }
+  data
 }
 
 fastDate <- function(x, tz=NULL)
@@ -574,7 +585,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 # use.Troubleshoot.mode - choose for during troubleshooting
 # use.Demog - choose whether Demographics in models (supply TRUE or FALSE)
 # use.iPOP - choose whether iPOP_ID variable is used (supply TRUE or FALSE)
-cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FALSE){
+cVS.lm = function(data, use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FALSE, npatients = NULL){
   if (use.Troubleshoot.mode){
      top.names <- c("HGB", "TGL")
   }
@@ -588,7 +599,7 @@ cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FA
   
   rsq.all = c()
   pct.var.all = c()
-  iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
+  iPOPcorDf.demo <- merge(data, iPOPdemographics[1:4], by="iPOP_ID")
   iPOPcorDf.demo$Gender <- as.factor(iPOPcorDf.demo$Gender)
   iPOPcorDf.demo$Ethn <- as.factor(iPOPcorDf.demo$Ethn)
   
@@ -606,15 +617,15 @@ cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FA
   #store names as vitals.variables
   #vitals.variables <- c("Pulse", "Temp", "AgeIn2016", names(gender), names(ethn)) # "BMI", "systolic", "diastolic", 
   if(use.Demog){
-    vitals.variables <- c("Pulse", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
+    vitals.variables <- c("Pulse", "systolic", "diastolic", "Temp", "AgeIn2016", "Gender", "Ethn") # "BMI", "systolic", "diastolic", 
   } else if(!use.Demog) {
-    vitals.variables <- c("Pulse", "Temp") #
+    vitals.variables <- c("Pulse", "Temp", "systolic", "diastolic") #
   }
   if (use.iPOP){
     vitals.variables = c(vitals.variables,"iPOP_ID")
   }
   
-  patients = unique(iPOPcorDf$iPOP_ID)
+  patients = unique(data$iPOP_ID)
   
   res = list()
   res$val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
@@ -623,39 +634,45 @@ cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FA
   # p.value<-list()  # TODO: decide if this is a relevant parameter to collect - I think not...?
   res$num.true <- rep(list(NA),length(top.names)) # number of observations per individual per clinic test
   
-  for (k in 1:length(patients)){
-    cat("Patient",patients[k],"\n") # LOO
+  if (is.null(npatients))
+    npatients = length(patients)
   
-    train <- patients[patients != patients[k]]
-    test <- patients[patients == patients[k]]
-    train.ids = iPOPcorDf.demo$iPOP_ID %in% train
-    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-    
-    if (use.iPOP){
-      test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-      test.idx = which(test.ids)
-      
-      nfrac = length(test.idx)
-      if (nfrac < 6)
-        next
-      nfrac = floor(length(test.idx)*0.2)
-      
-      test.idx = sample(test.idx)[1:nfrac]
-      test.ids = (1:length(test.ids) %in% test.idx)
-      train.ids = !test.ids
-    }
-    
-    iPOPcorDf.demo.tmp = iPOPcorDf.demo
-    if (use.iPOP){
-      iPOPcorDf.demo.tmp$iPOP_ID = 1*(iPOPcorDf.demo.tmp$iPOP_ID == patients[k])
-    }
-
-    dat.train.unsorted = iPOPcorDf.demo.tmp[train.ids, ] # subset input data by training set
-    dat.train = dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
-    dat.test = iPOPcorDf.demo.tmp[test.ids, ] # subset input data by testing set
-    
+  #patients.test = c("1636-69-001","1636-70-1005","1636-70-1008","1636-70-1014")
+  patients.test = patients[1:npatients]
+  
+  for (pat in patients.test[1:npatients]){
+    cat("Patient",pat,"\n") # LOO
     for (l in 1:length(top.names)){
-      cat("Test",top.names[l],"\n")
+       
+      train <- patients[patients != pat]
+      test <- patients[patients == pat]
+      train.ids = iPOPcorDf.demo$iPOP_ID %in% train
+      test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+      
+      if (use.iPOP){
+        test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+        test.idx = which(test.ids)
+        
+        nfrac = length(test.idx)
+        if (nfrac < 6)
+          next
+        nfrac = floor(length(test.idx)*0.2)
+        
+        test.idx = sample(test.idx)[1:nfrac]
+        test.ids = (1:length(test.ids) %in% test.idx)
+        train.ids = !test.ids
+      }
+      
+      iPOPcorDf.demo.tmp = iPOPcorDf.demo
+      if (use.iPOP){
+        iPOPcorDf.demo.tmp$iPOP_ID = 1*(iPOPcorDf.demo.tmp$iPOP_ID == pat)
+      }
+  
+      dat.train.unsorted = iPOPcorDf.demo.tmp[train.ids, ] # subset input data by training set
+      dat.train = dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
+      dat.test = iPOPcorDf.demo.tmp[test.ids, ] # subset input data by testing set
+    
+        cat("Test",top.names[l],"\n")
       # create training set
       x.train <- dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
       x.train <- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
@@ -710,24 +727,26 @@ cVS.lm = function(use.Troubleshoot.mode = TRUE, use.Demog = FALSE, use.iPOP = FA
 # CODE FOR LASSO, RF
 ####
 
-wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP = FALSE, npatients = NULL){
+wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP = FALSE, npatients = NULL){
   if (use.Troubleshoot.mode){
     top.names <- c("HGB", "TGL")
   }
   #clean wear data frame
-  wear[,8:length(names(wear))] <- apply(
-    wear[,8:length(names(wear))], 2,
+  data[,8:length(names(data))] <- apply(
+    data[,8:length(names(data))], 2,
     function(x) as.numeric(as.character(x)))
-  wear$Gender <- as.factor(wear$Gender)
-  wear$Ethn <- as.factor(wear$Ethn)
+  data$Gender <- as.factor(data$Gender)
+  data$Ethn <- as.factor(data$Ethn)
   wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
+
   if (use.iPOP){
     wear.variables = c(wear.variables,"iPOP_ID")
   }
   
   #change gender and ethnicity to dummy variables
-  gender <- data.frame(model.matrix( ~ Gender - 1, data=wear))
-  ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear))
+  gender <- data.frame(model.matrix( ~ Gender - 1, data=data))
+  ethn <- data.frame(model.matrix( ~ Ethn - 1, data=data))
   
   #remove the least populated gender and ethnicity (NCOL-1)
   cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
@@ -737,8 +756,8 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
   #store names as demo.variables
   demo.variables <- c("AgeIn2016", names(gender), names(ethn))
   
-  #cbind new gender and ethnicity variables to "wear"
-  wear <- cbind(wear,gender,ethn)
+  #cbind new gender and ethnicity variables to "data"
+  data <- cbind(data,gender,ethn)
   
   res = list()
   res$val.true <- rep(list(NA),length(top.names)) # list of vectors to store true values; each vector is for 1 clinical lab
@@ -772,39 +791,49 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
   if (is.null(npatients))
     npatients = length(patients)
   
-  for (k in 1:npatients){
-    cat("Patient",patients[k],"\n") # LOO
-    
-    train <- patients[patients != patients[k]]
-    test <- patients[patients == patients[k]]
-    train.ids = iPOPcorDf.demo$iPOP_ID %in% train
-    test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-    
-    if (use.iPOP){
-      test.ids = iPOPcorDf.demo$iPOP_ID %in% test
-      test.idx = which(test.ids)
-      
-      nfrac = length(test.idx)
-      if (nfrac < 6)
-        next
-      nfrac = floor(length(test.idx)*0.2)
-      
-      test.idx = sample(test.idx)[1:nfrac]
-      test.ids = (1:length(test.ids) %in% test.idx)
-      train.ids = !test.ids
-    }
-    
-    wear.tmp = wear
-    if (use.iPOP){
-      wear.tmp$iPOP_ID = 1*(wear.tmp$iPOP_ID == patients[k])
-    }
-    
-    
-    dat.train.unsorted <- wear.tmp[ train.ids, ] # subset input data by training set
-    dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
-    dat.test<-wear.tmp[ test.ids, ] # subset input data by testing set
-    
+  #patients.test = c("1636-69-001") #,"1636-70-1008")
+  #patients.test = c("1636-69-001","1636-70-1005","1636-70-1008","1636-70-1014")
+  patients.test = patients[1:npatients]
+  
+  k = 0
+  for (pat in patients.test){
+    k=k+1
+    cat("Patient",pat,"\n") # LOO
+
     for (l in 1:length(top.names)){
+      wear.tmp = data
+      if (use.iPOP){
+        wear.tmp = filter.nas(wear.tmp, c(top.names[l], wear.variables, demo.variables))
+        patients = wear.tmp$iPOP_ID
+      }
+      
+      train <- patients[patients != pat]
+      test <- patients[patients == pat]
+      train.ids = wear.tmp$iPOP_ID %in% train
+      test.ids = wear.tmp$iPOP_ID %in% test
+      
+      if (use.iPOP){
+        test.ids = iPOPcorDf.demo$iPOP_ID %in% test
+        test.idx = which(test.ids)
+        
+        nfrac = length(test.idx)
+        if (nfrac < 6)
+          next
+        nfrac = floor(length(test.idx)*0.2)
+        
+        test.idx = sample(test.idx)[1:nfrac]
+        test.ids = (1:length(test.ids) %in% test.idx)
+        train.ids = !test.ids
+
+        wear.tmp$iPOP_ID = 1*(wear.tmp$iPOP_ID == pat)
+      }
+      
+      
+      
+      dat.train.unsorted <- wear.tmp[ train.ids, ] # subset input data by training set
+      dat.train <- dat.train.unsorted[order(dat.train.unsorted$iPOP_ID),] #order by iPOP_ID in order to supply correct nfolds arg to glmnet
+      dat.test<-wear.tmp[ test.ids, ] # subset input data by testing set
+    
       cat("Test",top.names[l],"\n")
       x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID", top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
@@ -814,9 +843,9 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
       }
       
       # if(!NROW(x.train)){ #if x.train is empty
-      #   print(paste0("The x.train data was empty for ",patients[k],"'s ",top.names[l]," test."))
+      #   print(paste0("The x.train data was empty for ",pat,"'s ",top.names[l]," test."))
       # } else {
-      #   print(paste0("The x.train data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
+      #   print(paste0("The x.train data for ",pat,"'s ",top.names[l]," test had ",NROW(x.train)," observations."))
       # }
       predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(wear.variables, demo.variables)]) # later add in demographics
       outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
@@ -825,13 +854,13 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
       x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
       x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
       # if(!NROW(x.test)){ #if x.test is empty
-      #   print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
+      #   print(paste0("The x.test data was empty for ",pat,"'s ",top.names[l]," test."))
       # } else {
-      #   print(paste0("The x.test data for ",patients[k],"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
+      #   print(paste0("The x.test data for ",pat,"'s ",top.names[l]," test had ",NROW(x.test)," observations."))
       # }
       res$val.true[[l]] = c(res$val.true[[l]], x.test[,top.names[l]]) # true values of left out person
       
-      res$num.Records <- rbind(res$num.Records, c(IPOP_ID=patients[k], test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
+      res$num.Records <- rbind(res$num.Records, c(IPOP_ID=pat, test=top.names[l], TrainingObs=length(outcome), TestObs=length(x.test[,top.names[l]])))
       
       rf.variables.to.use = c(wear.variables, demo.variables) # rf variables (use all)
       
@@ -868,21 +897,21 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
       
       tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.manual)),
                         "cv.run"=rep(k,length(lasso.variables.lambda.manual)),
-                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.manual)),
+                        "left.out.person"=rep(pat,length(lasso.variables.lambda.manual)),
                         "lasso.feature"=names(lasso.variables.lambda.manual),
                         "lasso.coef.value"=as.numeric(lasso.variables.lambda.manual))
       res$lasso.features.lambda.manual <- rbind(res$lasso.features.lambda.manual,tmp)
       
       tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.min)),
                         "cv.run"=rep(k,length(lasso.variables.lambda.min)),
-                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.min)),
+                        "left.out.person"=rep(pat,length(lasso.variables.lambda.min)),
                         "lasso.feature"=names(lasso.variables.lambda.min),
                         "lasso.coef.value"=as.numeric(lasso.variables.lambda.min))
       res$lasso.features.lambda.min <- rbind(res$lasso.features.lambda.min,tmp)
       
       tmp <- data.frame("test"=rep(top.names[l],length(lasso.variables.lambda.1se)),
                         "cv.run"=rep(k,length(lasso.variables.lambda.1se)),
-                        "left.out.person"=rep(patients[k],length(lasso.variables.lambda.1se)),
+                        "left.out.person"=rep(pat,length(lasso.variables.lambda.1se)),
                         "lasso.feature"=names(lasso.variables.lambda.1se),
                         "lasso.coef.value"=as.numeric(lasso.variables.lambda.1se))
       res$lasso.features.lambda.1se <- rbind(res$lasso.features.lambda.1se,tmp)
@@ -964,7 +993,7 @@ wVS.models = function(use.Troubleshoot.mode = FALSE, use.Demog = FALSE, use.iPOP
   
       tmp <- data.frame("test"=rep(top.names[l],length(rf.features.list)),
                         "cv.run"=rep(k,length(rf.features.list)),
-                        "left.out.person"=rep(patients[k],length(rf.features.list)),
+                        "left.out.person"=rep(pat,length(rf.features.list)),
                         "rf.feature"=unlist(dimnames(rf.features.list)),
                         "rf.coef.value"=as.numeric(rf.features.list))
       res$rf.features <- rbind(res$rf.features,tmp)
@@ -1193,55 +1222,91 @@ combineResults = function(cVS.lm, wVS.results, use.Troubleshoot.mode = FALSE){
   list(fig.2c.corr.coefs = fig.2c.corr.coefs, fig.2c.df = fig.2c.df)
 }
 
-cVS.results = cVS.lm(use.Troubleshoot.mode = FALSE, use.iPOP = TRUE)
-wVS.results = wVS.models(use.Troubleshoot.mode = FALSE, use.iPOP = TRUE, npatients = 5)
-fig.tables = combineResults(cVS.lm,wVS.results, use.Troubleshoot.mode = FALSE)
+bootstrap.dataset = function(data){
+  n = nrow(data)
+  data[sample(n, replace = TRUE),]
+}
 
-##UNCOMMENT IF RUNNING LOCALLY
-lambda.choice <- "lasso.min"
+plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
+  fig.2c.plot <- melt(fig.tables$fig.2c.corr.coefs,id.vars="test")
+  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+  
+  tmp = fig.2c.plot[fig.2c.plot$variable == "vitals",]
+  lvls = as.character(tmp$test[order(-tmp$value)])
+  
+  fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
+  #^ Ran out of time, but I can simplify this later, which will probably rid the error.
+  fig.2c <- fig.2c.plot
+  fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+  ## DONE UNCOMMENT
+  
+  wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
+  # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
+  #                          TestObs = as.numeric(TestObs))
+  # Plot the % var explained
+  
+  ##UNCOMMENT IF RUNNING LOCALLY
+  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) +
+    geom_point(size = 5, aes(shape=variable, color=variable)) +
+    weartals_theme +
+    ylim(0,1) +
+    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                         labels=c("LM vitals", "LASSO", "RF")) +
+    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                         labels=c("LM vitals", "LASSO", "RF")) +
+    labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+  ## DONE UNCOMMENT
+  
+  fig.tables
+}
 
-fig.2c.plot <- melt(fig.tables$fig.2c.corr.coefs,id.vars="test")
-fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-#fig.2c.plot$test = factor(fig.2c.plot$test, levels = factor(fig.2c.plot$test[order(-fig.2c.plot$value)]))
-#^ Ran out of time, but I can simplify this later, which will probably rid the error.
-fig.2c <- fig.2c.plot
-fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
-## DONE UNCOMMENT
+post.process.results = function(wVS.results)
+{
+  ##UNCOMMENT IF RUNNING LOCALLY
+  lambda.choice <- "lasso.min"
+  
+  ## calculate correlation coefficients and pct var explained by the models (lambda min)
+  
+  # remove coefficients associated with participants that had zero x.test data
+  wVS.results$num.Records <- data.frame(wVS.results$num.Records)
+  cache <- wVS.results$num.Records[wVS.results$num.Records$TestObs=="0",]
+  cache <- cache[,c(2,1)] #list of clin tests and iPOPs that had zero x.test data
+  names(cache) <- c("test","left.out.person")
+  if (is.null(nrow(cache$delete)))
+    return()
+  cache$delete <- 1
+  tmp <- merge(wVS.results$lasso.features.lambda.manual,cache,all=TRUE)
+  tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
+  wVS.results$lasso.features.lambda.manual <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
+  tmp <- merge(wVS.results$lasso.features.lambda.min,cache,all=TRUE)
+  tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
+  wVS.results$lasso.features.lambda.min <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
+  tmp <- merge(wVS.results$lasso.features.lambda.1se,cache,all=TRUE)
+  tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
+  wVS.results$lasso.features.lambda.1se <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
+}
 
-wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
-# num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
-#                          TestObs = as.numeric(TestObs))
-# Plot the % var explained
+bootstrap.experiment = function(clin, wear, debug = FALSE, personalized = FALSE, demographics = FALSE, bootstrap = FALSE){
+  if (bootstrap){
+    clin = bootstrap.dataset(clin)
+    wear = bootstrap.dataset(wear)
+  }
+  
+  npatients = NULL
+  if (debug)
+    npatients = 5
 
-##UNCOMMENT IF RUNNING LOCALLY
-ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) +
-  geom_point(size = 5, aes(shape=variable, color=variable)) +
-  weartals_theme +
-  ylim(0,1) +
-  scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                       labels=c("LM vitals", "LASSO", "RF")) +
-  labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
-## DONE UNCOMMENT
+  cVS.results = cVS.lm(clin, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
+  wVS.results = wVS.models(wear, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
+  fig.tables = combineResults(cVS.lm,wVS.results)
+  plot.comparison(fig.tables)
+  post.process.results(wVS.results)
+  
+  list(cVS.results = cVS.results, wVS.results = wVS.results, fig.tables = fig.tables)
+}
 
-## calculate correlation coefficients and pct var explained by the models (lambda min)
+expepriments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE) }, mc.cores = 6)
 
-# remove coefficients associated with participants that had zero x.test data
-num.Records <- data.frame(num.Records)
-cache <- num.Records[num.Records$TestObs=="0",]
-cache <- cache[,c(2,1)] #list of clin tests and iPOPs that had zero x.test data
-names(cache) <- c("test","left.out.person")
-cache$delete <- 1
-tmp <- merge(lasso.features.lambda.manual,cache,all=TRUE)
-tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
-lasso.features.lambda.manual <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
-tmp <- merge(lasso.features.lambda.min,cache,all=TRUE)
-tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
-lasso.features.lambda.min <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
-tmp <- merge(lasso.features.lambda.1se,cache,all=TRUE)
-tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
-lasso.features.lambda.1se <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
 
 # store the results
 write.csv(fig.tables$fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
@@ -2172,16 +2237,6 @@ summary(res)
 gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
-filter.nas = function(data, cols){
-  cols = cols[cols %in% names(data)]
-  if (length(cols) == 0)
-    return(data)
-  for (col in cols){
-    data = data[!is.na(data[,col]),]
-  }
-  data
 }
 
 # Compute stats of an LM model of a certain test given the coefs
