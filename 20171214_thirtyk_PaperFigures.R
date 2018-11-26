@@ -1049,7 +1049,7 @@ wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, us
 # emp_2side_pval(emp_quant, -31.15)
 
 
-combineResults = function(cVS.lm, wVS.results, use.Troubleshoot.mode = FALSE){ 
+combineResults = function(cVS.results, wVS.results, use.Troubleshoot.mode = FALSE){ 
   if (use.Troubleshoot.mode){
     top.names <- c("HGB", "TGL")
   }
@@ -1227,39 +1227,6 @@ bootstrap.dataset = function(data){
   data[sample(n, replace = TRUE),]
 }
 
-plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
-  fig.2c.plot <- melt(fig.tables$fig.2c.corr.coefs,id.vars="test")
-  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-  
-  tmp = fig.2c.plot[fig.2c.plot$variable == "vitals",]
-  lvls = as.character(tmp$test[order(-tmp$value)])
-  
-  fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
-  #^ Ran out of time, but I can simplify this later, which will probably rid the error.
-  fig.2c <- fig.2c.plot
-  fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
-  ## DONE UNCOMMENT
-  
-  wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
-  # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
-  #                          TestObs = as.numeric(TestObs))
-  # Plot the % var explained
-  
-  ##UNCOMMENT IF RUNNING LOCALLY
-  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=value, color = variable)) +
-    geom_point(size = 5, aes(shape=variable, color=variable)) +
-    weartals_theme +
-    ylim(0,1) +
-    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                         labels=c("LM vitals", "LASSO", "RF")) +
-    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                         labels=c("LM vitals", "LASSO", "RF")) +
-    labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
-  ## DONE UNCOMMENT
-  
-  fig.tables
-}
-
 post.process.results = function(wVS.results)
 {
   ##UNCOMMENT IF RUNNING LOCALLY
@@ -1288,24 +1255,81 @@ post.process.results = function(wVS.results)
 
 bootstrap.experiment = function(clin, wear, debug = FALSE, personalized = FALSE, demographics = FALSE, bootstrap = FALSE){
   if (bootstrap){
-    clin = bootstrap.dataset(clin)
-    wear = bootstrap.dataset(wear)
+    clin.boot = bootstrap.dataset(clin)
+    wear.boot = bootstrap.dataset(wear)
+  }
+  else {
+    clin.boot = clin
+    wear.boot = wear
   }
   
   npatients = NULL
   if (debug)
     npatients = 5
 
-  cVS.results = cVS.lm(clin, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
-  wVS.results = wVS.models(wear, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
-  fig.tables = combineResults(cVS.lm,wVS.results)
-  plot.comparison(fig.tables)
+  cVS.results = cVS.lm(clin.boot, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
+  wVS.results = wVS.models(wear.boot, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
+  fig.tables = combineResults(cVS.results,wVS.results)
   post.process.results(wVS.results)
   
   list(cVS.results = cVS.results, wVS.results = wVS.results, fig.tables = fig.tables)
 }
 
-expepriments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE) }, mc.cores = 6)
+combine.experiments = function(experiments){
+  res = list(fig.2c.corr.coefs = c(), fig.2c.df = c())
+  for (i in 1:length(experiments) ){
+    experiment = experiments[[i]]
+    coefs = data.frame(experiment$fig.tables$fig.2c.corr.coefs)
+    coefs$experiment = i
+    res$fig.2c.corr.coefs = rbind(res$fig.2c.corr.coefs, coefs)
+
+    df = data.frame(experiment$fig.tables$fig.2c.df)
+    df$experiment = i
+    res$fig.2c.df = rbind(res$fig.2c.df, df)
+  }
+  res
+}
+
+plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
+  fig.2c.plot <- gather(fig.tables$fig.2c.corr.coefs, variable, value, -test)
+  fig.2c.plot = fig.2c.plot[fig.2c.plot$variable!="experiment",]
+#  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
+  fig.2c.plot = group_by(fig.2c.plot,test,variable) %>% summarise(mean = mean(value), sd = sd(value))
+  
+  tmp = fig.2c.plot[fig.2c.plot$variable == "vitals",]
+  lvls = as.character(tmp$test[order(-tmp$mean)])
+  
+  fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
+  #^ Ran out of time, but I can simplify this later, which will probably rid the error.
+  fig.2c <- fig.2c.plot
+  fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+  ## DONE UNCOMMENT
+  
+  wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
+  # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
+  #                          TestObs = as.numeric(TestObs))
+  # Plot the % var explained
+  
+  ##UNCOMMENT IF RUNNING LOCALLY
+  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=mean, color = variable)) +
+    geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.1) +
+    geom_point(size = 5, aes(shape=variable, color=variable)) +
+    weartals_theme +
+    ylim(0,1) +
+    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                         labels=c("LM vitals", "LASSO", "RF")) +
+    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
+                         labels=c("LM vitals", "LASSO", "RF")) +
+    labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
+  ## DONE UNCOMMENT
+}
+
+experiments = mclapply(1:24, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) }, mc.cores = 6)
+fig.tables = combine.experiments(experiments)
+#fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
+#fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
+
+plot.comparison(fig.tables)
 
 
 # store the results
