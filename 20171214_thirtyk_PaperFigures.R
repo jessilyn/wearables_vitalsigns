@@ -1290,7 +1290,7 @@ combine.experiments = function(experiments){
   res
 }
 
-plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
+plot.comparison = function(fig.tables){
   fig.2c.plot <- gather(fig.tables$fig.2c.corr.coefs, variable, value, -test)
   fig.2c.plot = fig.2c.plot[fig.2c.plot$variable!="experiment",]
 #  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
@@ -1315,7 +1315,7 @@ plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
     geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.1) +
     geom_point(size = 5, aes(shape=variable, color=variable)) +
     weartals_theme +
-    ylim(0,1) +
+    ylim(0,0.75) +
     scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
                          labels=c("LM vitals", "LASSO", "RF")) +
     scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
@@ -1324,7 +1324,7 @@ plot.comparison = function(fig.tables, use.Troubleshoot.mode = TRUE){
   ## DONE UNCOMMENT
 }
 
-experiments = mclapply(1:24, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) }, mc.cores = 6)
+experiments = mclapply(1:30, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = TRUE, personalized = FALSE) }, mc.cores = 6)
 fig.tables = combine.experiments(experiments)
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
