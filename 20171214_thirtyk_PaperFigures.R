@@ -1291,6 +1291,8 @@ combine.experiments = function(experiments){
 }
 
 plot.comparison = function(fig.tables){
+  lambda.choice <- "lasso.min"
+  
   fig.2c.plot <- gather(fig.tables$fig.2c.corr.coefs, variable, value, -test)
   fig.2c.plot = fig.2c.plot[fig.2c.plot$variable!="experiment",]
 #  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
@@ -1305,7 +1307,7 @@ plot.comparison = function(fig.tables){
   fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
   ## DONE UNCOMMENT
   
-  wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
+  # wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
   # num.Records.2 <- transform(num.Records, TrainingObs = as.numeric(TrainingObs),
   #                          TestObs = as.numeric(TestObs))
   # Plot the % var explained
@@ -1315,7 +1317,7 @@ plot.comparison = function(fig.tables){
     geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.1) +
     geom_point(size = 5, aes(shape=variable, color=variable)) +
     weartals_theme +
-    ylim(0,0.75) +
+    ylim(0,1) +
     scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
                          labels=c("LM vitals", "LASSO", "RF")) +
     scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
@@ -1324,8 +1326,30 @@ plot.comparison = function(fig.tables){
   ## DONE UNCOMMENT
 }
 
-experiments = mclapply(1:30, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = TRUE, personalized = FALSE) }, mc.cores = 6)
+personal.mean.model = function(){
+  dset = wear
+  idvar = "iPOP_ID"
+  
+  for (test in allClin){
+    dset[,test] = as.numeric(gsub("<","",dset[,test]))
+    dset[,test] = as.numeric(gsub(">","",dset[,test]))
+  }
+  res = data.frame(test=NULL, error=NULL)
+  for (test in allClin){
+    sm = summary(lm(paste(test,"~",idvar),na.omit(dset[,c(idvar,test)])))
+    res = rbind(res, data.frame(test=test, error=sqrt(sm$adj.r.squared)))
+  }
+  res <- transform(res, test=reorder(test, -error) ) 
+  
+  ggplot(res, aes(x=test, y=error)) +
+    ylim(0,1) +
+    weartals_theme +
+    geom_point(size = 5)
+}
+
+experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) }, mc.cores = 6)
 fig.tables = combine.experiments(experiments)
+
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
 
