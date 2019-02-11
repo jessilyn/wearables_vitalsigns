@@ -1251,6 +1251,7 @@ post.process.results = function(wVS.results)
   tmp <- merge(wVS.results$lasso.features.lambda.1se,cache,all=TRUE)
   tmp <- tmp[which(is.na(tmp$delete)),] #remove rows selected for deletion
   wVS.results$lasso.features.lambda.1se <- tmp[,-which(names(tmp)=="delete")] #remove column called "delete"
+  wVS.results
 }
 
 bootstrap.experiment = function(clin, wear, debug = FALSE, personalized = FALSE, demographics = FALSE, bootstrap = FALSE){
@@ -1269,17 +1270,20 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, personalized = FALSE,
 
   cVS.results = cVS.lm(clin.boot, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
   wVS.results = wVS.models(wear.boot, use.Troubleshoot.mode = debug, use.iPOP = personalized, npatients = npatients, use.Demog = demographics)
-  fig.tables = combineResults(cVS.results,wVS.results)
-  post.process.results(wVS.results)
+  fig.tables = combineResults(cVS.results,wVS.results,use.Troubleshoot.mode = debug)
+#  wVS.results = post.process.results(wVS.results)
   
   list(cVS.results = cVS.results, wVS.results = wVS.results, fig.tables = fig.tables)
 }
 
-combine.experiments = function(experiments){
+combine.experiments = function(experiments,pernsonal){
   res = list(fig.2c.corr.coefs = c(), fig.2c.df = c())
   for (i in 1:length(experiments) ){
     experiment = experiments[[i]]
     coefs = data.frame(experiment$fig.tables$fig.2c.corr.coefs)
+    personal.coefs = personal[[i]][,1:2]
+    colnames(personal.coefs)[2] = "personal.mean"
+    coefs = merge(coefs, personal.coefs, by="test")
     coefs$experiment = i
     res$fig.2c.corr.coefs = rbind(res$fig.2c.corr.coefs, coefs)
 
@@ -1298,13 +1302,13 @@ plot.comparison = function(fig.tables){
 #  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
   fig.2c.plot = group_by(fig.2c.plot,test,variable) %>% summarise(mean = mean(value), sd = sd(value))
   
-  tmp = fig.2c.plot[fig.2c.plot$variable == "vitals",]
+  tmp = fig.2c.plot[fig.2c.plot$variable == "rf",]
   lvls = as.character(tmp$test[order(-tmp$mean)])
   
   fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
   #^ Ran out of time, but I can simplify this later, which will probably rid the error.
   fig.2c <- fig.2c.plot
-  fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by LM Vitals
+  #fig.2c <- fig.2c.plot[order(-fig.2c.plot[,3]),] # reorder by RF
   ## DONE UNCOMMENT
   
   # wVS.results$num.Records <- as.data.frame(wVS.results$num.Records)
@@ -1313,15 +1317,15 @@ plot.comparison = function(fig.tables){
   # Plot the % var explained
   
   ##UNCOMMENT IF RUNNING LOCALLY
-  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf"),], aes(x=test, y=mean, color = variable)) +
-    geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.1) +
-    geom_point(size = 5, aes(shape=variable, color=variable)) +
+  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf","personal.mean"),], aes(x=test, y=mean, color = variable)) +
+    geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.5)) +
+    geom_point(size = 3, aes(shape=variable, color=variable), position=position_dodge(width=0.5)) +
     weartals_theme +
     ylim(0,1) +
-    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                         labels=c("LM vitals", "LASSO", "RF")) +
-    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf"),
-                         labels=c("LM vitals", "LASSO", "RF")) +
+    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
+                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
+    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
+                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
     labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
   ## DONE UNCOMMENT
 }
@@ -1335,25 +1339,146 @@ personal.mean.model = function(){
     dset[,test] = as.numeric(gsub(">","",dset[,test]))
   }
   res = data.frame(test=NULL, error=NULL)
-  for (test in allClin){
-    sm = summary(lm(paste(test,"~",idvar),na.omit(dset[,c(idvar,test)])))
-    res = rbind(res, data.frame(test=test, error=sqrt(sm$adj.r.squared)))
+  
+  
+  patients = unique(wear$iPOP_ID)
+  for (patient in patients){
+    test.ids = dset$iPOP_ID %in% patient
+    test.idx = which(test.ids)
+    
+    nfrac = length(test.idx)
+    if (nfrac < 6)
+      next
+    nfrac = floor(length(test.idx)*0.2)
+    
+    test.idx = sample(test.idx)[1:nfrac]
+    test.ids = (1:length(test.ids) %in% test.idx)
+    train.ids = !test.ids
+
+    
+    for (test in allClin){
+      model.our = lm(paste(test,"~",idvar),na.omit(dset[train.ids,c(idvar,test)]))
+      model.null = lm(paste(test,"~ 1"),na.omit(dset[train.ids,c(idvar,test)]))
+      dset.test = na.omit(dset[test.ids,c(idvar,test)])
+      preds.our = predict(model.our, newdata = dset.test)
+      preds.null = predict(model.null, newdata = dset.test)
+      r.squared = max(0, 1 - sum((dset.test[,2] - preds.our)**2) / sum((dset.test[,2] - preds.null)**2))
+      
+      res = rbind(res, data.frame(test=test, error=sqrt(r.squared)))
+    }
   }
   res <- transform(res, test=reorder(test, -error) ) 
   
-  ggplot(res, aes(x=test, y=error)) +
-    ylim(0,1) +
-    weartals_theme +
-    geom_point(size = 5)
+  # ggplot(res, aes(x=test, y=error)) +
+  #   ylim(0,1) +
+  #   weartals_theme +
+  #   geom_point(size = 5)
+  res = na.omit(res) %>% group_by(test) %>% summarise_all(funs(mean,sd))
+#  res <- transform(res, test=reorder(test, -mean) ) 
+  res
 }
 
-experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) }, mc.cores = 6)
-fig.tables = combine.experiments(experiments)
+plot_tree <- function(final_model, 
+                      tree_num) {
+  
+  # get tree by index
+  tree <- randomForest::getTree(final_model, 
+                                k = tree_num, 
+                                labelVar = TRUE) %>%
+  tibble::rownames_to_column() %>%
+  # make leaf split points to NA, so the 0s won't get plotted
+    mutate(`split point` = ifelse(is.na(`split var`), NA, `split point`)) %>%
+    mutate(`prediction` = ifelse(is.na(`split var`), `prediction`, NA))
+  
+  tree[["split point"]][is.na(tree[["split var"]])] = NA
+  
+  # prepare data frame for graph
+  graph_frame <- data.frame(from = rep(tree$rowname, 2),
+                            to = c(tree$`left daughter`, tree$`right daughter`))
+  
+  # convert to graph and delete the last node that we don't want to plot
+  graph <- graph_from_data_frame(graph_frame) %>%
+    delete_vertices("0")
+  
+  # set node labels
+  V(graph)$node_label <- gsub("_", " ", as.character(tree$`split var`))
+  V(graph)$leaf_label <- format(tree$prediction, digits = 4)
+  V(graph)$leaf_label[is.na(tree$prediction)] = NA
+  V(graph)$split <- format(tree[["split point"]],digits = 2)
+  V(graph)$split[is.na(tree[["split point"]])] <- NA
+  print(tree[["split point"]])
+  print(V(graph)$split)
+  
+  # plot
+  plot <- ggraph(graph, 'dendrogram') + 
+    theme_bw() +
+    geom_edge_link() +
+    geom_node_point() +
+    geom_node_text(aes(label = node_label), na.rm = TRUE, vjust = -0.5, repel = TRUE) +
+    geom_node_label(aes(label = split), vjust = 1.5, na.rm = TRUE, fill = "white") +
+    geom_node_label(aes(label = leaf_label, fill = leaf_label),  vjust=1.15, na.rm = TRUE,
+                    colour = "white", fontface = "bold", show.legend = FALSE) +
+    theme(panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.background = element_blank(),
+          plot.background = element_rect(fill = "white"),
+          panel.border = element_blank(),
+          axis.line = element_blank(),
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          plot.title = element_text(size = 18))
+  
+  print(plot)
+}
+
+library(dplyr)
+install.packages(c("ggraph","igraph"))
+library(ggraph)
+library(igraph)
+demo_rf = function(){
+  wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
+  data = na.omit(wear[,c("HGB",wear.variables)])
+  frm = paste0("HGB ~ ",paste(wear.variables,collapse=" + "))
+
+  model = randomForest(as.formula(frm), data = data, importance=TRUE, proximity=TRUE, maxnodes=20)
+
+  plot_tree(model,2)
+}
+demo_rf()
+
+personal = mclapply(1:6, function(x) { personal.mean.model() })
+
+experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) }, mc.cores = 6)
+fig.tables = combine.experiments(experiments,personal)
+#save(experiments,file="data/experiments-ipop-6.Rda")
+#save(personal,file="data/personal-ipop-6.Rda")
 
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
 
 plot.comparison(fig.tables)
+results = fig.tables$fig.2c.corr.coefs
+results$diff = results$rf - results$personal.mean
+results = results[,c("test","diff")]
+results = results %>% group_by(test) %>% summarise_all(funs(mean,sd))
+lvls = as.character(results$test[order(-results$mean)])
+results$test = factor(results$test, levels = lvls)
+
+ggplot(results, aes(x=test, y=mean)) +
+  geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.3, position=position_dodge(width=0.5)) +
+  weartals_theme +
+   geom_hline(yintercept=0, linetype="dashed") +
+   geom_point(size = 5)
+
+allClin[22]
+tvp = data.frame(predicted=experiments[[1]]$wVS.results$rf.val.pred[[22]], true=experiments[[1]]$wVS.results$val.true[[22]])
+ggplot(tvp, aes(x=true, y=predicted)) +
+  weartals_theme +
+  geom_point(size = 5)
 
 
 # store the results
