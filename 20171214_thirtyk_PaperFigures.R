@@ -1514,6 +1514,38 @@ plt
 ggsave("hct-true-vs-pred.png",plt,width = 6,height = 5)
 
 
+
+# Build a RF HCT model for "1636-69-001", plot R^2 over time
+varyingR2 = function(){
+
+wear.tmp = wear
+
+patients = unique(wear.tmp$iPOP_ID)
+#onehot = t(simplify2array(lapply(wear.tmp$iPOP_ID, FUN = function(x){x == patients})))
+#colnames(onehot) = paste("p",patients,sep="")
+
+wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+wear.tmp = wear.tmp[,c("iPOP_ID", "Clin_Result_Date", "HCT",wear.variables)]
+#wear.tmp = cbind(wear.tmp, onehot)
+wear.tmp = na.omit(wear.tmp)
+
+test.patient = patients[1]
+test = wear.tmp$iPOP_ID == test.patient
+wear.ids = wear.tmp[,c(1,2)]
+wear.tmp = wear.tmp[,-c(1,2)]
+model = randomForest(wear.tmp[!test,-1],wear.tmp[!test,1])
+preds = predict(model,newdata = wear.tmp[test,-1])
+dates = wear.ids[test,]
+plot( sqrt((preds - wear.tmp[test,1])**2 / mean(wear.tmp[,1]**2)) )
+}
+
+# number of HCT observations per person
+wear.tmp = wear
+wear.tmp = wear.tmp[,c("iPOP_ID", "HCT", wear.variables[153])]
+wear.tmp = wear.tmp[wear.tmp$iPOP_ID == "1636-69-001",]
+wear.tmp = na.omit(wear.tmp)
+dim(na.omit(wear.tmp))
+
 # store the results [Now just save the entire "experiments" object]
 # write.csv(fig.tables$fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
 # write.csv(fig.tables$fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
