@@ -28,9 +28,18 @@ library("parallel")
 
 source("ggplot-theme.R") # just to make things look nice
 
+library(RColorBrewer)
+myColors <- c("peachpuff2", "lightskyblue3", "firebrick", "mediumpurple4", "sandybrown", "palegreen4", "salmon")
+
 if(!dir.exists("plots")) dir.create("plots")
 
 # FUNCTIONS
+# Get ggplot colors
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt <- quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
   H <- 1.5 * IQR(x, na.rm = na.rm)
@@ -738,7 +747,7 @@ wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, us
   data$Gender <- as.factor(data$Gender)
   data$Ethn <- as.factor(data$Ethn)
   wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-  wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
+  #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
 
   if (use.iPOP){
     wear.variables = c(wear.variables,"iPOP_ID")
@@ -804,7 +813,7 @@ wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, us
       wear.tmp = data
       if (use.iPOP){
         wear.tmp = filter.nas(wear.tmp, c(top.names[l], wear.variables, demo.variables))
-        patients = wear.tmp$iPOP_ID
+        patients = unique(wear.tmp$iPOP_ID)
       }
       
       train <- patients[patients != pat]
@@ -1302,7 +1311,7 @@ plot.comparison = function(fig.tables){
 #  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
   fig.2c.plot = group_by(fig.2c.plot,test,variable) %>% summarise(mean = mean(value), sd = sd(value))
   
-  tmp = fig.2c.plot[fig.2c.plot$variable == "rf",]
+  tmp = fig.2c.plot[fig.2c.plot$variable == "personal.mean",]
   lvls = as.character(tmp$test[order(-tmp$mean)])
   
   fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
@@ -1317,15 +1326,16 @@ plot.comparison = function(fig.tables){
   # Plot the % var explained
   
   ##UNCOMMENT IF RUNNING LOCALLY
-  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf","personal.mean"),], aes(x=test, y=mean, color = variable)) +
-    geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.5)) +
-    geom_point(size = 3, aes(shape=variable, color=variable), position=position_dodge(width=0.5)) +
+  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf","rf.pers","personal.mean"),], aes(x=test, y=mean, color = variable)) +
+    geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.7)) +
+    geom_point(size = 3, position=position_dodge(width=0.7)) + #, aes(shape=variable)
     weartals_theme +
     ylim(0,1) +
-    scale_shape_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
-                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
-    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
-                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
+    scale_color_manual(values=gg_color_hue(5)[c(3,1,2,5,4)]) +
+#    scale_shape_manual(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
+#                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
+#    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
+#                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
     labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
   ## DONE UNCOMMENT
 }
@@ -1358,6 +1368,7 @@ personal.mean.model = function(){
     
     for (test in allClin){
       model.our = lm(paste(test,"~",idvar),na.omit(dset[train.ids,c(idvar,test)]))
+      
       model.null = lm(paste(test,"~ 1"),na.omit(dset[train.ids,c(idvar,test)]))
       dset.test = na.omit(dset[test.ids,c(idvar,test)])
       preds.our = predict(model.our, newdata = dset.test)
@@ -1435,32 +1446,49 @@ plot_tree <- function(final_model,
 }
 
 library(dplyr)
-install.packages(c("ggraph","igraph"))
 library(ggraph)
 library(igraph)
 demo_rf = function(){
   wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
   #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
-  data = na.omit(wear[,c("HGB",wear.variables)])
-  frm = paste0("HGB ~ ",paste(wear.variables,collapse=" + "))
+  data = na.omit(wear[,c("HCT",wear.variables)])
+  frm = paste0("HCT ~ ",paste(wear.variables,collapse=" + "))
 
   model = randomForest(as.formula(frm), data = data, importance=TRUE, proximity=TRUE, maxnodes=20)
 
   plot_tree(model,2)
 }
-demo_rf()
+plt = demo_rf()
+ggsave("hct-rf.png",plt,width = 12,height = 5)
 
-personal = mclapply(1:6, function(x) { personal.mean.model() })
+personal = mclapply(1:6, function(x) { personal.mean.model() }, mc.cores = 6)
 
-experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) }, mc.cores = 6)
+experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = FALSE, personalized = TRUE) }, mc.cores = 6)
+experiments.nopers = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) }, mc.cores = 6)
+
 fig.tables = combine.experiments(experiments,personal)
-#save(experiments,file="data/experiments-ipop-6.Rda")
-#save(personal,file="data/personal-ipop-6.Rda")
+fig.tables.pers = combine.experiments(experiments.pers,personal)
+
+colnames(fig.tables.pers$fig.2c.corr.coefs)[6]="rf.pers"
+colnames(fig.tables.pers$fig.2c.df)[c(6,10,14)] = c("rf.pers","num.obs.rf.pers","p.val.rf.pers")
+
+fig.tables$fig.2c.corr.coefs = merge(fig.tables$fig.2c.corr.coefs, fig.tables.pers$fig.2c.corr.coefs[,c("test","rf.pers")])
+fig.tables$fig.2c.df = merge(fig.tables$fig.2c.df, fig.tables.pers$fig.2c.df[,c("test","rf.pers","num.obs.rf.pers","p.val.rf.pers")])
+
+# Save experiments
+save(experiments.pers, experiments, file="data/experiments-ipop-6.Rda")
+save(personal,file="data/personal-ipop-6.Rda")
+
+#load("data/experiments-ipop-6.Rda")
+#load("data/personal-ipop-6.Rda")
 
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
 
-plot.comparison(fig.tables)
+plt = plot.comparison(fig.tables)
+plt
+
+ggsave("iPOP-wear-model-comparison.png",width=20,height=5)
 results = fig.tables$fig.2c.corr.coefs
 results$diff = results$rf - results$personal.mean
 results = results[,c("test","diff")]
@@ -1474,22 +1502,27 @@ ggplot(results, aes(x=test, y=mean)) +
    geom_hline(yintercept=0, linetype="dashed") +
    geom_point(size = 5)
 
-allClin[22]
-tvp = data.frame(predicted=experiments[[1]]$wVS.results$rf.val.pred[[22]], true=experiments[[1]]$wVS.results$val.true[[22]])
-ggplot(tvp, aes(x=true, y=predicted)) +
+cols = gg_color_hue(3)
+testId = 29
+allClin[testId]
+tvp = data.frame(predicted=experiments[[3]]$wVS.results$rf.val.pred[[testId]], true=experiments[[3]]$wVS.results$val.true[[testId]])
+plt = ggplot(tvp, aes(x=true, y=predicted)) +
   weartals_theme +
-  geom_point(size = 5)
+  geom_abline(intercept = 0, slope = 1) +
+  geom_point(size = 3)
+plt
+ggsave("hct-true-vs-pred.png",plt,width = 6,height = 5)
 
 
-# store the results
-write.csv(fig.tables$fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
-write.csv(fig.tables$fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
-write.table(num.Records, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(num.Records.check, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.manual, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.1se, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(lasso.features.lambda.min, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
-write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# store the results [Now just save the entire "experiments" object]
+# write.csv(fig.tables$fig.2c.df, "../SECURE_data/20180608/20180608_pct_var_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+# write.csv(fig.tables$fig.2c.corr.coefs, "../SECURE_data/20180608/20180608_corr_coefs_Dayprior_noDemog_ThreeLambdas.csv",row.names=FALSE)
+# write.table(num.Records, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# write.table(num.Records.check, "../SECURE_data/20180608/20180608_Dayprior_noDemog_num_Records_check.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# write.table(lasso.features.lambda.manual, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaManual.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# write.table(lasso.features.lambda.1se, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambda1se.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# write.table(lasso.features.lambda.min, "../SECURE_data/20180608/20180608_Dayprior_noDemog_LassoFeaturesLambdaMin.csv",row.names=FALSE,col.names=FALSE, sep=",")
+# write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_Features.csv",row.names=FALSE,col.names=FALSE, sep=",")
 
 # Plot the % var explained
 # ggplot(fig.2c.lambda.1se, aes(x=test, y=value, color = variable)) + geom_point(size = 5, aes(shape=variable, color=variable)) +
@@ -1537,9 +1570,6 @@ df$value <- as.numeric(df$value)
 df <- df[df$value>0,] # only show those models that actually do well.
 
 #colors for the x-axis labels by clinical.groups
-library(RColorBrewer)
-#myColors <- brewer.pal(6,"Set1")
-myColors <- c("peachpuff2", "lightskyblue3", "firebrick", "mediumpurple4", "sandybrown", "palegreen4", "salmon")
 df$col <- rep("NA", length(df$test))
 for (i in 1:length(clinical.groups)){
   df$col[df$test %in% clinical.groups[[i]]] <- as.character(myColors[i])
@@ -2406,12 +2436,6 @@ getDiastolicSlope = function(test){
 res = getDiastolicSlope("HCT")
 summary(res)
 
-# Get ggplot colors
-gg_color_hue <- function(n) {
-  hues = seq(15, 375, length = n + 1)
-  hcl(h = hues, l = 65, c = 100)[1:n]
-}
-
 # Compute stats of an LM model of a certain test given the coefs
 # The following script cross-validates by taking one observation from each
 # patient with at least 4 observations. The model simply 
@@ -2503,18 +2527,18 @@ correct.vars = function(data){
 }
 
 # Loop over all tests and all models for the personal medels comparsion. Plot results
-generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntest = NULL){
+generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_hi = 1e7, ntest = NULL){
   set.seed(0)
-  if (dataset == "iPOP"){
+  if (dataset_type == "iPOP"){
     identifier = "iPOP_ID"
-    corDf4A = wear
+    corDf4A = dataset
     test.names = allClin
     
     corDf4A = correct.vars(corDf4A)
   }
   else{
     identifier = "ANON_ID"
-    corDf4A = corDf
+    corDf4A = dataset
     test.names = intersect(allClin,colnames(corDf4A))
   }
   
@@ -2531,7 +2555,7 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   for (test.name in test.names[1:ntest]){
     models = list()
     model_vars = c()
-    if (dataset == "iPOP"){
+    if (dataset_type == "iPOP"){
       model_vars = names(wear)[57:563] #c("gsr_mean")
       models[["vitals + personal mean"]] = paste(c(identifier, model_vars), collapse = " + ")
       min_patients = 0
@@ -2571,27 +2595,43 @@ generate4A = function(dataset, threshold = 4, cap = 10, threshold_hi = 1e7, ntes
   }
   res = data.frame(test = res.tests, model = res.models, value = res.values, n = res.n)
   print(res)
-  res = res[order(-res$value),]
-  res = res[order(res$model),] # order by the population vitals model
-  res$test = factor(as.character(res$test), levels = unique(as.character(res$test)))
   res = na.omit(res)
-  pp = ggplot(res, aes(test, value, group = model, color = model)) +
-    ylab(expression(sqrt("Variance explained"))) +
-    xlab("Lab test") +
-    geom_jitter(size = 2, height = 0.0, width=0.2) + 
-    weartals_theme + 
-    theme(text = element_text(size=14))
-  ggsave(paste0("plots/Figure-4A-",dataset,".png"), plot = pp, width = 12, height = 3)
-  print(pp)
-  write.csv(res, file=paste0("data/Figure-4A-",dataset,".csv"))
   res
 }
 # TODO: Increase cap in the final version to get better accuracy. Lower caps are for speeding up
 #  cap - cut of number of patients for building the individual models (the higher the better population slope estimates)
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
 #res = generate4A("30k",threshold = 50, cap = 500)
-res = generate4A("iPOP",threshold = 5, cap = 50, ntest=2)
-res = generate4A("30k",threshold = 50, cap = 50, ntest=20)
+#res = generate4A(wear, "iPOP",threshold = 5, cap = 50, ntest=2)
+experiments4A = mclapply(1:6, function(x) { 
+  corDf.boot = bootstrap.dataset(corDf)
+  generate4A(corDf.boot, "30k",threshold = 50, cap = 50) #, ntest=2)
+}, mc.cores = 6)
+#save(experiments4A,file="experiments4A.Rda")
+
+res = data.frame()
+for (i in 1:length(experiments4A)){
+  experiment = experiments4A[[i]]
+  experiment$experiment_id = i
+  res = rbind(res, experiment)
+}
+toplot = group_by(res,test,model) %>% summarise(mean = mean(value), sd = sd(value))
+toplot = toplot[order(-toplot$mean),]
+toplot = toplot[order(toplot$model),] # order by the population vitals model
+toplot$test = factor(as.character(toplot$test), levels = unique(as.character(toplot$test)))
+
+pp = ggplot(toplot, aes(test, mean, group = model, color = model)) +
+  ylab(expression(sqrt("Variance explained"))) +
+  xlab("Lab test") +
+  geom_point(size = 3, position=position_dodge(width=0.7)) +
+  geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.7)) +
+  scale_color_manual(values=gg_color_hue(5)[c(1,2,3,5,4)]) +
+  weartals_theme + 
+  theme(text = element_text(size=14))
+print(pp)
+ggsave(paste0("plots/Figure-4A.png"), plot = pp, width = 20, height = 4.5)
+
+
 
 res = res[order(as.numeric(row.names(res))),]
 res$model = as.character(res$model)
