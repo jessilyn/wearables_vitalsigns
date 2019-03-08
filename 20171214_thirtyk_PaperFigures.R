@@ -747,6 +747,7 @@ wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, us
   data$Gender <- as.factor(data$Gender)
   data$Ethn <- as.factor(data$Ethn)
   wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  wear.variables = wear.variables[1:20]
   #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
 
   if (use.iPOP){
@@ -1233,7 +1234,7 @@ combineResults = function(cVS.results, wVS.results, use.Troubleshoot.mode = FALS
 
 bootstrap.dataset = function(data){
   n = nrow(data)
-  data[sample(n, replace = TRUE),]
+  data[sample(n),]
 }
 
 post.process.results = function(wVS.results)
@@ -1463,11 +1464,11 @@ ggsave("hct-rf.png",plt,width = 12,height = 5)
 
 personal = mclapply(1:6, function(x) { personal.mean.model() }, mc.cores = 6)
 
-experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = FALSE, personalized = TRUE) }, mc.cores = 6)
-experiments.nopers = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = FALSE, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) }, mc.cores = 6)
+experiments = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = TRUE, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) }, mc.cores = 6)
+experiments.nopers = mclapply(1:6, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = TRUE, bootstrap = TRUE, demographics = TRUE, personalized = FALSE) }, mc.cores = 6)
 
-fig.tables = combine.experiments(experiments,personal)
-fig.tables.pers = combine.experiments(experiments.pers,personal)
+fig.tables = combine.experiments(experiments.nopers,personal)
+fig.tables.pers = combine.experiments(experiments,personal)
 
 colnames(fig.tables.pers$fig.2c.corr.coefs)[6]="rf.pers"
 colnames(fig.tables.pers$fig.2c.df)[c(6,10,14)] = c("rf.pers","num.obs.rf.pers","p.val.rf.pers")
@@ -1476,8 +1477,8 @@ fig.tables$fig.2c.corr.coefs = merge(fig.tables$fig.2c.corr.coefs, fig.tables.pe
 fig.tables$fig.2c.df = merge(fig.tables$fig.2c.df, fig.tables.pers$fig.2c.df[,c("test","rf.pers","num.obs.rf.pers","p.val.rf.pers")])
 
 # Save experiments
-save(experiments.pers, experiments, file="data/experiments-ipop-6.Rda")
-save(personal,file="data/personal-ipop-6.Rda")
+#save(experiments.pers, experiments, file="data/experiments-ipop-6.Rda")
+#save(personal,file="data/personal-ipop-6.Rda")
 
 #load("data/experiments-ipop-6.Rda")
 #load("data/personal-ipop-6.Rda")
@@ -1524,24 +1525,70 @@ patients = unique(wear.tmp$iPOP_ID)
 #onehot = t(simplify2array(lapply(wear.tmp$iPOP_ID, FUN = function(x){x == patients})))
 #colnames(onehot) = paste("p",patients,sep="")
 
-wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
-wear.tmp = wear.tmp[,c("iPOP_ID", "Clin_Result_Date", "HCT",wear.variables)]
+wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE))[1:4] # the table of model features we want to work with
 #wear.tmp = cbind(wear.tmp, onehot)
+
+wear.variables = c("HCT","iPOP_ID","Clin_Result_Date",wear.variables)
+
+#change gender and ethnicity to dummy variables
+gender <- data.frame(model.matrix( ~ Gender - 1, data=wear.tmp))
+ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear.tmp))
+
+#remove the least populated gender and ethnicity (NCOL-1)
+cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+
+#store names as demo.variables
+demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+
+#cbind new gender and ethnicity variables to "data"
+wear.tmp <- cbind(wear.tmp,gender,ethn)
+wear.tmp = wear.tmp[,c(wear.variables,demo.variables)]
 wear.tmp = na.omit(wear.tmp)
 
 test.patient = patients[1]
 test = wear.tmp$iPOP_ID == test.patient
-wear.ids = wear.tmp[,c(1,2)]
-wear.tmp = wear.tmp[,-c(1,2)]
-model = randomForest(wear.tmp[!test,-1],wear.tmp[!test,1])
-preds = predict(model,newdata = wear.tmp[test,-1])
-dates = wear.ids[test,]
-plot( sqrt((preds - wear.tmp[test,1])**2 / mean(wear.tmp[,1]**2)) )
+
+
+onehot = model.matrix(as.formula(paste0("~ iPOP_ID - 1")), wear.tmp)
+colnames(onehot) = paste0("ID",1:ncol(onehot))
+wear.tmp = cbind(wear.tmp, onehot)
+wear.tmp = wear.tmp[,-2]
+
+dates = c()
+rpve = c()
+ntest = 10
+for (i in 1:(sum(test) - ntest - 1) ){
+  trainobs = which(test)[(0):(i)]
+  testobs = which(test)[(i+1):(i+ntest)]
+  
+  train = rep(TRUE, nrow(wear.data))
+  train[test] = FALSE
+  train[trainobs] = TRUE
+    
+  wear.dates = wear.tmp[,c(2)]
+  wear.data = wear.tmp[,-c(2)]
+  
+  model = randomForest(wear.data[train,-1],wear.data[train,1])
+  
+  tt = wear.data[testobs,1]
+  pp = predict(model,newdata = wear.tmp[testobs,-1])
+  rpve = c(rpve, sqrt(max(1 - mean((tt - pp)**2) / var(wear.data[,1]), 0)))
+  dates = c(dates, wear.dates[testobs[ntest]])
+}
+dres.pred = data.frame(time = (as.Date(dates) - min(as.Date(dates)))/365.0, rpve = rpve)
+plt_pred = ggplot(dres.pred, aes(time, rpve)) + 
+  weartals_theme + theme(text = element_text(size=25)) +
+  geom_line(size=1.3,color="red") +
+  geom_point(size=3,color="red") 
+plt_pred
+ggsave("Figure-4_5A.png",plot = plt_pred)
 }
 
 # number of HCT observations per person
 wear.tmp = wear
-wear.tmp = wear.tmp[,c("iPOP_ID", "HCT", wear.variables[153])]
+wear.tmp = cbind(wear.tmp[,c("iPOP_ID", "HCT", "highAct_sk_min")],wear.tmp[,60:100])
 wear.tmp = wear.tmp[wear.tmp$iPOP_ID == "1636-69-001",]
 wear.tmp = na.omit(wear.tmp)
 dim(na.omit(wear.tmp))
@@ -2637,7 +2684,7 @@ generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_
 #res = generate4A(wear, "iPOP",threshold = 5, cap = 50, ntest=2)
 experiments4A = mclapply(1:6, function(x) { 
   corDf.boot = bootstrap.dataset(corDf)
-  generate4A(corDf.boot, "30k",threshold = 50, cap = 50) #, ntest=2)
+  generate4A(corDf.boot, "30k",threshold = 50, cap = 50, ntest=2)
 }, mc.cores = 6)
 #save(experiments4A,file="experiments4A.Rda")
 
