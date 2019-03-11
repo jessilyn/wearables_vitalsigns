@@ -337,6 +337,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #describe(iPOPlabs)
 
 source("experiment/population-models.R")
+source("experiment/group-comparison.R")
 source("experiment/cca.R")
 
 ##############

@@ -207,6 +207,7 @@ experiments4A = mclapply(1:6, function(x) {
   generate4A(corDf.boot, "30k",threshold = 50, cap = 50, ntest = 2)
 }, mc.cores = 6)
 save(experiments4A,file="experiments4A.Rda")
+load("experiments4A.Rda")
 
 res = data.frame()
 for (i in 1:length(experiments4A)){
