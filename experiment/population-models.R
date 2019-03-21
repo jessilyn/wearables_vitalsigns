@@ -734,7 +734,7 @@ plot.comparison = function(fig.tables){
   # Plot the % var explained
   
   ##UNCOMMENT IF RUNNING LOCALLY
-  ggplot(fig.2c[fig.2c$variable %in% c("vitals",lambda.choice,"rf","rf.pers","personal.mean"),], aes(x=test, y=mean, color = variable)) +
+  ggplot(fig.2c[fig.2c$variable %in% c("rf.pers","personal.mean"),], aes(x=test, y=mean, color = variable)) +
     geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.7)) +
     geom_point(size = 3, position=position_dodge(width=0.7)) + #, aes(shape=variable)
     weartals_theme +
@@ -885,6 +885,15 @@ experiments = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wea
 experiments.nopers = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = debug, bootstrap = TRUE, demographics = TRUE, personalized = FALSE) },
                               mc.cores = cores)
 
+# Save experiments
+# save(experiments, experiments, file="data/experiments-ipop-pers.Rda")
+# save(experiments.nopers, experiments, file="data/experiments-ipop-nopers.Rda")
+# save(personal,file="data/personal-ipop-6.Rda")
+
+load("data/experiments-ipop-pers.Rda")
+load("data/experiments-ipop-nopers.Rda")
+load("data/personal-ipop-6.Rda")
+
 fig.tables = combine.experiments(experiments.nopers,personal)
 fig.tables.pers = combine.experiments(experiments,personal)
 
@@ -893,14 +902,6 @@ colnames(fig.tables.pers$fig.2c.df)[c(6,10,14)] = c("rf.pers","num.obs.rf.pers",
 
 fig.tables$fig.2c.corr.coefs = merge(fig.tables$fig.2c.corr.coefs, fig.tables.pers$fig.2c.corr.coefs[,c("test","rf.pers")])
 fig.tables$fig.2c.df = merge(fig.tables$fig.2c.df, fig.tables.pers$fig.2c.df[,c("test","rf.pers","num.obs.rf.pers","p.val.rf.pers")])
-
-# Save experiments
-save(experiments, experiments, file="data/experiments-ipop-pers.Rda")
-save(experiments.nopers, experiments, file="data/experiments-ipop-nopers.Rda")
-save(personal,file="data/personal-ipop-6.Rda")
-
-#load("data/experiments-ipop-6.Rda")
-#load("data/personal-ipop-6.Rda")
 
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
@@ -982,7 +983,7 @@ varyingR2 = function(){
     trainobs = which(test)[(0):(i)]
     testobs = which(test)[(i+1):(i+ntest)]
     
-    train = rep(TRUE, nrow(wear.data))
+    train = rep(TRUE, nrow(wear.tmp))
     train[test] = FALSE
     train[trainobs] = TRUE
     
@@ -996,14 +997,17 @@ varyingR2 = function(){
     rpve = c(rpve, sqrt(max(1 - mean((tt - pp)**2) / var(wear.data[,1]), 0)))
     dates = c(dates, wear.dates[testobs[ntest]])
   }
-  dres.pred = data.frame(time = (as.Date(dates) - min(as.Date(dates)))/365.0, rpve = rpve)
+  dres.pred = data.frame(time = (as.Date(dates) - min(as.Date(dates)))/365.0, rpve = rpve, dates = as.Date(dates))
   plt_pred = ggplot(dres.pred, aes(time, rpve)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     geom_line(size=1.3,color="red") +
     geom_point(size=3,color="red") 
   plt_pred
   ggsave("Figure-4_5A.png",plot = plt_pred)
+  dres.pred
 }
+figure45.varyingr2 = varyingR2()
+figure45.varyingr2$dates
 
 # number of HCT observations per person
 wear.tmp = wear

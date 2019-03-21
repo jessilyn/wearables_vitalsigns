@@ -232,8 +232,17 @@ print(pp)
 ggsave(paste0("plots/Figure-4A.png"), plot = pp, width = 20, height = 4.5)
 
 
+res.wide = spread(res, model, value)
+res.wide$diff = res.wide$`vitals + personal mean and slope` - res.wide$`personal mean`
+data.frame(group_by(res.wide, test) %>% summarise(p.val = t.test(diff,y=rep(0,100),"greater")$p.value,
+                                                  improvement.mean = mean(diff),
+                                                  improvement.sd = sd(diff),
+                                                  times.better = mean(diff > 0)))
+
+tt = t.test(res.wide[res.wide$test == "HCT","diff"])
 
 res = res[order(as.numeric(row.names(res))),]
+
 res$model = as.character(res$model)
 
 ## Reproduce Figure 4A without rerunning the code (read from a file)
