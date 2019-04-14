@@ -166,7 +166,7 @@ wVS.models = function(data, use.Troubleshoot.mode = FALSE, use.Demog = FALSE, us
     function(x) as.numeric(as.character(x)))
   data$Gender <- as.factor(data$Gender)
   data$Ethn <- as.factor(data$Ethn)
-  wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  wear.variables <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE)) # the table of model features we want to work with
   wear.variables = wear.variables[1:20]
   #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
   
@@ -865,7 +865,7 @@ library(dplyr)
 library(ggraph)
 library(igraph)
 demo_rf = function(){
-  wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+  wear.variables <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE)) # the table of model features we want to work with
   #wear.variables = c("hr_mean","st_mean","gsr_mean","rhr_mean")
   data = na.omit(wear[,c("HCT",wear.variables)])
   frm = paste0("HCT ~ ",paste(wear.variables,collapse=" + "))
@@ -877,8 +877,8 @@ demo_rf = function(){
 plt = demo_rf()
 ggsave("hct-rf.png",plt,width = 12,height = 5)
 
-reps = 100
-cores = 50
+reps = 6
+cores = 6
 debug = FALSE
 
 # reps = 1
@@ -888,15 +888,15 @@ debug = FALSE
 personal = mclapply(1:reps, function(x) { personal.mean.model() },
                     mc.cores = cores)
 
-experiments = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = debug, bootstrap = TRUE, demographics = TRUE, personalized = TRUE) },
+experiments = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = debug, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) },
                        mc.cores = cores)
-experiments.nopers = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = debug, bootstrap = TRUE, demographics = TRUE, personalized = FALSE) },
+experiments.nopers = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcorDf, wear, debug = debug, bootstrap = TRUE, demographics = FALSE, personalized = FALSE) },
                               mc.cores = cores)
 
 # Save experiments
-# save(experiments, experiments, file="data/experiments-ipop-pers.Rda")
-# save(experiments.nopers, experiments, file="data/experiments-ipop-nopers.Rda")
-# save(personal,file="data/personal-ipop-6.Rda")
+save(experiments, experiments, file="data/experiments-ipop-pers-dem.Rda")
+save(experiments.nopers, experiments, file="data/experiments-ipop-nopers-dem.Rda")
+save(personal,file="data/personal-ipop-6.Rda")
 
 load("data/experiments-ipop-pers.Rda")
 load("data/experiments-ipop-nopers.Rda")
@@ -932,7 +932,7 @@ ggplot(results, aes(x=test, y=mean)) +
   geom_point(size = 5)
 
 cols = gg_color_hue(3)
-testId = 29
+testId = 2
 allClin[testId]
 tvp = data.frame(predicted=experiments[[1]]$wVS.results$rf.val.pred[[testId]], true=experiments[[1]]$wVS.results$val.true[[testId]])
 plt = ggplot(tvp, aes(x=true, y=predicted)) +
@@ -953,7 +953,7 @@ varyingR2 = function(){
   #onehot = t(simplify2array(lapply(wear.tmp$iPOP_ID, FUN = function(x){x == patients})))
   #colnames(onehot) = paste("p",patients,sep="")
   
-  wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE))[1:4] # the table of model features we want to work with
+  wear.variables <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))[1:4] # the table of model features we want to work with
   #wear.tmp = cbind(wear.tmp, onehot)
   
   wear.variables = c("HCT","iPOP_ID","Clin_Result_Date",wear.variables)
