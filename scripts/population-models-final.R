@@ -111,14 +111,18 @@ reduce = function(res.list){
 
 # Summary metrics
 get.stats = function(res){
-  stats = data.frame(model = c(), test = c(), rve = c())
+  stats = data.frame(model = c(), test = c(), rve = c(), p.val = c())
   for (r in names(res)){
     for (res.test in names(res[[r]]) ){
       true = reduce(lapply(res[[r]][[res.test]], function(res){ res$true} ))
       null = reduce(lapply(res[[r]][[res.test]], function(res){ res$null} ))
       pred = reduce(lapply(res[[r]][[res.test]], function(res){ res$pred} ))
       
-      df = data.frame(model = r, test = res.test, rve = sqrt(max(0,1 - sum((true - pred)**2) / sum((true - null)**2))))
+      df = data.frame(model = r,
+                      test = res.test,
+                      rve = sqrt(max(0,1 - sum((true - pred)**2) / sum((true - null)**2))),
+                      ve = 1 - sum((true - pred)**2) / sum((true - null)**2)
+                      )
       stats = rbind(stats, df)
     }
   }
@@ -140,7 +144,6 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, bootstrap = FALSE){
   res
 }
 
-
 res = mclapply(1:6, function(i){bootstrap.experiment(clin, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 all.res = data.frame()
@@ -159,8 +162,12 @@ df = grouped %>%
   arrange(model,desc(mean))
 df$test = factor(df$test, levels = unique(df$test))
 
-ggplot(df, mapping= aes(x=test,y=mean,color=model)) + 
-  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2) +
+df$min = df$mean - df$sd
+df$min[df$min < 0] = 0
+df$max = df$mean + df$sd
+p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) + 
+  geom_errorbar(aes(ymin=min, ymax=max), width=.2) +
   weartals_theme + 
-  geom_point(size=3)
-
+  geom_point(size=3) +
+  labs(x = NULL, y ="RPVE")
+ggsave(paste0("population.png"),p,width=14,height=5)
