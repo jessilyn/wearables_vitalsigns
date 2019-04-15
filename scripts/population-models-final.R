@@ -136,7 +136,7 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, bootstrap = FALSE){
   }
   
   res = list()
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE)
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, model = "LM")
 #  res[["wear_pers_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = c("."), model = "LM")
   res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
   res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
@@ -144,7 +144,7 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, bootstrap = FALSE){
   res
 }
 
-res = mclapply(1:6, function(i){bootstrap.experiment(clin, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:6, function(i){bootstrap.experiment(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 all.res = data.frame()
 
