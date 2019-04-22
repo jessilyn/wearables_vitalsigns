@@ -137,28 +137,30 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, bootstrap = FALSE){
   
   res = list()
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, model = "LM")
-#  res[["wear_pers_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = c("."), model = "LM")
   res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
   res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
+#  res[["wear_nopers_basic_lm"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = c("hr_mean","st_mean"), model = "LM")
   
   res
 }
 
 res = mclapply(1:6, function(i){bootstrap.experiment(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
+res = experiments4A
 all.res = data.frame()
 
 for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-save(all.res, file="population.experiments.2vars.Rda")
+#save(all.res, file="population.experiments.2vars.Rda")
+load(file="population.experiments.2vars.Rda")
 
 library(dplyr)
 grouped <- group_by(all.res, model, test)
 
 df = grouped %>%
-  summarise(mean=mean(rve), sd=sd(rve))  %>%
+  summarise(mean=mean(rve), sd=sd(rve), pval=mean(ve<1e-10))  %>%
   arrange(model,desc(mean))
 df$test = factor(df$test, levels = unique(df$test))
 
@@ -171,3 +173,4 @@ p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) +
   geom_point(size=3) +
   labs(x = NULL, y ="RPVE")
 ggsave(paste0("population.png"),p,width=14,height=5)
+p

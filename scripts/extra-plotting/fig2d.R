@@ -9,7 +9,7 @@ load("all.res.Rda")
 grouped <- group_by(all.res, model, test)
 
 df = grouped %>%
-  summarise(mean=mean(rve), sd=sd(rve))  %>%
+  summarise(mean=mean(rve), sd=sd(rve), pval=mean(ve<1e-10))  %>%
   arrange(model,desc(mean))
 df$test = factor(df$test, levels = unique(df$test))
 
