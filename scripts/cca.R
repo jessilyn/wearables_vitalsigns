@@ -138,4 +138,4 @@ res.cca = t(simplify2array(res.cca))
 colnames(res.cca) = names(clinical.groups)
 save(res.cca, file="res.cca.Rda")
 
-sourc("scripts/extra-plotting/fig2f.R")
+source("scripts/extra-plotting/fig2f.R")

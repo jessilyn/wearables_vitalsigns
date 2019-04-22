@@ -703,7 +703,7 @@ bootstrap.experiment = function(clin, wear, debug = FALSE, personalized = FALSE,
 
 combine.experiments = function(experiments,pernsonal){
   res = list(fig.2c.corr.coefs = c(), fig.2c.df = c())
-  for (i in 1:length(experiments) ){
+  for (i in 1:length(personal) ){
     experiment = experiments[[i]]
     coefs = data.frame(experiment$fig.tables$fig.2c.corr.coefs)
     personal.coefs = personal[[i]][,1:2]
@@ -725,7 +725,7 @@ plot.comparison = function(fig.tables){
   fig.2c.plot <- gather(fig.tables$fig.2c.corr.coefs, variable, value, -test)
   fig.2c.plot = fig.2c.plot[fig.2c.plot$variable!="experiment",]
   #  fig.2c.plot[,3][is.na(fig.2c.plot[,3])] <- 0 #replace % var explained of NaN w/ 0
-  fig.2c.plot = group_by(fig.2c.plot,test,variable) %>% summarise(mean = mean(value), sd = sd(value))
+  fig.2c.plot = fig.2c.plot %>% group_by(test,variable) %>% summarise(mean = mean(value), sd = sd(value))
   
   tmp = fig.2c.plot[fig.2c.plot$variable == "personal.mean",]
   lvls = as.character(tmp$test[order(-tmp$mean)])
@@ -877,7 +877,7 @@ demo_rf = function(){
 plt = demo_rf()
 ggsave("hct-rf.png",plt,width = 12,height = 5)
 
-reps = 6
+reps = 100
 cores = 6
 debug = FALSE
 
@@ -894,9 +894,9 @@ experiments.nopers = mclapply(1:reps, function(x) { bootstrap.experiment(iPOPcor
                               mc.cores = cores)
 
 # Save experiments
-save(experiments, experiments, file="data/experiments-ipop-pers-dem.Rda")
-save(experiments.nopers, experiments, file="data/experiments-ipop-nopers-dem.Rda")
-save(personal,file="data/personal-ipop-6.Rda")
+#save(experiments, experiments, file="data/experiments-ipop-pers-dem.Rda")
+#save(experiments.nopers, experiments, file="data/experiments-ipop-nopers-dem.Rda")
+save(personal,file="data/personal-ipop-100.Rda")
 
 load("data/experiments-ipop-pers.Rda")
 load("data/experiments-ipop-nopers.Rda")

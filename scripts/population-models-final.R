@@ -67,10 +67,6 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
 }
 
 population.loo = function(data, model = "RF", personalized = FALSE, debug = FALSE, vars = NULL){
-  # Some variables are 
-  if (is.null(vars))
-    vars <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE)) # the table of model features we want to work with
-
   patients = unique(iPOPcorDf$iPOP_ID)
   if (debug){
     top.names <- c("HCT")
@@ -129,31 +125,49 @@ get.stats = function(res){
   stats
 }
 
-bootstrap.experiment = function(clin, wear, debug = FALSE, bootstrap = FALSE){
+bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE){
   if (bootstrap){
-    clin = bootstrap.dataset(clin,replace = TRUE)
+    clin = bootstrap.dataset(clin, replace = TRUE)
     wear = bootstrap.dataset(wear, replace = TRUE)
   }
   
   res = list()
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, model = "LM")
+  
+  vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
+  
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "LM")
   res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
   res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
-#  res[["wear_nopers_basic_lm"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = c("hr_mean","st_mean"), model = "LM")
   
   res
 }
 
-res = mclapply(1:6, function(i){bootstrap.experiment(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
+bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALSE){
+  if (bootstrap){
+    clin = bootstrap.dataset(clin, replace = FALSE)
+    wear = bootstrap.dataset(wear, replace = FALSE)
+  }
+  
+  res = list()
+  
+  vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))[1:40]
+  
+  # Figure 4.5
+  res[["wear_pers_lm_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = numeric(0), model = "LM")
+  res[["wear_pers_rf"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all, model = "RF")
+  
+  res
+}
 
-res = experiments4A
+res = mclapply(1:100, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
+
 all.res = data.frame()
 
 for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-save(res, file="population.experiments.2vars.Rda")
+#save(res, file="population.experiments.2vars.Rda")
 save(all.res, file="all.res.Rda")
 
 source("scripts/extra-plotting/fig2d.R")

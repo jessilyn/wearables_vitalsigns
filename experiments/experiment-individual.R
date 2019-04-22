@@ -1,3 +1,3 @@
-source("experiment/load-data.R")
-source("experiment/helper-functions.R")
-source("experiment/individual-models.R")
+source("scripts/load-data.R")
+source("scripts/helper-functions.R")
+source("scripts/individual-models.R")
