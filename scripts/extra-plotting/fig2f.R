@@ -1,3 +1,6 @@
+library("dplyr")
+library("tidyr")
+library("ggplot2")
 load("res.cca.Rda")
 df.res = data.frame(res.cca) %>%
   gather(group, value, Electrolytes:Hematologic) %>%
