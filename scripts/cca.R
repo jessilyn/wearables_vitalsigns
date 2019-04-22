@@ -10,7 +10,7 @@
 
 library("PMA")
 library("Hmisc")
-wear.variables <- unlist(read.table("FinalLasso_153WearableFactors.csv", stringsAsFactors = FALSE)) # the table of model features we want to work with
+wear.variables <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE)) # the table of model features we want to work with
 
 
 #TODO: UALAB coding causes problems! I removed it from diabetes
@@ -133,25 +133,9 @@ cca.experiment = function(i){
   }
   results
 }
-results = mclapply(1:12, cca.experiment, mc.cores = 6)
-results = t(simplify2array(results))
-colnames(results) = names(clinical.groups)
+res.cca = mclapply(1:12, cca.experiment, mc.cores = 6)
+res.cca = t(simplify2array(res.cca))
+colnames(res.cca) = names(clinical.groups)
+save(res.cca, file="res.cca.Rda")
 
-df.res = data.frame(results) %>%
-  gather(group, value, Electrolytes:Hematologic) %>%
-  group_by(group) %>%
-  summarise(mean=mean(value), sd=sd(value)) %>%
-  arrange(desc(mean))
-df.res = data.frame(df.res)
-df.res$group = factor(df.res$group, levels = df.res$group)
-
-p=ggplot(df.res, aes(x=group, y=mean)) +
-  geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=.2) +
-  theme(legend.title = element_blank()) +
-  geom_point(size=4.5) +
-  weartals_theme + 
-  ylim(0,0.5) +
-  labs(x = NULL, y ="Correlation Coefficient")
-p
-geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
-ggsave(paste0("plots/Figure2E.png"),p,width=8,height=6)
+sourc("scripts/extra-plotting/fig2f.R")

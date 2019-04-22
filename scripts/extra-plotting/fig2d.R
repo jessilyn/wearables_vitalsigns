@@ -4,7 +4,7 @@ library(dplyr)
 weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
 # save(all.res,file="all.res.Rda")
-load("all.res.Rda")
+load("all.res.Rda") # as in population-models-final.R
 
 grouped <- group_by(all.res, model, test)
 

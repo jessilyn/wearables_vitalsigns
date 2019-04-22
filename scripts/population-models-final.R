@@ -153,24 +153,7 @@ for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-#save(all.res, file="population.experiments.2vars.Rda")
-load(file="population.experiments.2vars.Rda")
+save(res, file="population.experiments.2vars.Rda")
+save(all.res, file="all.res.Rda")
 
-library(dplyr)
-grouped <- group_by(all.res, model, test)
-
-df = grouped %>%
-  summarise(mean=mean(rve), sd=sd(rve), pval=mean(ve<1e-10))  %>%
-  arrange(model,desc(mean))
-df$test = factor(df$test, levels = unique(df$test))
-
-df$min = df$mean - df$sd
-df$min[df$min < 0] = 0
-df$max = df$mean + df$sd
-p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) + 
-  geom_errorbar(aes(ymin=min, ymax=max), width=.2) +
-  weartals_theme + 
-  geom_point(size=3) +
-  labs(x = NULL, y ="RPVE")
-ggsave(paste0("population.png"),p,width=14,height=5)
-p
+source("scripts/extra-plotting/fig2d.R")
