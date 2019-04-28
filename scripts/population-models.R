@@ -914,6 +914,8 @@ fig.tables$fig.2c.df = merge(fig.tables$fig.2c.df, fig.tables.pers$fig.2c.df[,c(
 #fig.tables = list(fig.2c.df = aggregate(. ~ test, data=fig.tables$fig.2c.df, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE),
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
 
+res.30k = fig.tables$fig.2c.corr.coefs
+
 plt = plot.comparison(fig.tables)
 plt
 

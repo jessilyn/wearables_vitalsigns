@@ -215,6 +215,8 @@ for (i in 1:length(experiments4A)){
   experiment$experiment_id = i
   res = rbind(res, experiment)
 }
+res.ipop = res
+
 toplot = group_by(res,test,model) %>% summarise(mean = mean(value), sd = sd(value))
 toplot = toplot[order(-toplot$mean),]
 toplot = toplot[order(toplot$model),] # order by the population vitals model
