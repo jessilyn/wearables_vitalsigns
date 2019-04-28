@@ -1,8 +1,11 @@
+library("dplyr")
+library("tidyr")
+library("ggplot2")
 load("res.cca.Rda")
 df.res = data.frame(res.cca) %>%
   gather(group, value, Electrolytes:Hematologic) %>%
   group_by(group) %>%
-  summarise(mean=mean(value), sd=sd(value)) %>%
+  summarise(mean=mean(value), sd=sd(value), pval=pnorm(0, mean(value), sd(value))) %>%
   arrange(desc(mean))
 df.res = data.frame(df.res)
 df.res$group = factor(df.res$group, levels = df.res$group)
