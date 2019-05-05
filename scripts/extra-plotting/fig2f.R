@@ -1,6 +1,7 @@
 library("dplyr")
 library("tidyr")
 library("ggplot2")
+source("ggplot-theme.R")
 
 load("res.cca.Rda")
 df.res = data.frame(res.cca) %>%
@@ -9,6 +10,7 @@ df.res = data.frame(res.cca) %>%
   summarise(mean=mean(value), sd=sd(value), pval=pnorm(0, mean(value), sd(value))) %>%
   arrange(desc(mean))
 df.res = data.frame(df.res)
+df.res[order(levels(df.res$group)),]$mean = res.cca.means[order(res.cca.means$test),]$value
 df.res$group = factor(df.res$group, levels = df.res$group)
 
 p=ggplot(df.res, aes(x=group, y=mean)) +

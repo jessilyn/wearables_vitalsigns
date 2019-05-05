@@ -21,10 +21,3 @@ p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) +
   labs(x = NULL, y ="RPVE")
 p
 ggsave(paste0("population.png"),p,width=14,height=5)
-
-
-library("dplyr")
-data("mtcars")
-mtcars %>%
-  group_by(cyl) %>%
-  summarize(mean = mean(disp))

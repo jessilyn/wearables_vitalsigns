@@ -113,7 +113,7 @@ get.cca = function(wear,name){
   list(indexX = indexX, indexY = indexY)
 }
 
-
+# Bootstrap standard deviation
 cca.experiment = function(i){
   set.seed(i)
   results = c()
@@ -136,6 +136,16 @@ cca.experiment = function(i){
 res.cca = mclapply(1:12, cca.experiment, mc.cores = 6)
 res.cca = t(simplify2array(res.cca))
 colnames(res.cca) = names(clinical.groups)
-save(res.cca, file="res.cca.Rda")
+
+# Get means from the experiment on full data
+res = c()
+for (nm in names(clinical.groups)){
+  r = get.cca(wear, nm)
+  res = c(res,abs(cor(r$indexX, r$indexY)))
+}
+res.cca.means = data.frame(test=names(clinical.groups),value=res)
+
+save(res.cca, res.cca.means, file="res.cca.Rda")
+load("res.cca.Rda")
 
 source("scripts/extra-plotting/fig2f.R")
