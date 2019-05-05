@@ -160,6 +160,7 @@ getEvents = function(dres, codes)
 
 
 # Temporal evolution of the estimate of the mean
+# Method: Get last 50 (param: window) observations and compute adjasted rsquared of the lm
 generate5C = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
 {
   if (dataset == "iPOP"){
@@ -260,7 +261,7 @@ dres = generate5C("HCT","Pulse","iPOP",
                   window = 30,filter=pats,1)
 
 ## Load codes (initial)
-codes = read.csv("../SECURE_data/SECURE/initial_MI.csv",stringsAsFactors=FALSE,header = FALSE)
+codes = read.csv(paste0(dir,"initial_MI.csv"),stringsAsFactors=FALSE,header = FALSE)
 colnames(codes) = c("ANON_ID","ICD_DATE","ICD9","ICD10","DX_NAME")
 codes$date = as.Date(as.POSIXct(codes$ICD_DATE,format="%d-%b-%Y")) + 1 # POSIX no time mapped by Date to the previous day so add 1
 
@@ -346,14 +347,12 @@ pats = c("D-145","D-148","PD-6145") #, "N-3683")
 for (i in 1:length(pats))
   generate5Cevents(pats[i],i)
 
-generate5D = function(pat = "1636-69-001",lab.test = "HCT"){
+# Models depending on the number of observations
+# Method:
+# * Get only patients with at least nobs + neval observations
+# * Start from nstart observations and go to nobs observations for training
+generate5D = function(pat = "1636-69-001",lab.test = "HCT", nobs = 25, neval = 3, nstart = 6, shift = 2){
   ## 1636-69-001
-  
-  
-  nobs = 25
-  neval = 3
-  nstart = 6
-  shift = 2
   
   ## How much data we need for the estimates
   corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[lab.test]]),]
@@ -412,7 +411,7 @@ res = generate5D("1636-69-001", "HCT")
 ###############
 # run after reading in and cleaning data and running Figure 2D section to get top.names
 
-weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+#weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
 #corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")
 corr.coefs <-read.table("../SECURE_data/20180403_ranked_models_ipop_lm.csv",row.names=1, sep=",")
@@ -481,3 +480,79 @@ d <- melt(data, id.vars="X")
 ggplot(d, aes(x=X, y=value, col=variable, shape=variable))+
   geom_point(cex=2.5) + 
   weartals_theme
+
+
+
+# Build a RF HCT model for "1636-69-001", plot R^2 over time
+generate5E = function(){
+  
+  wear.tmp = wear
+  
+  patients = unique(wear.tmp$iPOP_ID)
+  #onehot = t(simplify2array(lapply(wear.tmp$iPOP_ID, FUN = function(x){x == patients})))
+  #colnames(onehot) = paste("p",patients,sep="")
+  
+  wear.variables <- unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))[1:4] # the table of model features we want to work with
+  #wear.tmp = cbind(wear.tmp, onehot)
+  
+  wear.variables = c("HCT","iPOP_ID","Clin_Result_Date",wear.variables)
+  
+  #change gender and ethnicity to dummy variables
+  gender <- data.frame(model.matrix( ~ Gender - 1, data=wear.tmp))
+  ethn <- data.frame(model.matrix( ~ Ethn - 1, data=wear.tmp))
+  
+  #remove the least populated gender and ethnicity (NCOL-1)
+  cache <- names(gender)[which(sapply(gender,sum)==max(sapply(gender,sum)))]
+  gender <- data.frame(cache=gender[which(sapply(gender,sum)==max(sapply(gender,sum)))])
+  ethn <- ethn[,-which(sapply(ethn,sum)==min(sapply(ethn,sum)))]
+  
+  #store names as demo.variables
+  demo.variables <- c("AgeIn2016", names(gender), names(ethn))
+  
+  #cbind new gender and ethnicity variables to "data"
+  wear.tmp <- cbind(wear.tmp,gender,ethn)
+  wear.tmp = wear.tmp[,c(wear.variables,demo.variables)]
+  wear.tmp = na.omit(wear.tmp)
+  
+  test.patient = patients[1]
+  test = wear.tmp$iPOP_ID == test.patient
+  
+  
+  onehot = model.matrix(as.formula(paste0("~ iPOP_ID - 1")), wear.tmp)
+  colnames(onehot) = paste0("ID",1:ncol(onehot))
+  wear.tmp = cbind(wear.tmp, onehot)
+  wear.tmp = wear.tmp[,-2]
+  
+  dates = c()
+  rpve = c()
+  ntest = 10
+  for (i in 1:(sum(test) - ntest - 1) ){
+    trainobs = which(test)[(0):(i)]
+    testobs = which(test)[(i+1):(i+ntest)]
+    
+    train = rep(TRUE, nrow(wear.tmp))
+    train[test] = FALSE
+    train[trainobs] = TRUE
+    
+    wear.dates = wear.tmp[,c(2)]
+    wear.data = wear.tmp[,-c(2)]
+    
+    model = randomForest(wear.data[train,-1],wear.data[train,1])
+    
+    tt = wear.data[testobs,1]
+    pp = predict(model,newdata = wear.tmp[testobs,-1])
+    rpve = c(rpve, sqrt(max(1 - mean((tt - pp)**2) / var(wear.data[,1]), 0)))
+    dates = c(dates, wear.dates[testobs[ntest]])
+  }
+  dres.pred = data.frame(time = (as.Date(dates) - min(as.Date(dates)))/365.0, rpve = rpve, dates = as.Date(dates))
+  plt_pred = ggplot(dres.pred, aes(time, rpve)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    geom_line(size=1.3,color="red") +
+    ylim(0, 1) +
+    geom_point(size=3,color="red")
+  plt_pred
+  ggsave("plots/Figure-5E.png",plot = plt_pred,width = 6, height = 6)
+  dres.pred
+}
+figure45.varyingr2 = generate5E()
+figure45.varyingr2$dates
