@@ -4,7 +4,7 @@ library(dplyr)
 weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
 # save(all.res,file="all.res.Rda")
-load("all.res.Rda") # as in population-models-final.R
+#load("all.res.Rda") # as in population-models-final.R
 
 df = all.res %>% group_by(model, test) %>%
   summarise(mean=mean(rve), sd=sd(rve), pval=mean(ve<1e-10))  %>%

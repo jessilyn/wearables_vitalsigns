@@ -74,8 +74,6 @@ population.loo = function(data, model = "RF", personalized = FALSE, debug = FALS
   }
   demo.variables = c()
   
-  k = 0
-  
   res = list()
   for (test.id in top.names){
     cat("Test",test.id,"\n")
@@ -135,7 +133,7 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE)
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "LM")
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
   res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
   res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
   
@@ -159,7 +157,7 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res
 }
 
-res = mclapply(1:100, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:6, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
 
 all.res = data.frame()
 
