@@ -1,4 +1,4 @@
-run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF")
+run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF", mode = "all")
 {
   # We assume that the data that went in contains all the variables to use in the model and iPOP_ID
   wear.tmp = filter.nas(data,names(data))
@@ -13,13 +13,13 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
   
   if (personalized){
     test.idx = which(test.ids)
-
+    
     # Check if the patient has at least six observations    
     nfrac = length(test.idx)
     if (nfrac < 6){
       return(list(pred = c(),
-           true = c(),
-           null = c()))
+                  true = c(),
+                  null = c()))
     }
     
     # if yes, take 20% of their observation and keep them as a test set
@@ -33,10 +33,10 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
     # We will use iPOP ID to build a personalized model for that subject
     wear.tmp$iPOP_ID = 1*(wear.tmp$iPOP_ID == patient.id)
   }
-
+  
   # subsect
   x.train = wear.tmp[train.ids,] 
-
+  
   # if we are not building personalized models, remove subject id
   if (!personalized){
     x.train = x.train[,-1,drop=FALSE]
@@ -44,15 +44,27 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
   
   # create test set
   x.test = wear.tmp[test.ids,] # subset input data by lab: only take current lab test of interest
-
+  
   # List all variables going into the model
   vars = names(x.train)
   vars = vars[-which(vars %in% test.id)]
   
-  # Build the RF model
+  # Choose variables using lasso
+  if (mode == "LASSO"){
+    glm.res = cv.glmnet(x=as.matrix(x.train[,vars]),y=as.matrix(x.train[,test.id]),
+                        standardize.response=FALSE,
+                        family="gaussian",
+                        nfolds=10,
+                        nlambda=100)
+    beta.1se = which(glm.res$lambda < glm.res$lambda.1se)[1] # lambda 1se
+    vars = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,beta.1se]) > 1e-10,]) # TODO: this is an arbitrary rule for now
+  }
+  
+  # Build the RF model 
   rf.fml = paste(test.id, "~", paste(vars, collapse=" + "))
   if (model == "RF")
     mdl = randomForest(as.formula(rf.fml), data = x.train) 
+  
   if (model == "LM")
     mdl = lm(as.formula(rf.fml), data = x.train)
   
@@ -66,13 +78,15 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
        null = predict(null.model, newdata = x.test))
 }
 
-population.loo = function(data, model = "RF", personalized = FALSE, debug = FALSE, vars = NULL){
+population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL){
   patients = unique(iPOPcorDf$iPOP_ID)
   if (debug){
     top.names <- c("HCT")
     patients = patients[1:20]
   }
   demo.variables = c()
+  
+  k = 0
   
   res = list()
   for (test.id in top.names){
@@ -82,7 +96,7 @@ population.loo = function(data, model = "RF", personalized = FALSE, debug = FALS
     for (patient.id in patients){
       cat("Patient",patient.id,"\n") # LOO
       vars.subset = c("iPOP_ID", test.id, vars, demo.variables)
-      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model)
+      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model, mode = mode)
     }
   }
   res
@@ -116,7 +130,7 @@ get.stats = function(res){
                       test = res.test,
                       rve = sqrt(max(0,1 - sum((true - pred)**2) / sum((true - null)**2))),
                       ve = 1 - sum((true - pred)**2) / sum((true - null)**2)
-                      )
+      )
       stats = rbind(stats, df)
     }
   }
@@ -134,6 +148,7 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE)
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
+  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "LM", mode = "LASSO")
   res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
   res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
   
