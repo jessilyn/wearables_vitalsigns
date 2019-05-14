@@ -60,6 +60,9 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
     vars = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,beta.1se]) > 1e-10,]) # TODO: this is an arbitrary rule for now
   }
   
+  if (length(vars) == 0)
+    vars = "1"
+
   # Build the RF model 
   rf.fml = paste(test.id, "~", paste(vars, collapse=" + "))
   if (model == "RF")
