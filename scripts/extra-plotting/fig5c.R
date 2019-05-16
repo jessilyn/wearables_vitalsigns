@@ -20,19 +20,13 @@ lvls = as.character(tmp$test[order(-tmp$mean)])
 fig.2c.plot$test = factor(fig.2c.plot$test, levels = lvls)
 #^ Ran out of time, but I can simplify this later, which will probably rid the error.
 fig.2c <- fig.2c.plot
-## DONE UNCOMMENT
 
-##UNCOMMENT IF RUNNING LOCALLY
 ggplot(fig.2c[fig.2c$variable %in% c("rf.pers","personal.mean"),], aes(x=test, y=mean, color = variable)) +
   geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.7)) +
   geom_point(size = 3, position=position_dodge(width=0.7)) + #, aes(shape=variable)
   weartals_theme +
   ylim(0,1) +
   scale_color_manual(values=gg_color_hue(5)[c(3,1,2,5,4)]) +
-  #    scale_shape_manual(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
-  #                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
-  #    scale_color_discrete(breaks=c("vitals", lambda.choice, "rf","personal.mean"),
-  #                         labels=c("LM", "LASSO", "RF","Pers. mean")) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
 
 plt = plot.comparison(res)
