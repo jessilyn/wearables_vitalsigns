@@ -155,10 +155,10 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE,
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
+#  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF")
-  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
-  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
+#  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
+#  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
   
   res
 }
@@ -180,7 +180,7 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res
 }
 
-res = mclapply(1:60, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, randomized = TRUE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 6)
 #res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 all.res = data.frame()
