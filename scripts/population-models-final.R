@@ -1,8 +1,11 @@
-run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF", mode = "all")
+run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF", mode = "all", randomized = FALSE)
 {
   # We assume that the data that went in contains all the variables to use in the model and iPOP_ID
   wear.tmp = filter.nas(data,names(data))
   wear.tmp = wear.tmp[order(wear.tmp$iPOP_ID),]
+  
+  if (randomized)
+    wear.tmp[,test.id] = sample(wear.tmp[,test.id])
   
   # List all patients and remove patient.id for LOO cross-validation
   patients = unique(wear.tmp$iPOP_ID)
@@ -81,7 +84,7 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
        null = predict(null.model, newdata = x.test))
 }
 
-population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL){
+population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL, randomized = FALSE){
   patients = unique(iPOPcorDf$iPOP_ID)
   if (debug){
     top.names <- c("HCT")
@@ -99,7 +102,7 @@ population.loo = function(data, model = "RF", mode="all", personalized = FALSE, 
     for (patient.id in patients){
       cat("Patient",patient.id,"\n") # LOO
       vars.subset = c("iPOP_ID", test.id, vars, demo.variables)
-      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model, mode = mode)
+      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model, mode = mode, randomized = randomized)
     }
   }
   res
@@ -130,7 +133,8 @@ get.stats = function(res){
       pred = reduce(lapply(res[[r]][[res.test]], function(res){ res$pred} ))
       
       df = data.frame(model = r,
-                      pval = cor.test(true,pred)$p.val,
+#                      pval = cor.test(true,pred)$p.val,
+                      pval = t.test( (true-pred)**2, (true-null)**2 )$p.value,
                       test = res.test,
                       rve = sqrt(max(0,1 - sum((true - pred)**2) / sum((true - null)**2))),
                       ve = 1 - sum((true - pred)**2) / sum((true - null)**2)
@@ -141,7 +145,7 @@ get.stats = function(res){
   stats
 }
 
-bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE){
+bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE, randomized = FALSE){
   if (bootstrap){
     clin = bootstrap.dataset(clin, replace = TRUE)
     wear = bootstrap.dataset(wear, replace = TRUE)
@@ -151,18 +155,18 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE)
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "LM", mode = "LASSO")
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
-  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "RF")
-  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, vars = c("Pulse","Temp"), model = "LM")
+  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF")
+  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
+  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
   
   res
 }
 
-bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALSE){
+bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALSE, randomized = FALSE){
   if (bootstrap){
-    clin = bootstrap.dataset(clin, replace = FALSE)
-    wear = bootstrap.dataset(wear, replace = FALSE)
+    clin = bootstrap.dataset(clin, replace = FALSE, randomized = randomized)
+    wear = bootstrap.dataset(wear, replace = FALSE, randomized = randomized)
   }
   
   res = list()
@@ -176,8 +180,8 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res
 }
 
-#res = mclapply(1:6, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
-res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:60, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, randomized = TRUE, bootstrap = TRUE)}, mc.cores = 6)
+#res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 all.res = data.frame()
 
