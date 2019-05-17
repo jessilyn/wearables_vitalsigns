@@ -155,10 +155,10 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE,
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-#  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
+  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF")
-#  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
-#  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
+  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
+  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
   
   res
 }
@@ -189,8 +189,8 @@ for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-#save(res, file="population.experiments.2vars.Rda")
+save(res, file="population.experiments.randomized.Rda")
 save(all.res, file="fig2d.Rda")
 
-load("population.experiments.2vars.Rda")
-source("scripts/extra-plotting/fig2d.R")
+#load("population.experiments.2vars.Rda")
+#source("scripts/extra-plotting/fig2d.R")
