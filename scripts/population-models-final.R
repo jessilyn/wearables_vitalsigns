@@ -182,7 +182,7 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
 
 ### EXPERIMENTS
 ## NULL distributions (save summary in null.res)
-res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 50)
+res = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
 
 ## Final runs for 2d (save summary in all.res)
 # res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
