@@ -254,12 +254,6 @@ generate5C = function(clin,vit,dataset = "30k",window=50,filter = NULL,col = 1)
   list(dres = dres, plt_slope = plt_slope, plt_rqs = plt_rsq, plt_pred = plt_pred, events = events)
 }
 
-visits = aggregate(iPOPcorDf$iPOP_ID,by=list(iPOPcorDf$iPOP_ID),length)
-visits = visits[order(-visits$x),]
-pats = visits[1:1,1]
-dres = generate5C("HCT","Pulse","iPOP",
-                  window = 30,filter=pats,1)
-
 ## Load codes (initial)
 codes = read.csv(paste0(dir,"initial_MI.csv"),stringsAsFactors=FALSE,header = FALSE)
 colnames(codes) = c("ANON_ID","ICD_DATE","ICD9","ICD10","DX_NAME")
@@ -550,9 +544,42 @@ generate5E = function(){
     geom_line(size=1.3,color="red") +
     ylim(0, 1) +
     geom_point(size=3,color="red")
-  plt_pred
   ggsave("plots/Figure-5E.png",plot = plt_pred,width = 6, height = 6)
-  dres.pred
+  list(plt_pred=plt_pred,  dres.pred=dres.pred)
 }
-figure45.varyingr2 = generate5E()
-figure45.varyingr2$dates
+
+# visits = aggregate(iPOPcorDf$iPOP_ID,by=list(iPOPcorDf$iPOP_ID),length)
+# visits = visits[order(-visits$x),]
+# pats = visits[1:1,1]
+
+# FIGURE 6
+# Starts at 2015-04-21 ends at 2017-06-14
+generate6 = function(){
+  dres = generate5C("HCT","Pulse","iPOP",
+                    window = 10,filter="1636-69-001",1)
+  dres$plt_rqs
+  
+  # Starts at 2014-12-07 ends at 2015-06-17
+  figure45.varyingr2 = generate5E() 
+  figure45.varyingr2$plt_pred
+  
+  # COMBINE
+  dres.combined = dres$dres[,c("date","rsquared")]
+  dres.combined$rpve = sqrt(dres.combined$rsquared)
+  dres.combined = dres.combined[,c("date","rpve")]
+  dres.combined$type="clinical"
+  dres.combined.wear = figure45.varyingr2$dres.pred[,c("dates","rpve")]
+  colnames(dres.combined.wear)[1] = "date"
+  dres.combined.wear$type = "wearable"
+  dres = rbind(dres.combined,dres.combined.wear)
+  dres$time = (as.Date(dres$date) - min(as.Date(dres$date)))/365.0
+
+  plt = ggplot(dres, aes(time, rpve, group=type, colour=type)) + 
+    weartals_theme + theme(text = element_text(size=25)) +
+    ylim(0, 1) +
+    geom_line(size=1.3) +
+    geom_point(size=3)
+  ggsave("plots/Figure-6.png",plot = plt,width = 10, height = 6)
+  plt
+}
+generate6()

@@ -8,7 +8,7 @@ weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.bor
 load("fig2d-null.Rda") # as in population-models-final.R
 
 df = data.frame(all.res) %>% group_by(model, test) %>%
-  summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve), pval=-1)  %>%
+  summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve))  %>%
   arrange(model,desc(mean))
 df$test = factor(df$test, levels = unique(df$test))
 
@@ -32,8 +32,9 @@ ggsave(paste0("population.png"),p,width=14,height=5)
 # * use empirical distribution under the null 
 # * p-value = likelihood of our result under the null
 df = data.frame(df)
+pval = c()
 for (i in 1:nrow(df))
 {
-  df[i,"pval"] = mean((null.res[(as.character(null.res$test)==df[i,"test"]) & (as.character(null.res$model)==df[i,"model"]),])$ve > df$mean.ve[i])
+  pval = c(pval,mean((null.res[(as.character(null.res$test)==df[i,"test"]) & (as.character(null.res$model)==df[i,"model"]),])$ve > df$mean.ve[i]))
 }
-df
+df$pval = pval
