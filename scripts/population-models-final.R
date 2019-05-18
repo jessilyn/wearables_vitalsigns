@@ -183,6 +183,8 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
 res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 6)
 #res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
+load("population.experiments.randomized.Rda")
+
 all.res = data.frame()
 
 for (r in res){
@@ -190,7 +192,7 @@ for (r in res){
 }
 
 #save(res, file="population.experiments.2vars.Rda")
-save(all.res, file="fig2d.Rda")
+save(all.res, null.res, file="fig2d-null.Rda")
 
 load("population.experiments.2vars.Rda")
 source("scripts/extra-plotting/fig2d.R")

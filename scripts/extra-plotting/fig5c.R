@@ -1,4 +1,6 @@
 library("dplyr")
+library("ggplot2")
+library("tidyr")
 
 load("figure5c.Rda")
 
@@ -28,6 +30,3 @@ ggplot(fig.2c[fig.2c$variable %in% c("rf.pers","personal.mean"),], aes(x=test, y
   ylim(0,1) +
   scale_color_manual(values=gg_color_hue(5)[c(3,1,2,5,4)]) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained")))
-
-plt = plot.comparison(res)
-plt

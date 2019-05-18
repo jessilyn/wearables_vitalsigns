@@ -877,9 +877,9 @@ demo_rf = function(){
 plt = demo_rf()
 ggsave("hct-rf.png",plt,width = 12,height = 5)
 
-reps = 100
+reps = 6
 cores = 6
-debug = FALSE
+debug = TRUE
 
 # reps = 1
 # cores = 1
@@ -915,6 +915,8 @@ fig.tables$fig.2c.df = merge(fig.tables$fig.2c.df, fig.tables.pers$fig.2c.df[,c(
 #fig.2c.corr.coefs = aggregate(. ~ test, data=fig.tables$fig.2c.corr.coefs, function(x,na.rm=TRUE){ c(mean(x),sd(x))}, na.rm=TRUE))
 
 res.30k = fig.tables$fig.2c.corr.coefs
+res = fig.tables
+save(res,file = "figure5c.Rda")
 
 plt = plot.comparison(fig.tables)
 plt
