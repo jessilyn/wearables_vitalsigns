@@ -180,15 +180,24 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res
 }
 
-res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 6)
+### EXPERIMENTS
+## NULL distributions (save summary in null.res)
+res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 50)
+
+## Final runs for 2d (save summary in all.res)
+# res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
+
+## Experiments for 4.5
 #res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
+### Summary stats
 all.res = data.frame()
 
 for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
+# Save results
 save(res, file="population.experiments.randomized.Rda")
 save(all.res, file="fig2d.Rda")
 
