@@ -155,10 +155,10 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE,
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-#  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
+  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF")
-#  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
-#  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
+  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
+  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
   
   res
 }
@@ -180,19 +180,26 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res
 }
 
-res = mclapply(1:200, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 6)
+### EXPERIMENTS
+## NULL distributions (save summary in null.res)
+res = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
+
+## Final runs for 2d (save summary in all.res)
+# res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
+
+## Experiments for 4.5
 #res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
-load("population.experiments.randomized.Rda")
-
+### Summary stats
 all.res = data.frame()
 
 for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-#save(res, file="population.experiments.2vars.Rda")
-save(all.res, null.res, file="fig2d-null.Rda")
+# Save results
+save(res, file="population.experiments.randomized.Rda")
+save(all.res, file="fig2d.Rda")
 
-load("population.experiments.2vars.Rda")
-source("scripts/extra-plotting/fig2d.R")
+#load("population.experiments.2vars.Rda")
+#source("scripts/extra-plotting/fig2d.R")
