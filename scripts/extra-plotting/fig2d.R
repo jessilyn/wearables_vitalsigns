@@ -5,7 +5,8 @@ library(dplyr)
 weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
 # save(all.res,file="all.res.Rda")
-load("fig2d-null.Rda") # as in population-models-final.R
+
+load("fig2d.Rda") # as in population-models-final.R
 
 df = data.frame(all.res) %>% group_by(model, test) %>%
   summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve))  %>%
@@ -38,3 +39,4 @@ for (i in 1:nrow(df))
   pval = c(pval,mean((null.res[(as.character(null.res$test)==df[i,"test"]) & (as.character(null.res$model)==df[i,"model"]),])$ve > df$mean.ve[i]))
 }
 df$pval = pval
+p.adjust(df$pval,method ="bonferroni")

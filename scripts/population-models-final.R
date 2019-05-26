@@ -182,7 +182,8 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
 
 ### EXPERIMENTS
 ## NULL distributions (save summary in null.res)
-res = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
+res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = FALSE)}, mc.cores = 100)
+res.randomized = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
 
 ## Final runs for 2d (save summary in all.res)
 # res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
@@ -190,16 +191,24 @@ res = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.
 ## Experiments for 4.5
 #res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
-### Summary stats
+### Summary stats for the randomized trials (null hypothesis)
+null.res = data.frame()
+
+for (r in res.randomized){
+  null.res = rbind(null.res, get.stats(r))
+}
+
+### Summary stats for the actual experiment
 all.res = data.frame()
 
 for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-# Save results
-save(res, file="population.experiments.randomized.Rda")
-save(all.res, file="fig2d.Rda")
+null.res = null.res.tmp
 
-#load("population.experiments.2vars.Rda")
+# Save results
+#save(res, res.randomized, file="population.experiments.randomized.Rda")
+save(all.res, null.res, file="fig2d.Rda")
+
 #source("scripts/extra-plotting/fig2d.R")
