@@ -6,7 +6,7 @@ weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.bor
 
 # save(all.res,file="all.res.Rda")
 
-load("fig2d.Rda") # as in population-models-final.R
+load("20190525-fig2d.Rda") # as in population-models-final.R
 
 df = data.frame(all.res) %>% group_by(model, test) %>%
   summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve))  %>%
