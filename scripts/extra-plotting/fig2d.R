@@ -40,3 +40,4 @@ for (i in 1:nrow(df))
 }
 df$pval = pval
 p.adjust(df$pval,method ="bonferroni")
+p.adjust(df$pval,method ="fdr")
