@@ -165,38 +165,39 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE,
 
 bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALSE, randomized = FALSE){
   if (bootstrap){
-    clin = bootstrap.dataset(clin, replace = FALSE, randomized = randomized)
-    wear = bootstrap.dataset(wear, replace = FALSE, randomized = randomized)
+    clin = bootstrap.dataset(clin, replace = FALSE)
+    wear = bootstrap.dataset(wear, replace = FALSE)
   }
   
   res = list()
   
-  vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))[1:40]
+  vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
   # Figure 4.5
   res[["wear_pers_lm_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = numeric(0), model = "LM")
   res[["wear_pers_rf"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all, model = "RF")
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
   
   res
 }
 
 ### EXPERIMENTS
 ## NULL distributions (save summary in null.res)
-res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = FALSE)}, mc.cores = 100)
-res.randomized = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
+#res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = FALSE)}, mc.cores = 100)
+#res.randomized = mclapply(1:1000, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = TRUE, bootstrap = FALSE)}, mc.cores = 100)
 
 ## Final runs for 2d (save summary in all.res)
 # res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
 
 ## Experiments for 4.5
-#res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
 
 ### Summary stats for the randomized trials (null hypothesis)
-null.res = data.frame()
-
-for (r in res.randomized){
-  null.res = rbind(null.res, get.stats(r))
-}
+# null.res = data.frame()
+# 
+# for (r in res.randomized){
+#   null.res = rbind(null.res, get.stats(r))
+# }
 
 ### Summary stats for the actual experiment
 all.res = data.frame()
@@ -205,7 +206,20 @@ for (r in res){
   all.res = rbind(all.res, get.stats(r))
 }
 
-null.res = null.res.tmp
+df = data.frame(all.res) %>% group_by(model, test) %>%
+  summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve))  %>%
+  arrange(model,desc(mean))
+df$test = factor(df$test, levels = unique(df$test))
+
+df$min = df$mean - df$sd
+df$min[df$min < 0] = 0
+df$max = df$mean + df$sd
+p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) + 
+  geom_errorbar(aes(ymin=min, ymax=max), width=.2) +
+  geom_point(size=3) +
+  weartals_theme + 
+  labs(x = NULL, y ="RPVE")
+p
 
 # Save results
 #save(res, res.randomized, file="population.experiments.randomized.Rda")

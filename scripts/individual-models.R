@@ -140,9 +140,7 @@ generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_
   res.tests = c()
   if (is.null(ntest))
     ntest = length(test.names)
-  min_patients = 10
-  
-  
+
   for (test.name in test.names[1:ntest]){
     models = list()
     model_vars = c()
@@ -163,15 +161,18 @@ generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_
       # population vitals + personal intercept model
       models[["personal mean"]] = paste0(identifier)
 
-    res.tests  = c(res.tests, test.name)
-    mdl = "vitals + personal mean"
-    model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]],
-                         model_vars = model_vars,threshold_hi = threshold_hi, mixed = FALSE, type = "RF",
-                         vits = vits)
-    res.values = c(res.values, model$res)
-    res.models = c(res.models, paste(mdl,"(RF)"))
-    res.n = c(res.n, model$n)
-    print("RF done")
+      # RF MODELS (only vitals & personal)
+    models_rf = list("vitals + personal mean","personal mean")
+    for (mdl in models_rf){
+      res.tests  = c(res.tests, test.name)
+      model = getLMresults(corDf4A, test.name, threshold, identifier, cap, models[[mdl]],
+                           model_vars = model_vars,threshold_hi = threshold_hi, mixed = FALSE, type = "RF",
+                           vits = vits)
+      res.values = c(res.values, model$res)
+      res.models = c(res.models, paste(mdl,"(RF)"))
+      res.n = c(res.n, model$n)
+      print("RF done")
+    }
     
     for (mdl in names(models)){
       res.tests  = c(res.tests, test.name)
@@ -185,7 +186,6 @@ generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_
     }
   }
   res = data.frame(test = res.tests, model = res.models, value = res.values, n = res.n)
-  print(res)
   res = na.omit(res)
   res
 }
@@ -194,24 +194,29 @@ generate4A = function(dataset, dataset_type, threshold = 4, cap = 10, threshold_
 #  threshold - minimum number of visits for being included in the model (the higher the more accurate personal models)
 #res = generate4A("30k",threshold = 50, cap = 500)
 #res = generate4A(wear, "iPOP",threshold = 5, cap = 50, ntest=2)
-experiments4A = mclapply(1:4, function(x) { 
-  # 30k
-#  corDf.boot = bootstrap.dataset(corDf)
-#  generate4A(corDf.boot, "30k",threshold = 50, cap = 50, ntest = 2)
-  
+experiments5A = mclapply(1:4, function(x) { 
   # IPOP
   corDf.boot = bootstrap.dataset(iPOPcorDf)
-  generate4A(corDf.boot, "iPOP",threshold = 4, cap = 100)
+  generate4A(corDf.boot, "iPOP",threshold = 4, cap = 100, ntest = 2)
 }, mc.cores = 4)
-save(experiments4A,file="experiments4A.Rda")
-load("experiments4A.Rda")
+save(experiments5A,file="experiments5A.Rda")
+load("experiments5A.Rda")
+
+experiments5B = mclapply(1:4, function(x) { 
+  # 30k
+  corDf.boot = bootstrap.dataset(corDf)
+  generate4A(corDf.boot, "30k",threshold = 50, cap = 50, ntest = 2)
+}, mc.cores = 4)
+save(experiments5B,file="experiments5B.Rda")
+load("experiments5B.Rda")
 
 boxplot(iPOPcorDf$IGM ~ iPOPcorDf$iPOP_ID) 
 boxplot(iPOPcorDf$CO2 ~ iPOPcorDf$iPOP_ID) 
 
+experiments = experiments5B
 res = data.frame()
-for (i in 1:length(experiments4A)){
-  experiment = experiments4A[[i]]
+for (i in 1:length(experiments)){
+  experiment = experiments[[i]]
   experiment$experiment_id = i
   res = rbind(res, experiment)
 }
@@ -227,7 +232,7 @@ pp = ggplot(toplot, aes(test, mean, group = model, color = model)) +
   xlab("Lab test") +
   geom_point(size = 3, position=position_dodge(width=0.7)) +
   geom_errorbar(size = 0.8, aes(ymin=mean-sd, ymax=mean+sd), width=.8, position=position_dodge(width=0.7)) +
-  scale_color_manual(values=gg_color_hue(5)[c(1,2,3,5,4)]) +
+  scale_color_manual(values=gg_color_hue(6)[c(1,2,3,5,4,6)]) +
   weartals_theme + 
   theme(text = element_text(size=14))
 print(pp)
