@@ -134,7 +134,7 @@ get.stats = function(res){
       
       df = data.frame(model = r,
 #                      pval = cor.test(true,pred)$p.val,
-                      pval = t.test( (true-pred)**2, (true-null)**2 )$p.value,
+#                      pval = t.test( (true-pred)**2, (true-null)**2 )$p.value,
                       test = res.test,
                       rve = sqrt(max(0,1 - sum((true - pred)**2) / sum((true - null)**2))),
                       ve = 1 - sum((true - pred)**2) / sum((true - null)**2)
@@ -175,7 +175,7 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   
   # Figure 4.5
   res[["wear_pers_lm_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = numeric(0), model = "LM")
-  res[["wear_pers_rf"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all, model = "RF")
+  res[["wear_pers_lm"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all[1:10], model = "LM", mode = "LASSO")
   res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
   
   res
@@ -222,7 +222,7 @@ p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) +
 p
 
 # Save results
-#save(res, res.randomized, file="population.experiments.randomized.Rda")
-save(all.res, null.res, file="fig2d.Rda")
+save(res, file="experiment5b.Rda")
+save(all.res, file="fig5b.Rda")
 
 #source("scripts/extra-plotting/fig2d.R")
