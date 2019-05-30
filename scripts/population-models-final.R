@@ -1,4 +1,4 @@
-run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF", mode = "all", randomized = FALSE)
+run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model = "RF", mode = "all", randomized = FALSE, min.visits = 10)
 {
   # We assume that the data that went in contains all the variables to use in the model and iPOP_ID
   wear.tmp = filter.nas(data,names(data))
@@ -19,7 +19,7 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
     
     # Check if the patient has at least six observations    
     nfrac = length(test.idx)
-    if (nfrac < 6){
+    if (nfrac < min.visits){
       return(list(pred = c(),
                   true = c(),
                   null = c()))
@@ -63,8 +63,11 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
     vars = rownames(glm.res$glmnet.fit$beta[abs(glm.res$glmnet.fit$beta[,beta.1se]) > 1e-10,]) # TODO: this is an arbitrary rule for now
   }
   
-  if (length(vars) == 0)
+  if (length(vars) == 0){
     vars = "1"
+    if (personalized)
+      vars = "iPOP_ID"
+  }
 
   # Build the RF model 
   rf.fml = paste(test.id, "~", paste(vars, collapse=" + "))
@@ -84,8 +87,11 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
        null = predict(null.model, newdata = x.test))
 }
 
-population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL, randomized = FALSE){
+population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL, randomized = FALSE, num.patients = NULL){
   patients = unique(iPOPcorDf$iPOP_ID)
+  if (!is.null(num.patients))
+    patients = patients[1:num.patients]
+  
   if (debug){
     top.names <- c("HCT")
     patients = patients[1:20]
@@ -172,11 +178,17 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
   res = list()
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
+  # vars.all = c("hr_mean",#"hr_sd",
+  #              "st_mean",#"st_sd",
+  #              "gsr_mean",#"gsr_sd",
+  #              "sk_mean",#"sk_sd",
+  #              "rhr_mean"#"rhr_sd"
+  # )
   
   # Figure 4.5
-  res[["wear_pers_lm_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = numeric(0), model = "LM")
-  res[["wear_pers_lm"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all[1:10], model = "LM", mode = "LASSO")
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF")
+  res[["wear_pers_lm_null"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = numeric(0), model = "LM", num.patients = 1)
+  res[["wear_pers_lm"]] = population.loo(wear, debug = debug, personalized = TRUE, vars = vars.all[1:20], num.patients = 1, mode = "LASSO")
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, vars = vars.all, model = "RF",num.patients = 1)
   
   res
 }
@@ -190,7 +202,7 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
 # res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
 
 ## Experiments for 4.5
-res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, bootstrap = TRUE)}, mc.cores = 6)
+res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 ### Summary stats for the randomized trials (null hypothesis)
 # null.res = data.frame()
@@ -208,7 +220,7 @@ for (r in res){
 
 df = data.frame(all.res) %>% group_by(model, test) %>%
   summarise(mean=mean(rve), mean.ve=mean(ve), sd=sd(rve))  %>%
-  arrange(model,desc(mean))
+  arrange(desc(model),desc(mean))
 df$test = factor(df$test, levels = unique(df$test))
 
 df$min = df$mean - df$sd
