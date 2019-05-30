@@ -40,12 +40,13 @@ summary(res)
 # patient with at least 4 observations. The model simply 
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, vits = c("Temp","Pulse","Systolic","Diastolic","Respiration"), model_vars=c(), threshold_hi = 1e7, mixed=FALSE, type="LM", min_patients = 10){
   # TODO: that's an ugly wayL to remove NAs but correct
-  corDf.tmp = filter.nas(corDf4A, c(test.name,model_vars,vits))
+  corDf.tmp.full = filter.nas(corDf4A, c(test.name,model_vars,vits))
   
-  ids = sort(table(corDf.tmp[[identifier]]))
+  ids = sort(table(corDf.tmp.full[[identifier]]))
   atleastafew = names(ids[(ids >= threshold) & (ids <= threshold_hi)]) # select patients with at least 10 tests
   atleastafew = atleastafew[1:min(cap,length(atleastafew))] # troubles with training bigger models
-  corDf.tmp = corDf.tmp[corDf.tmp[[identifier]] %in% atleastafew,]
+
+    corDf.tmp = corDf.tmp.full[corDf.tmp.full[[identifier]] %in% atleastafew,]
   testids = c()
 
   print(dim(corDf.tmp))
@@ -54,7 +55,7 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
   if (length(atleastafew) > min_patients){
     # Select the last observation from each patient who qualified (at least n0 obs)
     for (id in atleastafew){
-      lastvisit = tail(which(corDf.tmp[[identifier]] == id),1)
+      lastvisit = sample(which(corDf.tmp[[identifier]] == id),ceiling(length(atleastafew)*0.2))
       testids = c(testids, lastvisit )
     }
     
@@ -101,7 +102,7 @@ getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_co
     
     # Sqrd root of variance explained
     var.exp = sum( (corDf.tmp[testids,test.name] - preds)**2)
-    var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp[-testids,test.name]))**2)
+    var.null = sum( (corDf.tmp[testids,test.name] - mean(corDf.tmp.full[-testids,test.name]))**2)
     if (test.name=="LYM")
       plot(corDf.tmp[testids,test.name], preds)
     if (var.exp/var.null > 1)
@@ -199,7 +200,7 @@ experiments5A = mclapply(1:4, function(x) {
   corDf.boot = bootstrap.dataset(iPOPcorDf)
   generate4A(corDf.boot, "iPOP",threshold = 4, cap = 100, ntest = 2)
 }, mc.cores = 4)
-save(experiments5A,file="experiments5A.Rda")
+#save(experiments5A,file="experiments5A.Rda")
 load("experiments5A.Rda")
 
 experiments5B = mclapply(1:4, function(x) { 
@@ -207,7 +208,7 @@ experiments5B = mclapply(1:4, function(x) {
   corDf.boot = bootstrap.dataset(corDf)
   generate4A(corDf.boot, "30k",threshold = 50, cap = 50, ntest = 2)
 }, mc.cores = 4)
-save(experiments5B,file="experiments5B.Rda")
+#save(experiments5B,file="experiments5B.Rda")
 load("experiments5B.Rda")
 
 boxplot(iPOPcorDf$IGM ~ iPOPcorDf$iPOP_ID) 
@@ -335,12 +336,14 @@ generate4DF = function(clin,vit,dataset = "30k"){
     identifier = "ANON_ID"
     corDf.tmp = corDf[!is.na(corDf[[clin]]),]
   }
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Systolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
-  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
+  # Use loess to estimate the population model
+#  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
+  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
   
+  
+  for (vital in vitals)
+    corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,vital]),]
+
   # Here we can select a few ANNON_ID
   if (dataset == "iPOP")
     toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
@@ -352,12 +355,9 @@ generate4DF = function(clin,vit,dataset = "30k"){
   
   dd = corDf.tmp[corDf.tmp[[identifier]] %in% toppat ,c(identifier,vit,clin)]
   
-  # Use loess to estimate the population model
-  vitals = c("Pulse","Temp","Systolic","Diastolic","Respiration")
-  
   # Use lm to estimate the population model
   frm = paste0(clin," ~ ",vit)
-  ww = lm(frm, corDf.tmp[sample(nrow(corDf.tmp))[1:10000],])
+  ww = lm(frm, corDf.tmp[sample(nrow(corDf.tmp)),])
   grid = seq(min(corDf.tmp[[vit]], na.rm = T),max(corDf.tmp[[vit]],na.rm = T),length.out = 100)
   df = data.frame(vit = grid)
   df[[vit]] = grid
@@ -375,16 +375,34 @@ generate4DF = function(clin,vit,dataset = "30k"){
     
     # Var explained (CV)
     errors = c()
+    errors.persmean = c()
     for (i in 1:20){
-      testids = sample(nrow(corDf.ind))[1:floor(nrow(corDf.ind)*0.2)]
+      #testids = (nrow(corDf.ind) - 10):nrow(corDf.ind)
+      testids = sample(nrow(corDf.ind))[1:ceiling(nrow(corDf.ind)*0.2)]
       model = lm(frm, data = corDf.ind[-testids,])
+      
+      # personal model
       preds = predict(model, newdata = corDf.ind[testids,])
+      
+      var.null = sum( (corDf.ind[testids,clin] - mean(corDf.tmp[,clin])) ** 2)
+
+      # compute var exp
       var.exp = sum( (corDf.ind[testids,clin] - preds) ** 2)
-      var.null = sum( (corDf.ind[testids,clin] - mean(corDf.ind[-testids,clin])) ** 2)
       err = max(1 - var.exp / var.null,0)
+      
       errors = c(errors, sqrt(err))
+      
+      var.exp = sum( (corDf.ind[testids,clin] - mean(corDf.ind[testids,clin])) ** 2)
+      err = max(1 - var.exp / var.null,0)
+      
+      errors.persmean = c(errors.persmean, sqrt(err))
     }
     err = mean(errors)
+    err.pm = mean(errors.persmean)
+    
+    plot(corDf.ind[testids,clin])
+    abline(h=mean(corDf.tmp[,clin]),col="red")
+    abline(h=mean(corDf.ind[testids,clin]),col="blue")
     
     # Correlation
     # model.sum = summary(model)
@@ -393,10 +411,10 @@ generate4DF = function(clin,vit,dataset = "30k"){
     dd[dd[[identifier]] == pat,]$accuracy = paste0(pat," (r=",sprintf("%.1f", err),")")
     
     slope = lm(paste0(clin," ~ ",vit),corDf.ind)$coefficients[vit]
-    stats = rbind(stats, c(err,slope,nrow(corDf.ind)))
+    stats = rbind(stats, c(err,err.pm,slope,nrow(corDf.ind)))
   }
   rownames(stats) = toppat
-  colnames(stats) = c("sqvarexp",vit,"visits")
+  colnames(stats) = c("sqvarexp","sqvarexp.pm",vit,"visits")
   
   # Plot individual models with accuracies
   ggplot(dd, aes_string(vit, clin, group = "accuracy", colour = "accuracy")) + 
@@ -519,7 +537,7 @@ generate4C = function(dataset){
           
           qq = qq + geom_vline(xintercept=val,color=cols[k],size=1.5)
         }
-        print(qq, vp = viewport(layout.pos.row = i, layout.pos.col = j))
+#        print(qq, vp = viewport(layout.pos.row = i, layout.pos.col = j))
         
       }
     }
@@ -528,4 +546,4 @@ generate4C = function(dataset){
   
   cf
 }
-#res = generate4C("30k")
+res = generate4C("30k")
