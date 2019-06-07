@@ -376,7 +376,7 @@ generate4DF = function(clin,vit,dataset = "30k"){
     # Var explained (CV)
     errors = c()
     errors.persmean = c()
-    for (i in 1:20){
+    for (i in 1:100){
       #testids = (nrow(corDf.ind) - 10):nrow(corDf.ind)
       testids = sample(nrow(corDf.ind))[1:ceiling(nrow(corDf.ind)*0.2)]
       model = lm(frm, data = corDf.ind[-testids,])
@@ -443,7 +443,9 @@ generate4DF = function(clin,vit,dataset = "30k"){
   
   stats
 }
+set.seed(1)
 stats = generate4DF("HCT","Diastolic","30k")
+print(stats)
 
 generate4E = function(clin,vit,dataset = "30k"){
   if (dataset == "iPOP"){
