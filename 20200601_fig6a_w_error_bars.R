@@ -83,15 +83,16 @@ p<-ggplot(to.plot, mapping= aes(x=test,y=mean,color= colorsBlue)) +
 
 
 ##this version works but without a legend
-colorsBlue<- c("#F7FBFF", "#C6DBEF", "#4292C6", "#08519C", "#08306B")
+colorsBlue<- c("#b6d4f0", "#9dc5eb", "#4292C6", "#08519C", "#08306B")
 p<-ggplot(to.plot, mapping= aes(x=test,y=mean,color= model)) +
   geom_point(size=3, position=position_dodge(width=0.2),aes(color= model)) +
   geom_errorbar(aes(ymin=mean - to.plot$sd, ymax=mean + to.plot$sd,color= model), width=.8, position=position_dodge(width=0.2)) +
   weartals_theme+
   ylim(-0.1, 0.65)+
   scale_color_manual(values=colorsBlue, labels = c("1 Day", "3 Day", "1 Week", "1 Month", "All Data"))+
-  labs(x = NULL, y =expression(sqrt("Variance explained")),color = "Model")
-
+  theme(legend.title = element_blank())+
+  labs(x = NULL, y =expression(sqrt("Variance explained")))
+p
 
 
 ggsave(paste0("Fig6A.png"),p,width=6,height=4)
