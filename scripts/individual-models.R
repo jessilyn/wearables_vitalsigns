@@ -25,6 +25,48 @@ res$ws
 res$tv
 sum(res$cnt >= 50)
 
+# For the response letter
+getTestStatsDemo = function(test, th = 10){
+  hct = na.omit(iPOPcorDf[,c("iPOP_ID",test)])
+  hct.mn = aggregate(hct[[test]], list(iPOP_ID = hct$iPOP_ID), mean)
+  hct.var = aggregate(hct[[test]], list(iPOP_ID = hct$iPOP_ID), var)
+  hct.cnt = aggregate(hct[[test]], list(iPOP_ID = hct$iPOP_ID), length)
+  
+  mn = mean(hct.var$x[hct.cnt$x >= th])
+  wmn = sum(hct.var$x[hct.cnt$x >= th] * sqrt(hct.cnt$x[hct.cnt$x >= th]) / sum(sqrt(hct.cnt$x[hct.cnt$x >= th])))
+  ssd = sd(hct.mn$x[hct.cnt$x >= th])
+  list(diff=mn-wmn,ssd=ssd)
+}
+res.all = data.frame()
+for (test in c("A1C")){
+  res = data.frame(getTestStatsDemo(test))
+  res$test = test
+  res.all = rbind(res.all, res)
+}
+
+plot(hct.mn$x)
+th=1
+
+mn = mean(hct.mn$x[hct.cnt$x >= th])
+wmn = sum(hct.mn$x[hct.cnt$x >= th] * hct.cnt$x[hct.cnt$x >= th] / sum(hct.cnt$x[hct.cnt$x >= th]))
+
+
+data = na.omit(iPOPcorDf[,c("iPOP_ID",test)])
+a <- data %>% 
+  group_by(iPOP_ID) %>% 
+  summarise(Response=mean(A1C),se=sd(A1C),cnt=length(A1C)) %>% ungroup %>%
+  ggplot(aes(x=iPOP_ID,y=Response)) + 
+  geom_point(show.legend = FALSE) +
+  weartals_theme + 
+  geom_errorbar(aes(ymin = Response - se, ymax = Response + se), width = 0.1) +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  ylab("A1C") + 
+  xlab("iPOP cohort participant") + 
+  geom_hline(yintercept=mn,color="red") + 
+  geom_hline(yintercept=wmn,color="blue")
+a
+
 getDiastolicSlope = function(test){
   hct = na.omit(corDf[,c("ANON_ID","Diastolic",test)])
   hct.mn = aggregate(list(HCT = hct[[test]], diastolic=hct$Diastolic), list(ANON_ID = hct$ANON_ID), mean)
@@ -350,6 +392,9 @@ generate4DF = function(clin,vit,dataset = "30k"){
   else
     toppat = c("PD-4419","D-6050","N-8819","N-5362","D-3086")
   
+  toppat = unique(corDf.tmp[[identifier]])
+  pat.analyzed = c()
+  
   # Alternatively, we select people with the largest number of observations
   # toppat = names(sort(-table(corDf.tmp[[identifier]]))[1:5])
   
@@ -373,10 +418,14 @@ generate4DF = function(clin,vit,dataset = "30k"){
     corDf.ind = corDf.tmp[corDf.tmp[[identifier]] == pat,]
     corDf.ind = corDf.ind[!is.na(corDf.ind[,vit]),]
     
+    if (nrow(corDf.ind) < 60 || pat == "PD-9999")
+      next
+    pat.analyzed = c(pat.analyzed, pat)
+    
     # Var explained (CV)
     errors = c()
     errors.persmean = c()
-    for (i in 1:100){
+    for (i in 1:1000){
       #testids = (nrow(corDf.ind) - 10):nrow(corDf.ind)
       testids = sample(nrow(corDf.ind))[1:ceiling(nrow(corDf.ind)*0.2)]
       model = lm(frm, data = corDf.ind[-testids,])
@@ -413,7 +462,7 @@ generate4DF = function(clin,vit,dataset = "30k"){
     slope = lm(paste0(clin," ~ ",vit),corDf.ind)$coefficients[vit]
     stats = rbind(stats, c(err,err.pm,slope,nrow(corDf.ind)))
   }
-  rownames(stats) = toppat
+  rownames(stats) = pat.analyzed
   colnames(stats) = c("sqvarexp","sqvarexp.pm",vit,"visits")
   
   # Plot individual models with accuracies

@@ -36,3 +36,6 @@ pp = ggplot(toplot, aes(test, mean, group = model, color = model)) +
   theme(text = element_text(size=14))
 
 print(pp)
+
+# Compare vitals and vitals + personal
+t.test(toplot[toplot$model=="vitals" & toplot$test == "MCHC",]$mean,toplot[toplot$model=="vitals + personal mean and slope" & toplot$test == "MCHC",]$mean)

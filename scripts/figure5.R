@@ -400,6 +400,91 @@ generate5D = function(pat = "1636-69-001",lab.test = "HCT", nobs = 25, neval = 3
 }
 res = generate5D("1636-69-001", "HCT")
 
+
+# An alternative version of the one above, now with number of days monitored
+generate5D_time = function(pat = "1636-69-001",lab.test = "HCT", nobs = 25, neval = 3, nstart = 6, shift = 2){
+  ## 1636-69-001
+  
+  ## How much data we need for the estimates
+  corDf.tmp = iPOPcorDf[!is.na(iPOPcorDf[[lab.test]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Pulse"]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["Temp"]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["systolic"]]),]
+  corDf.tmp = corDf.tmp[!is.na(corDf.tmp[["diastolic"]]),]
+  tbl = table(corDf.tmp$iPOP_ID)
+  patids = names(tbl[tbl >= nobs + neval])
+  wall = which(corDf.tmp$iPOP_ID == patids[1])
+  #half2 = wall[ceiling(length(wall)/2):length(wall)]
+  #corDf.tmp[half2,]$iPOP_ID = "1636-69-001-late"
+  #patids = c("1636-69-001-late", patids)
+  patids = patids[1]
+  
+  # Here we select people with the largest number of observations
+  vts = c("Pulse","Temp","systolic","diastolic") #,"Respiration")
+  
+  res = c()
+  d = corDf.tmp[corDf.tmp$iPOP_ID == patids, c(lab.test, vts, "Clin_Result_Date")]
+  pdate = as.POSIXct(d[["Clin_Result_Date"]])
+  d["time"] = (as.numeric(pdate))/(60*60*24)
+  d["time"] = d["time"] - min(d["time"])
+
+  
+  windows = 2:20*50
+  res = list()
+  
+  for (window in windows){
+    res[[as.character(window)]] = c()
+    for (i in 2:(nrow(d)-neval)){
+      test = i:(i+neval)#nrow(d)
+      
+      train = 1:(i-1)
+      enddate = d[["time"]][i]
+      startdate = enddate - window
+      
+      train_data = d[train,]
+      train_data = train_data[train_data[["time"]]>=startdate,]
+      
+      if (nrow(train_data) < length(vts) + 2)
+        next
+      if (nrow(train_data) == i-1)
+        next
+      
+      model = lm(paste0(lab.test," ~ ."),data=train_data[,c(lab.test, vts)])
+        
+      sm = summary(model)
+      pp = predict(model, newdata=d[test,c(lab.test, vts)])
+      err = mean((pp - d[test,lab.test])**2) / mean((mean(d[train,lab.test]) - d[test,lab.test])**2)
+      res[[as.character(window)]] = c(res[[as.character(window)]], err)
+    }
+  }
+  mse = c()
+  for (window in windows){
+    mse = c(mse, mean(res[[as.character(window)]]))
+  }
+  mse[mse>1] = 1
+  
+  #mse = colMeans(res[,1:nobs])
+  #mse[mse > 1] = 1
+  df = data.frame(days_monitored = windows, RPVE = sqrt(1 - mse))
+  #plot(df,ylab="RPVE of HCT prediction",xlab="observation used for the model")
+  
+  plt = ggplot(df, aes(days_monitored, RPVE)) + 
+    geom_point(size=3) +
+    weartals_theme + theme(text = element_text(size=25)) +
+    theme(legend.position="none") +
+    scale_x_continuous(breaks = pretty(df$days_monitored, n = 13)) 
+  print(plt)
+  ggsave(paste0("plots/Figure-5D-",pat,"-",lab.test,".png"),width = 6, height = 6)
+  write.table(df, file=paste0("data/Figure-5D-",pat,"-",lab.test,".csv"))
+  df
+}
+res = generate5D_time("1636-69-001", "HCT")
+
+# corDf.tmp = corDf.tmp[corDf.tmp[["iPOP_ID"]] == "1636-69-001",]
+# org = as.numeric(as.POSIXct(corDf.tmp[["Clin_Result_Date"]]),origin = "1970-01-01")
+# dist = (org - lag(org))/(60*60*24)
+# boxplot(dist)
+
 ###############
 #   Figure 5 #
 ###############
@@ -567,19 +652,22 @@ generate6 = function(){
   dres.combined = dres$dres[,c("date","rsquared")]
   dres.combined$rpve = sqrt(dres.combined$rsquared)
   dres.combined = dres.combined[,c("date","rpve")]
-  dres.combined$type="clinical"
+  dres.combined$type="cVS"
   dres.combined.wear = figure45.varyingr2$dres.pred[,c("dates","rpve")]
   colnames(dres.combined.wear)[1] = "date"
-  dres.combined.wear$type = "wearable"
+  dres.combined.wear$type = "wVS"
   dres = rbind(dres.combined,dres.combined.wear)
   dres$time = (as.Date(dres$date) - min(as.Date(dres$date)))/365.0
-
+  
   plt = ggplot(dres, aes(time, rpve, group=type, colour=type)) + 
     weartals_theme + theme(text = element_text(size=25)) +
     ylim(0, 1) +
     geom_line(size=1.3) +
-    geom_point(size=3)
-  ggsave("plots/Figure-6.png",plot = plt,width = 10, height = 6)
-  plt
+    geom_point(size=3) +
+    scale_color_manual(values=gg_color_hue(2)[c(2,1)]) +
+    ylab("Multiple correlation\ncoefficient (R)") +
+    xlab("Time (Years)")
+  ggsave("plots/Figure-6.png",plot = plt,width = 8, height = 6)
+  list(plt,dres)
 }
 generate6()

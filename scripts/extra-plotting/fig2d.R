@@ -24,6 +24,23 @@ p = ggplot(df, mapping= aes(x=test,y=mean,color=model)) +
 p
 ggsave(paste0("population.png"),p,width=14,height=5)
 
+df
+
+## Production ready Fig 2d
+df_fig2d = df[df$test %in% c("HCT","RBC","HGB","MONOAB","A1C","GLU","PLT","UALB","CL"),]
+df_fig2d$shape = 4
+df_fig2d$shape[df_fig2d$model=="wear_nopers_rf"] = 6
+df_fig2d$shape = as.factor(df_fig2d$shape)
+p = ggplot(df_fig2d, mapping= aes(x=test,y=mean,color=model)) + 
+  geom_errorbar(aes(ymin=min, ymax=max), width=.4, show.legend = FALSE) +
+  geom_point(aes(shape=shape), size=7, show.legend = FALSE) +
+  weartals_theme + 
+  theme(axis.text.x = element_text(face="bold"),
+        axis.text.y = element_text(face="bold")) + 
+  labs(x = NULL, y = NULL)
+p
+ggsave(paste0("fig2d.png"),p,width=5.5,height=4)
+
 ## Get p-values
 # Before running the code below
 # * run bootstrap.experiment.2d experiment with randomized = TRUE 1000 times
@@ -39,5 +56,5 @@ for (i in 1:nrow(df))
   pval = c(pval,mean((null.res[(as.character(null.res$test)==df[i,"test"]) & (as.character(null.res$model)==df[i,"model"]),])$ve > df$mean.ve[i]))
 }
 df$pval = pval
-p.adjust(df$pval,method ="bonferroni")
-p.adjust(df$pval,method ="fdr")
+p.adjust(df[1:44,]$pval,method ="bonferroni")
+p.adjust(df[1:44,]$pval,method ="fdr")
