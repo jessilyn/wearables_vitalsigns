@@ -9,8 +9,8 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
   
   # List all patients and remove patient.id for LOO cross-validation
   patients = unique(wear.tmp$iPOP_ID)
-  train = patients[patients != patient.id]
-  test = patients[patients == patient.id]
+  train = patients[!(patients %in% patient.id)]
+  test = patients[patients %in% patient.id]
   train.ids = wear.tmp$iPOP_ID %in% train
   test.ids = wear.tmp$iPOP_ID %in% test
   
@@ -87,28 +87,44 @@ run.on.patient = function(data, patient.id, test.id, personalized = FALSE, model
        null = predict(null.model, newdata = x.test))
 }
 
-population.loo = function(data, model = "RF", mode="all", personalized = FALSE, debug = FALSE, vars = NULL, randomized = FALSE, num.patients = NULL){
+population.loo = function(data, model = "RF", mode="all", personalized = FALSE,
+                          debug = FALSE, vars = NULL, randomized = FALSE, num.patients = NULL,
+                          kfolds = NULL){
   patients = unique(iPOPcorDf$iPOP_ID)
   if (!is.null(num.patients))
     patients = patients[1:num.patients]
+  else
+    num.patients = length(patients)
+
+  if (is.null(kfolds))
+    kfolds = length(patients)
   
   if (debug){
     top.names <- c("HCT")
-    patients = patients[1:20]
+    patients = patients[1:50]
   }
   demo.variables = c()
   
   k = 0
+
+  fold_size = num.patients %/% kfolds
   
   res = list()
   for (test.id in top.names){
     cat("Test",test.id,"\n")
     res[[test.id]] = list()
     
-    for (patient.id in patients){
-      cat("Patient",patient.id,"\n") # LOO
+#    for (patient.id in patients){
+#      cat("Patient",patient.id,"\n") # LOO
+#      vars.subset = c("iPOP_ID", test.id, vars, demo.variables)
+#      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model, mode = mode, randomized = randomized)
+#    }
+    
+    for (i in 1:kfolds){
+      test.patients = patients[((i-1)*fold_size):min(num.patients,(i*fold_size-1))]
+      cat("Fold",i,"\n") # LOO
       vars.subset = c("iPOP_ID", test.id, vars, demo.variables)
-      res[[test.id]][[patient.id]] = run.on.patient(data[,vars.subset], patient.id, test.id, personalized = personalized, model = model, mode = mode, randomized = randomized)
+      res[[test.id]][[i]] = run.on.patient(data[,vars.subset], test.patients, test.id, personalized = personalized, model = model, mode = mode, randomized = randomized)
     }
   }
   res
@@ -151,7 +167,7 @@ get.stats = function(res){
   stats
 }
 
-bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE, randomized = FALSE){
+bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE, randomized = FALSE, kfolds = NULL){
   if (bootstrap){
     clin = bootstrap.dataset(clin, replace = TRUE)
     wear = bootstrap.dataset(wear, replace = TRUE)
@@ -161,10 +177,10 @@ bootstrap.experiment.2d = function(clin, wear, debug = FALSE, bootstrap = FALSE,
   
   vars.all = unlist(read.table(paste0(dir,"FinalLasso_153WearableFactors.csv"), stringsAsFactors = FALSE))
   
-  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO")
-  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF")
-  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF")
-  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM")
+  res[["wear_nopers_lm_lasso"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "LM", mode = "LASSO", kfolds = kfolds)
+  res[["wear_nopers_rf"]] = population.loo(wear, debug = debug, personalized = FALSE, randomized = randomized, vars = vars.all, model = "RF", kfolds = kfolds)
+  res[["clin_nopers_rf"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "RF", kfolds = kfolds)
+  res[["clin_nopers_lm"]] = population.loo(clin, debug = debug, personalized = FALSE, randomized = randomized, vars = c("Pulse","Temp"), model = "LM", kfolds = kfolds)
   
   res
 }
@@ -200,9 +216,15 @@ bootstrap.experiment.4.5a = function(clin, wear, debug = FALSE, bootstrap = FALS
 
 ## Final runs for 2d (save summary in all.res)
 # res = mclapply(1:100, function(i){bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE)}, mc.cores = 50)
+res = mclapply(1:100, function(i){
+  bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, randomized = FALSE, bootstrap = TRUE, kfolds = 25)
+}, mc.cores = 50)
+res = mclapply(1:6, function(i){
+  bootstrap.experiment.2d(iPOPcorDf, wear.data.preprocess(wear), debug = TRUE, randomized = FALSE, bootstrap = FALSE, kfolds = 25)
+  }, mc.cores = 6)
 
 ## Experiments for 4.5
-res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
+# res = mclapply(1:6, function(i){bootstrap.experiment.4.5a(iPOPcorDf, wear.data.preprocess(wear), debug = FALSE, bootstrap = TRUE)}, mc.cores = 6)
 
 ### Summary stats for the randomized trials (null hypothesis)
 # null.res = data.frame()
