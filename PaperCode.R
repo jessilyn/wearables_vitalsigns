@@ -1344,9 +1344,10 @@ for (i in top.models) {
 rf.feature.summaries[rf.feature.summaries$test %in% top.models,]
 
 
-##############
-#  Figure 1D #
-##############
+
+#########################################################
+#     Main Text Numbers  - like Fig1D but for SEHR Data #
+#########################################################
 
 hist(table(corDf$ANON_ID), col="red", breaks=200, xlab = "Number of Clinic Visits / Person",
      main = NULL, font.lab=2,lwd=2,font=2,lty="blank",
