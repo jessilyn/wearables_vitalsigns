@@ -296,13 +296,9 @@ df<-df[!is.na(df$iPOP_ID),] # only keep wearables data that has an associated iP
 df[,"Heart_Rate"] <- apply(df[,"Heart_Rate"], 2, remove_outliers) # clean data based on HR
 df <- df[which(!is.na(df[,"Heart_Rate"])),] # remove observations where HR = NA
 # restrict to daytime values only (between 6am-10pm)
-#df$Timestamp_Local<-as.POSIXct(df$Timestamp_Local) # takes forever
 df$Timestamp_Local<-fastPOSIXct(df$Timestamp_Local) # takes a very long time
-#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 6 & hour( Timestamp_Local ) < 22 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
-#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 20 & hour( Timestamp_Local ) < 24 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
-#daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 24 | hour( Timestamp_Local ) >= 0 & hour( Timestamp_Local ) < 1, ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
-#below is actually nighttime for the test mike asked for
+# nighttime is currently represented below
 daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 19 & hour( Timestamp_Local ) < 21 , ] ) # pull data only from specific time window; store hourly resting data for boxplots
 
 vitals <- iPOPvitals
@@ -371,15 +367,6 @@ for (window in windows){
   df.name <- paste0("restingDf.vitals.", window)
   assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
 }
-
-
-ggplot()+
-  geom_line(aes(x=windows, y=wRHR.mean), color="red") +
-  geom_point(aes(x=windows, y=wRHR.mean), color="red") +
-  # geom_line(aes(x=windows, y=wRTemp.mean), color="blue") +
-  # geom_point(aes(x=windows, y=wRTemp.mean), color="blue") +
-  xlab("Resting Time Window (seconds)") +
-  ylab("Mean wRHR") # or wRTemp
   
 cols <- c("red","blue","green","purple")
 ggplot()+
@@ -393,15 +380,6 @@ ggplot()+
   geom_point(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
   xlab("Resting Time Window (seconds)") +
   ylab("HR SD") # or wRTemp
-  
-wRHR.mean
-wRHR.sd
-wRHR.num.obs
-HR.personal.sd
-wRTemp.mean
-wRTemp.sd
-wRTemp.num.obs
-Temp.personal.sd
 
 for(window in windows){
   restingDf.vitals <- eval(as.name(paste0("restingDf.vitals.",window)))
@@ -439,7 +417,19 @@ for(window in windows){
   
   rhr.daily.means.id$idx <- as.numeric(rhr.daily.means.id$iPOP_ID)
   
-
+###########################
+#     Main Text Numbers   #
+###########################
+  wRHR.mean
+  wRHR.sd
+  wRHR.num.obs
+  HR.personal.sd
+  wRTemp.mean
+  wRTemp.sd
+  wRTemp.num.obs
+  Temp.personal.sd
+  
+  
 ##########
 # Fig 1D #
 ##########
