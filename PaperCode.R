@@ -2,7 +2,7 @@
 # Master script for "Wearable sensors enable personalized predictions of clinical laboratory measurements"   #
 # Jessilyn Dunn & Lukasz Kidzinski                                                                           #
 # initiated: 11/01/2017                                                                                      #
-# last modified: 03/30/2021                                                                                  #
+# last modified: 04/01/2021                                                                                  #
 # Output: Figures for paper                                                                                  #
 ##############################################################################################################
 
@@ -27,7 +27,36 @@ library(nlme)
 library(MuMIn) 
 library(glmnet)
 
-source("ggplot-theme.R") # theme for figures
+# A theme for plots
+weartals_theme = theme_classic() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+
+multiplot <- function(..., plotlist = NULL, file, cols = 1, layout = NULL) {
+  require(grid)
+  
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  if (is.null(layout)) {
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots == 1) {
+    print(plots[[1]])
+    
+  } else {
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    for (i in 1:numPlots) {
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
 
 if(!dir.exists("plots")) dir.create("plots")
 
@@ -509,8 +538,6 @@ describe(iPOPlabs)
 ####################
 
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
-
-source("ggplot-theme.R") # just to make things look nice
 
 # choose for during troubleshooting
 use.Troubleshoot.mode = TRUE
