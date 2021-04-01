@@ -253,9 +253,10 @@ cpt$CPT_DATE <- as.Date(cpt$CPT_DATE, "%Y-%m-%d")
 ## merge iPOP and demographics
 iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 
-####################
-#### Figure 1  #####
-####################
+###########################
+#     Main Text Numbers   #
+###########################
+
 iPOPdaysMonitored <- read.csv("slide2_C_participant_data_summary.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 # restrict to wearables only people
@@ -284,11 +285,9 @@ male <- iPOP.table[iPOP.table$Gender=="M"]
 male <- male[-max(dim(male)),]
 max(male$AgeIn2016);  min(male$AgeIn2016); mean(male$AgeIn2016) # max age of male particpants
 
-
-
-###############
-#  Figure 1B  #
-############### 
+############
+#  Fig 1B  #
+############
 df <- fread(paste0(dir, "/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
                    header=TRUE,sep=",",stringsAsFactors = FALSE,
                    select=c("Timestamp_Local","Heart_Rate","Skin_Temperature_F",
@@ -484,9 +483,9 @@ hist(restingDf.all$restingSkinTemp, col="turquoise3", border="turquoise4", break
      main = NULL, font.lab=2,lwd=2,font=2)
 abline(v=mean(restingDf.all$restingSkinTemp[!is.na(restingDf.all$restingSkinTemp)]), col="blue", lwd=2)
 
-###############################
-#     Main Text Numbers       #
-###############################
+###########################
+#     Main Text Numbers   #
+###########################
 
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
 mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.54 +/- 9.92, n=1644
