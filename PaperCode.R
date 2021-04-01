@@ -1183,11 +1183,9 @@ ggplot(top.features, aes(x=lasso.feature, y=mean, color = test)) +
   labs(x = "Model Features",y = expression(paste("Coefficient")))+
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
 
-################################################
-#  Figure 3D  - Canonical Correlation Analysis #
-################################################
-
-# should we make this regularized - what is the right proportion between observations and features to decide this (I think there we have ~2X the numver of obs as features)
+############
+#  Fig 3D  #
+############
 
 # library("devtools)
 # install_url("https://cran.r-project.org/src/contrib/Archive/impute/impute_1.26.0.tar.gz")
@@ -1196,7 +1194,7 @@ ggplot(top.features, aes(x=lasso.feature, y=mean, color = test)) +
 library("PMA")
 library("Hmisc")
 
-#TODO: UALAB problem coding- removed
+## UALAB data formatting problem - removed from diabetes group
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
@@ -1205,7 +1203,7 @@ clinical.groups[["Cardiometabolic Disease"]]=c("A1C","ALB","GLU","UALB","CR","AL
 clinical.groups[["Liver Function"]]=c("ALKP","BUN","ALT","TBIL","AST")
 clinical.groups[["Inflammation"]]=c("BASO","LYM","LYMAB","MONO","MONOAB","NEUT","NEUTAB","IGM","EOS","EOSAB","BASOAB","WBC","HSCRP")
 clinical.groups[["Hematologic"]] = c("PLT","GLOB","TP","HGB","HCT","RDW","MCH","MCV","RBC","MCHC")
-#clinical.groups[["Cardiometabolic.Disease"]]=c("A1C","ALB","GLU","UALB","CR","ALCRU","CHOL"," LDLHDL","HDL","CHOLHDL","NHDL","TGL","LDL")
+
 cca.corr.coefs <- c()
 patients <- unique(wear$iPOP_ID)
 
@@ -1234,7 +1232,6 @@ for (nm in names(clinical.groups)){
   data.clin = wear[,which(colnames(wear) %in% c("iPOP_ID", clinical.groups[[nm]]))]
   data.wear = wear[,which(colnames(wear) %in% c(wear.variables))]
   # data.wear$AgeIn2016 = wear$AgeIn2016
-  
   # data.wear$male = wear$Gender == "M"
   # data.wear$ethnA = wear$Ethn == "A"
   # data.wear$ethnB = wear$Ethn == "B"
@@ -1249,7 +1246,7 @@ for (nm in names(clinical.groups)){
   tmp <- cor(d)
   tmp[upper.tri(tmp)] <- 0
   diag(tmp) <- 0
-  d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] # how does it choose which variable to get rid of? Does it matter which one bc they are linear combos of eachother?
+  d <- d[,!apply(tmp,2,function(x) any(x > 0.99999999999))] 
 
   d = scale(d,center = TRUE, scale = TRUE) # center data
   indexX = c()
@@ -1321,7 +1318,7 @@ p=ggplot(df.res, aes(x=name, y=cor)) +
   ylim(0,0.5) +
   labs(x = NULL, y ="Correlation Coefficient")
   geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.5)
-ggsave(paste0("plots/Figure2E.png"),p,width=5,height=4)
+ggsave(paste0("plots/Figure3D.png"),p,width=5,height=4)
 
 
 ###################
