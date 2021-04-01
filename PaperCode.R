@@ -245,7 +245,7 @@ cpt$CPT_DATE <- format(
   as.Date(cpt$CPT_DATE, "%d-%b-%Y"), "%Y-%m-%d")
 cpt$CPT_DATE <- as.Date(cpt$CPT_DATE, "%Y-%m-%d")
 
-### clean wear ### messes up code for Fig 2C so edited it out, but might be necessary for the CCA in Fig 2E
+### clean wear ### for the CCA in Fig 2E
 # wear2<-wear
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, function(x) as.numeric(as.character(x)))
 # wear[,-c(1:6)] <- apply(wear[,-c(1:6)], 2, remove_outliers) 
