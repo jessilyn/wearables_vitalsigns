@@ -506,9 +506,9 @@ describe(iPOPvitals)
 describe(iPOPlabs)
 
 
-####################
-#  Figure 3A - LM  #
-####################
+#################
+#  Fig 3A - LM  #
+#################
 
 # creates ranked list of clinical laboratory tests by the %var explained in simple LM; LOO cross validation at the subject level 
 
@@ -619,9 +619,9 @@ sqrt.pct.var <- sqrt(pct.var.explained)
 as.matrix(sort(sqrt(pct.var.explained)))
 
 
-#################################
-# Figure 3A: CODE FOR LASSO, RF # 
-#################################
+##############################
+# Fig 3A: CODE FOR LASSO, RF # 
+##############################
 
 #clean wear data frame
 wear[,8:length(names(wear))] <- apply(
@@ -1065,7 +1065,7 @@ write.table(rf.features, "../SECURE_data/20180608/20180608_Dayprior_noDemog_RF_F
 
 
 ## categories to color the x-axis
-#TODO: UALAB coding causes problems! Removed
+## UALAB data formatting problem - removed from diabetes group
 clinical.groups = list()
 clinical.groups[["Electrolytes"]] =c("CA","K","CL","CO2","NA.","AG")
 clinical.groups[["Diabetes"]] =c("A1C","ALB","GLU","CR","ALCRU") #"UALB",
@@ -1091,7 +1091,6 @@ df <- df[df$value>0,] # only show those models that actually do well.
 
 #colors for the x-axis labels by clinical.groups
 library(RColorBrewer)
-#myColors <- brewer.pal(6,"Set1")
 myColors <- c("peachpuff2", "lightskyblue3", "firebrick", "mediumpurple4", "sandybrown", "palegreen4", "salmon")
 df$col <- rep("NA", length(df$test))
 for (i in 1:length(clinical.groups)){
@@ -1110,9 +1109,6 @@ ggplot(df) +
                        labels=c("Without Demographics", "With Demographics"),
                        name=NULL) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, colour = df$col))
-
-
-
 
 ## LM, Lasso, RF
 withDemog <- read.csv("20180622_pct_var_DayPrior_ThreeLambdas.csv",
@@ -1381,9 +1377,9 @@ length(na.omit(vitals$Temp)) + length(na.omit(vitals$Pulse)) # total number of c
 length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 
 
-#########################################
-#    Figure 3A; Suppl. Table 2 and 3    #
-#########################################
+##############################
+#    Suppl. Table 2 and 3    #
+##############################
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; 
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using SEHR dataset
 # Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
@@ -1480,9 +1476,9 @@ ggplot(model.corr.coefs, aes(x=test, y=mean, group=model, col=as.factor(model.co
 
 write.table(models.corr.coefs, "20180504_pct_var_30k_noDemog.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
-################
-#    Figure 5A #
-################
+#################################
+#   Fig 5A  - Population Models #
+#################################
 library(caret)
 library(plyr)
 #function to pull out lm model p-values
@@ -1609,8 +1605,6 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   }
 }
 
-#20180506_model_compare_30k_withDemog.csv
-# 20180801_30k_RF_noIDnoDemog.csv
 write.table(models.corr.coefs, "20180804_cVS_noID_RF_train_test_60_40.csv",row.names=FALSE,col.names=TRUE, sep=",")
 
 corr.coefs <- as.data.frame(models.corr.coefs)
@@ -1681,7 +1675,7 @@ ggplot(delta.corr.coef, aes(x=test, y=mean))+
   
 ## get mean RPVE for each model:
 
-allModelResults <- read.csv("20180505_model_compare_SEHR_withDemog.csv",
+allModelResults <- read.csv("20180505_model_compare_30k_withDemog.csv",
          header =TRUE, stringsAsFactors = FALSE)
 models <- unique(allModelResults$model)
 
@@ -1698,10 +1692,9 @@ print(c("numTrainingObs", mean(sub$numTrainObs)))
 # increase in RVPE from demog-only to cVS + demog for top models:
 delta.corr.coef[order(delta.corr.coef$mean, decreasing = TRUE),]
 
-############
-# Figure 3 #
-############
-## Figure 3A: Check how individual means perform
+###############################
+# Fig 5 - Personalized Models #
+###############################
 
 library("lme4")
 
