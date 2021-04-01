@@ -285,9 +285,9 @@ male <- iPOP.table[iPOP.table$Gender=="M"]
 male <- male[-max(dim(male)),]
 max(male$AgeIn2016);  min(male$AgeIn2016); mean(male$AgeIn2016) # max age of male particpants
 
-############
-#  Fig 1B  #
-############
+################
+#  Fig 1B & C  #
+################
 df <- fread(paste0(dir, "/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
                    header=TRUE,sep=",",stringsAsFactors = FALSE,
                    select=c("Timestamp_Local","Heart_Rate","Skin_Temperature_F",
