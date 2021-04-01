@@ -454,9 +454,39 @@ for(window in windows){
        xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
   rug(iPOPdaysMonitored$Total_NumOfClinMeasures, ticksize = 0.1, lwd = 1)
 
-###############
-# Fig 1E  top #
-###############
+############
+# Fig 1E   #
+############
+
+## Fig 1E, top left
+par(mfrow = c(2,2), mai = c(0.7, 0.7, 0.7, 0.7))
+hist(iPOPvitals$Pulse, col="tomato3", , border="tomato4", breaks=1000,
+     xlab = "cHR", xlim=c(50,110),
+     main = NULL, font.lab=2,lwd=2,font=2)
+abline(v=mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]), col="blue", lwd=2)
+
+## Fig 1E, top right
+hist(iPOPvitals$Temp, col="turquoise3", border="turquoise4", breaks=100,
+     xlab = "cTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
+abline(v=mean(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)]), col="blue", lwd=2)
+
+#Fig 1E, bottom left
+hist(restingDf.all$restingHR, col="tomato3", border="tomato4", breaks=100,
+     xlab = "wRHR", xlim=c(50,100),
+     main = NULL, font.lab=2,lwd=2,font=2)
+scale_y_continuous()
+abline(v=mean(restingDf.all$restingHR[!is.na(restingDf.all$restingHR)]), col="blue", lwd=2)
+
+#Fig 1E, bottom right
+hist(restingDf.all$restingSkinTemp, col="turquoise3", border="turquoise4", breaks=100,
+     xlab = "wRTemp", xlim=c(65,105),
+     main = NULL, font.lab=2,lwd=2,font=2)
+abline(v=mean(restingDf.all$restingSkinTemp[!is.na(restingDf.all$restingSkinTemp)]), col="blue", lwd=2)
+
+###############################
+#     Main Text Numbers       #
+###############################
 
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
 mean(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # mean cHR; 71.54 +/- 9.92, n=1644
@@ -472,51 +502,6 @@ cTemp.sd <- sqrt(var(iPOPvitals$Temp[!is.na(iPOPvitals$Temp)])) # stdev of cTemp
 means<-aggregate(iPOPvitals$Temp,list(iPOPvitals$iPOP_ID), mean) # check this compare to indiv means
 sd<-aggregate(iPOPvitals$Temp, list(iPOPvitals$iPOP_ID), sd)
 cTemp.individual.sd <- mean(na.omit(sd$x)) # intra-individual SD 0.2536
-
-pdf(file = paste0(dir, "../Figure1/Figure1D_hists.pdf"))
-par(mfrow = c(2,2), mai = c(0.7, 0.7, 0.7, 0.7))
-hist(iPOPvitals$Pulse, col="tomato3", , border="tomato4", breaks=50,
-     xlab = "cHR", xlim=c(50,200),
-     main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPvitals$Temp, col="turquoise3", border="turquoise4", breaks=10,
-     xlab = "cTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
-
-#####################
-#  Figure 1D Bottom #
-#####################
-
-# resting HR and ST from Fig 1B data - need to run code for Fig 1B first
-options(scipen=10)
-hist(restingDf.all$restingHR, col="tomato3", border="tomato4", breaks=50,
-     xlab = "wRHR", xlim=c(50,200),
-     main = NULL, font.lab=2,lwd=2,font=2)
-scale_y_continuous()
-hist(restingDf.all$restingSkinTemp, col="turquoise3", border="turquoise4", breaks=46,
-     xlab = "wRTemp", xlim=c(65,105),
-     main = NULL, font.lab=2,lwd=2,font=2)
-dev.off()
-
-dfFigOne <- fread(paste0(paste0(dir, "BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv")),
-            header=TRUE,sep=",",stringsAsFactors = FALSE)
-
-dfFigOne$Heart_Rate <- remove_outliers(dfFigOne$Heart_Rate) # clean data based on HR 
-length(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # number of wHR measurements in iPOP cohort
-mean(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)]) # mean wHR mean 74.31 +/- 15.17, n=25,341,508
-sqrt(var(dfFigOne$Heart_Rate[!is.na(dfFigOne$Heart_Rate)])) # stdev of wHR
-
-# hist(dfFigOne$Heart_Rate, col="darkred", breaks=100,
-#      xlab = "wHR",
-#      main = NULL, font.lab=2,lwd=2,font=2,
-#      xlim=c(0,200))
-
-dfFigOne$Skin_Temperature_F <- remove_outliers(dfFigOne$Skin_Temperature_F) # clean data based on HR 
-length(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # number of wTemp measurements in iPOP cohort
-mean(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)]) # mean wTemp mean 88.57 +/- 3.74, n=27,136,802
-sqrt(var(dfFigOne$Skin_Temperature_F[!is.na(dfFigOne$Skin_Temperature_F)])) # stdev of wTemp 
-# hist(dfFigOne$Skin_Temperature_F, col="darkgrey", breaks=100,
-#      xlab = "wTemp", xlim=c(65,105),
-#      main = NULL, font.lab=2,lwd=2,font=2)
 
 #characterize the iPOP data set
 length(na.omit(iPOPvitals$Temp)) + length(na.omit(iPOPvitals$Pulse)) # total number of clinical vital signs measured
