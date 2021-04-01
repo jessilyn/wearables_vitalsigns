@@ -1977,7 +1977,7 @@ generate4DF = function(clin,vit,dataset = "SEHR"){
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Diastolic"]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Respiration"]),]
   
-  # Here we can select a few ANNON_ID
+  # Here we can select a few ANON_ID
   if (dataset == "iPOP")
     toppat = c("1636-70-1005","1636-70-1008","1636-70-1014","1636-69-001")
   else
@@ -2222,9 +2222,9 @@ generate5A = function(clin,dataset = "SEHR",min_visits=10,cap=200){
 }
 generate5A("CHOL","SEHR",cap=100,min_visits = 10)
 
-##################################
-#   Figure 4A & Suppl. Figure 3A #
-##################################
+#########################################
+#   Figure 4A & Extended Data Figure 2A #
+#########################################
 
 #Run after running individual time course from 2C (reading in various files for wear by timespans) that produced pct_var, corr_coeffs, & num_Records files   #
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
@@ -2247,9 +2247,9 @@ ggplot(fig.2c, aes(x=test, y=value, color = variable)) + geom_point(size = 5, ae
                        labels=c("LM vitals", "LASSO", "RF")) +
   labs(x = "Lab tests",y = expression(paste("Sqrt of % Variance Explained"))) 
 
-#####################
-#  Suppl. Figure 3B #
-#####################
+################################
+#  Fig 4B and Suppl. Figure 2B #
+################################
 getEvents = function(dres, codes)
 {
   dres$date = as.Date(dres$date)
@@ -2595,72 +2595,6 @@ ggplot(d, aes(x=X, y=value, col=variable, shape=variable))+
   geom_point(cex=2.5) + 
   weartals_theme
 
-
-#####################
-# Suppl. Figure 3C  #
-#####################
-iPOPtopTen <- c( "PLT",
-                 "ALKP",
-                 "BUN",
-                 "MONOAB",
-                 "HSCRP",
-                 "GLU",
-                 "GLOB",
-                 "A1C",
-                 "WBC",
-                 "IGM" )
-
-pList <- list(); j=0  
-for (i in iPOPtopTen){
-  j=j+1
-  call <-paste0("iPOPcorDf$",i)
-  df <- cbind(iPOPcorDf[[i]], iPOPcorDf[,c("Pulse", "Temp")])
-  df <- na.omit(df)
-  #pList[[j]] <- 
-  print(ggplot(df, aes(x = df$Pulse, y = df[,1])) +
-        geom_point(col="black", pch=19, cex=0.5) +
-        stat_smooth(method = "lm", formula = y  ~ x + I(x^2), size = 1.5, col="darkred") +
-        theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-        xlab("cHR") + ylab(i)) }
-#grid.arrange(pList[[1]],pList[[2]],pList[[3]],pList[[4]],pList[[5]],pList[[6]], ncol=2,top="Main Title")
-
-
-#####
-# iPOP binning plot figures
-#####
-summary.pulse<-list()
-summary.Temp<-list()
-r.squared <-c()
-for (j in clinTopTen){
-  iPOPcorDf$bin2<-ntile(iPOPcorDf[[j]], 40)
-  # for Temp
-  corDf2 <- summarySE(corDf, measurevar="Temp", groupvars="bin2", na.rm=TRUE)
-  
-  print(ggplot(corDf2, aes(x=bin2, y=Temp)) +
-  geom_point(stat="identity", fill="darkblue") +
-    geom_errorbar(aes(ymin=Temp-se, ymax=Temp+se), width=.4) +
-    xlab(paste(c(j, "bins", sep=" ")))+
-    scale_y_continuous(limits = c(97,99))
-  + theme(text = element_text(size=9),
-          axis.text.x = element_text(angle = 60, hjust = 1)))
-  print(paste0(j, ": number of data points in bin = ", sum(iPOPcorDf$bin2 %in% "2")))
-
-  print(ggplot(corDf2, aes(x = bin2, y = Temp)) +
-          stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1.5, col="darkblue") +
-          geom_point(col="black") +
-          #ylim(c(96,98.5))+
-          theme(axis.title=element_text(face="bold",size="14"),axis.text=element_text(size=16,face="bold"), panel.background = element_blank(), axis.line = element_line(colour = "black"))+
-          xlab(paste0(c(j ," Bin"))))
-  summary.Temp <- summary(lm(corDf2$Temp ~ corDf2$bin2 + I(corDf2$bin2^2)))
-  r.squared[j] <- summary.Temp$adj.r.squared
-  
-}
-as.matrix(r.squared)
-
-plot(corDf$Temp ~ corDf$NEUT, pch='.',
-     xlab="Neutrophils", ylab="Pulse", font.lab=2,lwd=2,font=2)
-abline(lm(corDf$Pulse ~ corDf$NEUT+ (corDf$NEUT)^2), col="blue",lwd=4)
-
 ########################
 #    Suppl. Table 4A   #
 ########################
@@ -2707,9 +2641,9 @@ tot <- 0; for (i in 7:56){
 # num vital signs in iPOP dataset
 tot <- 0; for (i in 7:56){tmp <- length(as.matrix(na.omit(wear[i]))); tot <- tot + tmp}; tot
 
-##########################
-# Supplementary Table 1B #
-##########################
+###################
+# Suppl. Table 1B #
+###################
 # get mean +/- SE for each of the 50 clin values
 thirtyk.summary <- describe(corDf)
 ipop.corDf.summary <- describe(iPOPcorDf)
@@ -2717,9 +2651,9 @@ ipop.demog.summary <- describe(iPOPdemographics$AgeIn2016)
 table(iPOPdemographics)
 write.csv(ipop.corDf.summary, "supplTable2.csv")
 
-##########################
-# Supplementary Table 2B #
-##########################
+###################
+# Suppl. Table 5B #
+###################
 write.csv(thirtyk.summary, "supplTable1.csv")
 
 #### END ####
