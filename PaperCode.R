@@ -442,21 +442,20 @@ for(window in windows){
   
 
 ##########
-# Fig 1C #
+# Fig 1D #
 ##########
-hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=10,
-     xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="red", breaks=10,
-     xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2, lty="blank")
-hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
-     xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
-hist(iPOPdaysMonitored$Days_monitored_by_basis, col="grey", breaks=20,
-     xlab = "Time Monitored by Watch (Days)", main = NULL, font.lab=2,lwd=2,font=2)
-mean(iPOPdaysMonitored$Total_NumOfClinMeasures)
-mean(iPOPdaysMonitored$Days_monitored_by_clinic)
+  ## Figure 1D, left
+  hist(iPOPdaysMonitored$Days_monitored_by_clinic, col="grey", breaks=10,
+       xlab = "Time Monitored by Clinic (Days)", main = NULL, font.lab=2,lwd=2,font=2)
+  rug(iPOPdaysMonitored$Days_monitored_by_clinic, ticksize = 0.1, lwd = 1)
+  
+  ## Figure 1D, right
+  hist(iPOPdaysMonitored$Total_NumOfClinMeasures, col="grey", breaks=10,
+       xlab = "Number of Clinic Visits / Person", main = NULL, font.lab=2,lwd=2,font=2)
+  rug(iPOPdaysMonitored$Total_NumOfClinMeasures, ticksize = 0.1, lwd = 1)
 
 ###############
-# Fig 1D  top #
+# Fig 1E  top #
 ###############
 
 length(iPOPvitals$Pulse[!is.na(iPOPvitals$Pulse)]) # number of cHR measurements in iPOP cohort
