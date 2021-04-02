@@ -223,7 +223,7 @@ comparison <- compare(iPOPcorDf,iPOPcorDf2,allowAll=TRUE)
 difference <-
   data.frame(lapply(1:ncol(iPOPcorDf),function(i)setdiff(iPOPcorDf[,i],comparison$tM[,i])))
 colnames(difference) <- colnames(iPOPcorDf)
-difference #no data points are removed.
+#difference #no data points are removed.
 
 ### clean corDf ### 
 summary(corDf)
@@ -257,7 +257,7 @@ iPOPcorDf.demo <- merge(iPOPcorDf, iPOPdemographics[1:4], by="iPOP_ID")
 #     Main Text Numbers   #
 ###########################
 
-iPOPdaysMonitored <- read.csv("slide2_C_participant_data_summary.csv",
+iPOPdaysMonitored <- read.csv(paste0(dir,"slide2_C_participant_data_summary.csv"),
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 # restrict to wearables only people
 iPOPdaysMonitored <- iPOPdaysMonitored[iPOPdaysMonitored$iPOP_ID %in% wearables.people,]
@@ -374,10 +374,10 @@ ggplot()+
   geom_point(aes(x=windows, y=wRHR.sd), color="red") +
   geom_line(aes(x=windows, y=HR.personal.sd), color="blue") +
   geom_point(aes(x=windows, y=HR.personal.sd), color="blue") +
-  geom_line(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
-  geom_point(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
-  geom_line(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
-  geom_point(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
+  #geom_line(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
+  #geom_point(aes(x=windows, y=rep(cHR.sd, length(windows))), color="coral") +
+  #geom_line(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
+  #geom_point(aes(x=windows, y=rep(cHR.individual.sd, length(windows))), color="skyblue") +
   xlab("Resting Time Window (seconds)") +
   ylab("HR SD") # or wRTemp
 
@@ -416,18 +416,18 @@ for(window in windows){
   hist(delta.daily.sd.RHR.pulse, col="darkred", main = paste0("Delta StdDev cHR - StdDev wRHR)"))
   
   rhr.daily.means.id$idx <- as.numeric(rhr.daily.means.id$iPOP_ID)
-  
+}
 ###########################
 #     Main Text Numbers   #
 ###########################
-  wRHR.mean
-  wRHR.sd
-  wRHR.num.obs
-  HR.personal.sd
-  wRTemp.mean
-  wRTemp.sd
-  wRTemp.num.obs
-  Temp.personal.sd
+wRHR.mean
+wRHR.sd
+wRHR.num.obs
+HR.personal.sd
+wRTemp.mean
+wRTemp.sd
+wRTemp.num.obs
+Temp.personal.sd
   
   
 ##########
@@ -502,7 +502,7 @@ length(unique(wear$iPOP_ID)) # num people in iPOP wearables dataset
 #############################
 # make table for vitals (Suppl. Table 1A)
 describe(iPOPvitals)
-# make table for labs
+# make table for labs (Suppl. Table 1B)
 describe(iPOPlabs)
 
 
