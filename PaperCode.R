@@ -1337,7 +1337,6 @@ for (i in top.models) {
 rf.feature.summaries[rf.feature.summaries$test %in% top.models,]
 
 
-
 #########################################################
 #     Main Text Numbers  - like Fig1D but for SEHR Data #
 #########################################################
@@ -1382,7 +1381,7 @@ length(table(corDf$ANON_ID)[table(corDf$ANON_ID)>50])
 ##############################
 # create ranked list of clinical laboratory tests by the correlation coefficients between observed and predicted values; 
 # predicted values from simple bivariate models of (lab test ~ pulse + temp) using SEHR dataset
-# Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the 28k dataset)
+# Do 10-fold cross validation at the subject level (e.g. each test set contains 1/10 of the people in the SEHR dataset)
 # RUN SEHR CORRELATIONS between labs and vitals
 
 names(corDf)[names(corDf) %in% "GLU_SerPlas"] <-"GLU"  # fix names to be same between iPOP and SEHR datasets ; number of NAs for each GLU: GLU_nonFasting (113472), GLU_wholeBld (111726), GLU_SerPlas (30949), GLU_byMeter (NA = 101012), GLU_fasting (110303)
@@ -1509,7 +1508,7 @@ to.remove <- gsub("\\s", "", to.remove)
 corDf.demog <- corDf.demog[ , -which(names(corDf.demog) %in% c(to.remove))]
 
 cv.runs <- 50
-folds <- createFolds(factor(corDf.demog$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+folds <- createFolds(factor(corDf.demog$Ethn), k = cv.runs, list = FALSE) # break data into (cv.runs) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and not in test and it breaks the pipeline
 
 #check that your folds work the way you expect
 corDf.demog$cv.folds <- folds; # ddply(corDf.demog, 'cv.folds', summarise, prop=sum(Ethn=="White")) # check that this equals table(corDf.tmp$Ethn) / cv.runs
@@ -1544,9 +1543,9 @@ for (i in 1:cv.runs){ #50 fold cross validation (10% test set; 90% training set)
   
   # Do stratified cross-validation per subject
   # split into training and test
-  #folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  #folds <- createFolds(factor(corDf.tmp$Ethn), k = 10, list = FALSE) # break data into (10% training, 90% test) folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and not in test and it breaks the pipeline
   # for random forest
-  folds <- createFolds(factor(corDf.tmp$Ethn), k = 3000, list = FALSE) # ~50 entries per fold; folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and note in test and it breaks the pipeline
+  folds <- createFolds(factor(corDf.tmp$Ethn), k = 3000, list = FALSE) # ~50 entries per fold; folds with equal proportion of ethnicities in each fold - if it becomes unbalanced sometimes one ethnicity will appear in training and not in test and it breaks the pipeline
   corDf.tmp$test.train <- folds
   
   # subjects = unique(ANON_ID)
@@ -1735,8 +1734,8 @@ gg_color_hue <- function(n) {
 }
 
 # Compute stats of an LM model of a certain test given the coefs
-# The following script cross-validates by taking one observation from each
-# patient with at least 4 observations. The model simply 
+# The following script cross-validates by taking one observation from each patient with at least 4 observations. 
+
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE, type="LM"){
   # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
