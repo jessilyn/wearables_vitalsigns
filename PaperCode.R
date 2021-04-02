@@ -2407,7 +2407,7 @@ generate5Cevents = function(pats,col,dataset="SEHR"){
     codes_pats$time = as.numeric(codes_pats$date - min(dres$dres$date))/365
     codes_pats = codes_pats[first,]
   }
-  else{#Mike
+  else{
     times = c(7,43,52,64)
     first = rep(FALSE, length(dres$dres$time))
     first[times] = TRUE
@@ -2526,7 +2526,6 @@ res = generate5D("1636-69-001", "HCT")
 
 weartals_theme = theme_bw() + theme(text = element_text(size=18), panel.border = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 
-#corr.coefs <-read.table("../SECURE_data/20180322_ranked_models_test_lm.csv",row.names=1, sep=",")
 corr.coefs <-read.table("../SECURE_data/20180403_ranked_models_ipop_lm.csv",row.names=1, sep=",")
 top.names<-rownames(corr.coefs) # names of lab tests from either the SEHR or the iPOP simple bivariate models
 top.names<-top.names[top.names %in% names(wear)] # only keep the lab names that are also present in the iPOP data
@@ -2586,7 +2585,7 @@ for (i in 1:4){
 }
 indiv.corr.coefs <- cbind(lr.corr.coefs, mm.corr.coefs, id.corr.coefs)
 rownames(indiv.corr.coefs) <- clin.idx
-write.table(indiv.corr.coefs, "../SECURE_data/20180329_indiv_SEHR_corr_coeffs.csv",row.names=TRUE,col.names=TRUE, sep=",")
+#write.table(indiv.corr.coefs, "../SECURE_data/20180329_indiv_SEHR_corr_coeffs.csv",row.names=TRUE,col.names=TRUE, sep=",")
 data <-read.table("../SECURE_data/20180330/20180329_indiv_SEHR_corr_coeffs.csv",
                   header=TRUE,sep=',',stringsAsFactors=FALSE)
 d <- melt(data, id.vars="X")
