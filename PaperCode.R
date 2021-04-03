@@ -285,9 +285,7 @@ male <- iPOP.table[iPOP.table$Gender=="M"]
 male <- male[-max(dim(male)),]
 max(male$AgeIn2016);  min(male$AgeIn2016); mean(male$AgeIn2016) # max age of male particpants
 
-################
-#  Fig 1B & C  #
-################
+
 df <- fread(paste0(dir, "/BasisData_20161111_PostSummerAddOns_Cleaned_NotNormalized_20180427.csv"),
                    header=TRUE,sep=",",stringsAsFactors = FALSE,
                    select=c("Timestamp_Local","Heart_Rate","Skin_Temperature_F",
@@ -304,6 +302,175 @@ daytime.df <- with( df, df[ hour( Timestamp_Local ) >= 19 & hour( Timestamp_Loca
 vitals <- iPOPvitals
 vitals$Clin_Result_Date<-as.Date(vitals$Clin_Result_Date, "%Y-%m-%d")
 colnames(vitals)[1:5] <- c("iPOP_ID", "Date", "BP", "Pulse", "Temp")
+
+##################
+# Fig 1B - Danny #
+##################
+#Set window and step maximums:
+windows=c(10, 60) # define time windows with no steps for resting threshold
+steps = c(1, 50) #define number max steps
+
+#To check day-prior, supply TRUE or FALSE here:
+#If TRUE, merges clinical based on day-prior, and also adds "dayPrior" to output file names.
+dayPrior = FALSE
+
+#Iterate through array of window sizes
+for (window in windows){
+  #Iterate through array of maximum steps
+  for (maxsteps in steps){
+    restingDf <- c() 
+    restingDf.all <- list() # keep all resting data for boxplots later
+    indiv.means <- c()
+    indiv.sd <- c()
+    
+    for(i in unique(df$iPOP_ID)){
+      subDf <- df[which(df$iPOP_ID %in% i),] #pull data per individual
+      restingST<-c()
+      restingST <- rollapplyr(subDf$Steps, width=window, by=1, sum, partial=TRUE)
+      restingST[1:window-1]<-"NA" # remove 1st x observations because we dont know what happened prior to putting the watch on
+      restingST <- as.numeric(restingST)  # Expected warning: "In as.numeric(restingST) : NAs introduced by coercion"
+      restingDf <- subDf[restingST<maxsteps & !is.na(restingST)] # in the previous time window of X min plus the current minute,there are < maxsteps steps 
+      indiv.means[i] <- mean(restingDf$Heart_Rate, na.rm=TRUE) # mean RHR for all days/times for individual i
+      indiv.sd[i] <- sd(restingDf$Heart_Rate, na.rm=TRUE) # RHR var for all days/times for individual i
+      restingDf.all[[i]] <- restingDf # store all resting data for boxplots
+    }
+    
+    #Combine all subject IDs into restingDf.all
+    restingDf.all <- rbindlist(restingDf.all)
+    restingDf.all$Date <- as.Date(restingDf.all$Timestamp_Local)
+    restingDf.all <- restingDf.all[,c("iPOP_ID","Date","Heart_Rate","Skin_Temperature_F","Steps","Timestamp_Local")]
+    names(restingDf.all) <- c("iPOP_ID","Date","restingHR","restingSkinTemp","restingSteps","DateTime")
+    
+    #Optional: use day-prior rather than day-of wearable data for comparison:
+    if(dayPrior){
+      restingDf.all$Date <- restingDf.all$Date + days(1)
+    }
+    # ^ All this does is advance each day by 1 if we set dayPrior to TRUE.
+    #   This simple change allows us to reuse most of our code while testing.
+    
+    # We do want only the dates that overlap for now, so:
+    #merge vitals (i.e., clinical HR measurments) with resting HR data from wearable BASIS
+    #device
+    restingDf.vitals <- merge(restingDf.all,vitals,by=c("iPOP_ID","Date"))
+    restingDf.vitals$DateTime<-as.POSIXct(restingDf.vitals$DateTime)
+    restingDf.vitals <- restingDf.vitals[order(restingDf.vitals$DateTime),] 
+    cols <- c("restingHR","restingSkinTemp","Pulse") #subset columns to convert
+    restingDf.vitals[,(cols) := lapply(.SD, function(x) as.numeric(as.character(x))), .SDcols = cols ]
+    df.name <- paste0("restingDf.vitals.window=", window,",msteps=", maxsteps)
+    assign(df.name, restingDf.vitals) # to store data frame for each resting window definition
+    
+    #Check progress:
+    print(paste0("Completed -- window:", window, " maxsteps:", maxsteps))
+  }
+  
+}
+
+# Gather aggregate daily wearable HR BASIS and CLINIC HR 
+
+#Suppress warnings (but return to show warnings at end of this chunk):
+original_warn <- getOption("warn")
+options(warn = -1)
+
+#Initialize subDfClinDay:
+
+subDfClinDay <-list()
+Delta_hr_parameters <- data.frame(matrix
+                                  (vector(), 0, 13,
+                                    dimnames=list(c(), c("numObs", 
+                                                         "init_hour",
+                                                         "end_hour",
+                                                         "maxsteps",
+                                                         "window",
+                                                         "Mean_wHR",
+                                                         "Median_wHR",
+                                                         "Stdev_wHR",
+                                                         "Mean_Clinic_HR",
+                                                         "Mean_wTemp",
+                                                         "Median_wTemp",
+                                                         "Stdev_wTemp",
+                                                         "Mean_Clinic_Temp"))),
+                                  stringsAsFactors=F)
+
+row_ind = 0
+
+#Establish 3 part nested-loop with varying windows, maxsteps, and iterating across 6am-10am 2 hr time windows:
+windows = c(10, 60)
+steps = c(1, 50)
+time = 'All'
+hours = c(0:22)
+
+for(window in windows){
+  
+  for(maxsteps in steps){
+    
+    restingDf.vitals <- eval(as.name(paste0("restingDf.vitals.window=", window,",msteps=", maxsteps)))
+    
+    #Set up sequence of starting time (hour) during day to iterate over for moving 2 hr time window
+    #Note: we achieve 2 hr window with use of "init_hour" and (init_hour + 2) as window...
+    
+    par(mfrow=c(2,4))
+    for (init_hour in hours){ # vary the hour of the day from 6am to 10am as start of window
+      
+      row_ind = row_ind + 1
+      
+      options(datatable.optimize=1)
+      subDfClinDay[[row_ind]] <- with( restingDf.vitals, restingDf.vitals[ hour( DateTime ) >= init_hour & hour( DateTime ) < (init_hour+2) , ] ) # pull data only from specific time window; store hourly resting data for boxplots
+      rhr.daily.means <- subDfClinDay[[row_ind]][, lapply(.SD, mean, na.rm= TRUE), by=c("iPOP_ID","Date")]
+      restingDf.compare <- cbind(rhr.daily.means$restingHR, rhr.daily.means$Pulse) 
+      restingDf.compare <- data.frame(restingDf.compare)
+      colnames(restingDf.compare) <- c("Resting_wHR", "cHR")
+      numObs <-dim(rhr.daily.means)[1]
+      rhr.daily.means.id <- cbind(rhr.daily.means$iPOP_ID, rhr.daily.means$restingHR, rhr.daily.means$Pulse)
+      rhr.daily.means.id <- as.data.frame(rhr.daily.means.id)
+      rhr.daily.means.id[,1 ]<- as.factor(as.character(rhr.daily.means.id[,1 ])); 
+      rhr.daily.means.id[,2 ]<- as.numeric(as.character(rhr.daily.means.id[,2 ])); 
+      rhr.daily.means.id[,3 ]<- as.numeric(as.character(rhr.daily.means.id[,3 ])); 
+      colnames(rhr.daily.means.id) <- c("iPOP_ID", "restingHR", "Pulse")
+      
+      title=(paste0((init_hour), " - ",(init_hour+2), " am\n Num Obs = ", numObs))
+      sig.test<-t.test(restingDf.vitals$restingHR, 
+                       restingDf.vitals$Pulse, 
+                       var.equal=FALSE, 
+                       paired=TRUE) # test wHR v cHR for significance
+      
+      #Calculate aggregate metrics per day at that given time window:
+      
+      mean_HR_BASIS = mean(rhr.daily.means[[3]], na.rm = TRUE)
+      median_HR_BASIS = median(rhr.daily.means[[3]], na.rm = TRUE)
+      stdev_HR_BASIS = sd(rhr.daily.means[[3]], na.rm = TRUE)
+      
+      mean_Temp_BASIS = mean(rhr.daily.means[[4]], na.rm = TRUE)
+      median_Temp_BASIS = median(rhr.daily.means[[4]], na.rm = TRUE)
+      stdev_Temp_BASIS = sd(rhr.daily.means[[4]], na.rm = TRUE)
+      
+      mean_HR_clinic = mean(rhr.daily.means[[8]], na.rm = TRUE)
+      mean_Temp_clinic = mean(rhr.daily.means[[9]], na.rm = TRUE)
+      
+      #Assemble these metric statistics in a dataframe:
+      
+      Delta_hr_parameters[row_ind, "Mean_wHR"] <- mean_HR_BASIS
+      Delta_hr_parameters[row_ind, "Median_wHR"] <- median_HR_BASIS
+      Delta_hr_parameters[row_ind, "Stdev_wHR"] <- stdev_HR_BASIS
+      Delta_hr_parameters[row_ind, "Mean_Clinic_HR"] <- mean_HR_clinic
+      Delta_hr_parameters[row_ind, "Mean_wTemp"] <- mean_Temp_BASIS
+      Delta_hr_parameters[row_ind, "Median_wTemp"] <- median_Temp_BASIS
+      Delta_hr_parameters[row_ind, "Stdev_wTemp"] <- stdev_Temp_BASIS
+      Delta_hr_parameters[row_ind, "Mean_Clinic_Temp"] <- mean_Temp_clinic
+      Delta_hr_parameters[row_ind, "numObs"] <- numObs
+      Delta_hr_parameters[row_ind, "init_hour"] <- init_hour
+      Delta_hr_parameters[row_ind, "end_hour"] <- init_hour + 2
+      Delta_hr_parameters[row_ind, "maxsteps"] <- maxsteps
+      Delta_hr_parameters[row_ind, "window"] <- window
+    }
+  }
+}
+
+#Export file to csv and plot in Tableau:
+write.csv(Delta_hr_parameters, file = "BASIS_mean_stdev_median_24_hr_wHR_and_Temp.csv")
+
+############
+#  Fig 1C  #
+############
 windows=c(60, 120, 180, 240) # define time windows with no steps for resting threshold (10,60,120, etc)
 
 dayPrior = FALSE
@@ -417,6 +584,7 @@ for(window in windows){
   
   rhr.daily.means.id$idx <- as.numeric(rhr.daily.means.id$iPOP_ID)
 }
+
 ###########################
 #     Main Text Numbers   #
 ###########################
