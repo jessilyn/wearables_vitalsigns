@@ -745,14 +745,14 @@ for (k in 1:length(patients)){
     cat("Test",top.names[l],"\n")
     # create training set
     x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID",top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
-    x.train<- na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. 
+    x.train<- na.omit(x.train) # skip nas and nans
     x.train.ids<-x.train$iPOP_ID
     x.train<-x.train[,-1]
     predictors <- as.data.frame(x.train[,colnames(x.train) %in% c(vitals.variables)]) # later add in demographics
     outcome <- as.matrix(x.train[,colnames(x.train) %in% top.names[l]]) # matrix of outcome for model building # tried adding as.numeric after as.matrix() but that introduced new issues
     # create test set
     x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], vitals.variables)] # subset input data by lab: only take current lab test of interest
-    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+    x.test<- na.omit(x.test) # skip nas and nans
     val.true[[l]] = c(val.true[[l]], x.test[,top.names[l]]) # true values of left out person
     num.true[[l]]<-c(num.true[[l]],length(x.test[,top.names[l]])) # number of test observations for left out person
     fml = paste("cbind(",paste(top.names[l],collapse=" , "),") ~",paste(vitals.variables,collapse=" + "))
@@ -858,7 +858,7 @@ for (k in 1:length(patients)){
   for (l in 1:length(top.names)){
     cat("Test",top.names[l],"\n")
     x.train<-dat.train[,colnames(dat.train) %in% c("iPOP_ID", top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-    x.train<-na.omit(x.train) # skip nas and nans ## TODO: the way this script is written, you will lose a lot of data because you take the number of lab visits down to the test with the minimum number of visits. However, if you do na.omit after the next line, you have to change your matrix to accept dynamic number of row entries. Not sure how to do this yet, so for now just reducing the data amount by a lot. 
+    x.train<-na.omit(x.train) # skip nas and nans
     x.train.ids<-x.train$iPOP_ID
     x.train<-x.train[,-1] 
     # if(!NROW(x.train)){ #if x.train is empty
@@ -871,7 +871,7 @@ for (k in 1:length(patients)){
     
     # create test set
     x.test<-dat.test[,colnames(dat.test) %in% c(top.names[l], wear.variables, demo.variables)] # subset input data by lab: only take current lab test of interest
-    x.test<- na.omit(x.test) # skip nas and nans ## TODO: SEE ABOVE na.omit FOR ISSUE WITH THIS
+    x.test<- na.omit(x.test) # skip nas and nans
     # if(!NROW(x.test)){ #if x.test is empty
     #   print(paste0("The x.test data was empty for ",patients[k],"'s ",top.names[l]," test."))
     # } else {
@@ -905,7 +905,7 @@ for (k in 1:length(patients)){
 #    lasso.model.lambda.min = lm(as.formula(lasso.fml.lambda.min), data = x.train) # , weights = labs.wear$weight)   
     
     #store all lasso variable coefs (lambda specific: manual, min, and 1se)
-    factors.lambda.manual = glm.res$glmnet.fit$beta[,25] # TODO: this is an arbitrary rule for now
+    factors.lambda.manual = glm.res$glmnet.fit$beta[,25]
     lasso.variables.lambda.manual = factors.lambda.manual#[abs(factors.lambda.manual)!=0]
     factors.lambda.min <- glm.res$glmnet.fit$beta[,which(glm.res$glmnet.fit$lambda==glm.res$lambda.min)]
     lasso.variables.lambda.min = factors.lambda.min#[abs(factors.lambda.min)!=0]
@@ -936,7 +936,7 @@ for (k in 1:length(patients)){
     lasso.features.lambda.1se <- rbind(lasso.features.lambda.1se,tmp)
     
     #store lasso variable names based on coef threshold (lambda specific: manual, min, and 1se)
-    lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10]) # TODO: this is an arbitrary rule for now
+    lasso.variables.to.use.lambda.manual = names(factors.lambda.manual[abs(factors.lambda.manual)>1e-10])
     lasso.variables.to.use.lambda.min = names(factors.lambda.min[abs(factors.lambda.min)>1e-10])
     lasso.variables.to.use.lambda.1se = names(factors.lambda.1se[abs(factors.lambda.1se)>1e-10])
     
@@ -1905,7 +1905,6 @@ gg_color_hue <- function(n) {
 # The following script cross-validates by taking one observation from each patient with at least 4 observations. 
 
 getLMresults = function(corDf4A, test.name, threshold, identifier, cap, model_coefs, threshold_hi = 1e7, mixed=FALSE, type="LM"){
-  # TODO: that's an ugly way to remove NAs but correct
   corDf.tmp = corDf4A[!is.na(corDf4A[,test.name]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Temp"]),]
   corDf.tmp = corDf.tmp[!is.na(corDf.tmp[,"Pulse"]),]
